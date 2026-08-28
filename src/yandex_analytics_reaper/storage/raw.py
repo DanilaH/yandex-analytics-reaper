@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
-from datetime import UTC, datetime
 import hashlib
 import json
+from collections.abc import Mapping
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -11,7 +11,6 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict
 
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
-
 
 SENSITIVE_KEYS = {
     "authorization",

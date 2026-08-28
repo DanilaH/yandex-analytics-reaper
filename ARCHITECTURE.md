@@ -1,15 +1,23 @@
 # Architecture
 
+`ARCHITECTURE.md` owns code/runtime boundaries. Implementation sequencing belongs to `ROADMAP.md`; analytical semantics belong to `docs/spec/`.
+
 ## System boundary
 
 ```text
 Sources
   ↓
+CollectedResponse
+  ↓
 Raw immutable snapshots
   ↓
-Versioned parsers
+Versioned source parsers
   ↓
-Normalized platform-neutral observations
+Source DTOs
+  ↓
+Versioned normalizers
+  ↓
+Platform-neutral domain observations
   ↓
 Lineage
   ↓
@@ -24,6 +32,8 @@ Own release outcomes
 Calibration
 ```
 
+The parser answers **what the source said**. The normalizer answers **what that source value means in our domain model**. Source DTOs must not leak into analytics/domain layers.
+
 ## Package layout
 
 ```text
@@ -32,11 +42,13 @@ src/yandex_analytics_reaper/
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics and uncertainty
   sources/        source capability contracts
-    yandex/        current Yandex implementation
+    yandex/        Yandex client + source DTO parsers
   storage/        immutable raw storage
-  taxonomy/       taxonomy schema foundations
-  cli.py          explicit local probes only
+  taxonomy/       draft taxonomy schema foundations
+  cli.py          explicit local probes/debug interface
 ```
+
+Normalizer/persistence packages are introduced in Phase 2 when normalized market-state storage begins.
 
 ## Source capability architecture
 
@@ -52,67 +64,82 @@ MediaProvider
 TrendProvider
 ```
 
-A provider may implement only a subset.
+A provider may implement only a subset. A new official/third-party source replaces only the capabilities it actually supplies.
 
 ## Raw-first ingestion
 
-HTTP/source collection produces a `CollectedResponse`.
-
-The response is written to `RawSnapshotStore` first. Only then may a parser normalize it.
+Collection produces a `CollectedResponse`. Persist it before any source interpretation:
 
 ```text
 CollectedResponse
   ↓ persist
-RawSnapshotMetadata
+RawSnapshotMetadata + exact body
   ↓ parser(version)
-Normalized observation
+Source DTO
+  ↓ normalizer(version)
+Domain Observation
 ```
 
-This lets us reparse historical raw data after schema/parser changes.
+Raw snapshots contain request/response facts and safe request context only. They are independent of parser and normalizer versions so historical data can be reparsed/reinterpreted after implementation changes.
+
+## Lineage
+
+Decision-relevant values must be reconstructable through:
+
+```text
+candidate evidence
+→ derived feature
+→ domain observation
+→ normalization lineage
+→ source DTO/raw field
+→ raw snapshot
+```
+
+Lineage is many-to-many: one domain observation may combine multiple raw/source observations.
 
 ## Identity
 
-`Game` is platform-neutral.
-
-A Yandex app is a `PlatformListing` identified by:
+`PlatformListing` is the primary analytical identity during Yandex-only phases:
 
 ```text
 platform = yandex_games
 external_app_id = <appID>
 ```
 
-Future Steam/mobile listings can map to the same canonical game without changing the core model.
+`Game` exists as a platform-neutral canonical identity, but cross-platform entity resolution is deliberately optional until cross-market enrichment requires it. Do not build a matching engine during Yandex market-state work.
 
 ## Evidence
 
-Do not use one confidence grade.
+Do not use one confidence grade. Evidence semantics are owned by `docs/spec/evidence-model.md`.
 
-Decision-relevant evidence carries independent dimensions:
+Core independent dimensions include:
 
 ```text
 provenance
 measurement_kind
 semantic_confidence
-freshness
 coverage
-point_in_time_integrity
+historical_availability
+revision_status
 uncertainty
 ```
 
+Freshness is computed at read/decision time from timestamps; it is not an immutable stored evidence property.
+
 ## Yandex adapter
 
-The current public adapter implements three proven capabilities:
+The current Yandex adapter has three proven current capabilities:
 
 ```text
-feed exposure
+recommendation/feed exposure
 search discovery
 rich game metadata
 ```
 
-The adapter returns raw responses; parsers own Yandex-specific schema interpretation.
+Collectors return raw responses. Parsers own Yandex response-shape interpretation. Phase 2 normalizers convert parsed Yandex DTOs into stable domain observations.
 
-## Persistence roadmap
+## Persistence boundary
 
-Phase 1 uses filesystem raw snapshots only.
+Foundation stores immutable raw responses on the filesystem.
 
-PostgreSQL/Parquet/DuckDB are introduced when normalized historical persistence begins. Do not add them merely to match an architecture diagram.
+Normalized persistence, lineage persistence, schema-drift registry, and historical market-state reconstruction belong to Phase 2. PostgreSQL/Parquet/DuckDB should be introduced only where their concrete storage/query roles are defined, not merely to match an architecture diagram.

@@ -1,0 +1,85 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+
+from yandex_analytics_reaper.domain import GameMetricName, SessionProfile
+from yandex_analytics_reaper.normalizers import NormalizationContext, YandexGameNormalizer
+from yandex_analytics_reaper.sources.yandex.parsers import Developer, GameDetails, PlayPageData
+
+
+def _context() -> NormalizationContext:
+    instant = datetime(2026, 8, 28, 18, 0, tzinfo=UTC)
+    return NormalizationContext(observed_at=instant, available_at=instant, retrieved_at=instant)
+
+
+def test_details_normalizer_converts_source_dto_to_domain_semantics() -> None:
+    details = GameDetails(
+        app_id=438560,
+        title="Example",
+        developer=Developer(id=10, name="Dev"),
+        yandex_rating=86,
+        player_rating=4.3,
+        rating_count=6,
+        first_published=1750000000,
+        min_load_time=14.8,
+        languages=("ru", "en"),
+        platforms=("desktop", "mobile"),
+        orientation="any",
+        cloud_save=True,
+        leaderboards=True,
+        purchases_enabled=True,
+        has_products=False,
+    )
+
+    normalized = YandexGameNormalizer().normalize_details(details, _context())
+
+    assert normalized.listing.id == "yandex_games:438560"
+    assert normalized.listing.external_app_id == "438560"
+    assert normalized.developer is not None
+    assert normalized.developer.external_developer_id == "10"
+    assert normalized.listing_state.developer_id == "yandex_games:10"
+    assert normalized.listing_state.languages == ("ru", "en")
+    assert normalized.listing_state.has_products is False
+    assert normalized.listing.first_published_at == datetime.fromtimestamp(1750000000, UTC)
+
+    metrics = {metric.metric_name: metric.value for metric in normalized.metrics}
+    assert metrics == {
+        GameMetricName.YANDEX_GAMES_RATING: 86,
+        GameMetricName.PLAYER_RATING: 4.3,
+        GameMetricName.RATING_COUNT: 6,
+        GameMetricName.MIN_LOAD_TIME_SECONDS: 14.8,
+    }
+
+
+def test_play_page_normalizer_preserves_boolean_false_and_publish_time() -> None:
+    page = PlayPageData(
+        app_id=438560,
+        app_version="1.2.3",
+        published_time=1750000100,
+        yandex_rating=86,
+        rewarded_ads=True,
+        fullscreen_ads=False,
+        sticky_ads=False,
+        leaderboards=True,
+        purchases_enabled=True,
+        has_products=False,
+    )
+
+    normalized = YandexGameNormalizer().normalize_play_page(page, _context())
+
+    assert normalized.listing_state.app_version == "1.2.3"
+    assert normalized.listing_state.published_at == datetime.fromtimestamp(1750000100, UTC)
+    assert normalized.listing_state.fullscreen_ads is False
+    assert normalized.listing_state.sticky_ads is False
+    assert normalized.listing_state.has_products is False
+
+
+def test_play_page_normalizer_rejects_missing_identity() -> None:
+    with pytest.raises(ValueError, match="without app_id"):
+        YandexGameNormalizer().normalize_play_page(PlayPageData(), _context())
+
+
+def test_session_profile_is_the_only_auth_semantic_in_probe_context() -> None:
+    assert SessionProfile.AUTHENTICATED_TEST.value == "authenticated_test"

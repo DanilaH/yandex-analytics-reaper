@@ -57,7 +57,6 @@ class ProbeContext(BaseModel):
     platform: str = "desktop_other"
     country_observed: str | None = None
     collector_region: str | None = None
-    authenticated_state: bool = False
     session_profile: SessionProfile = SessionProfile.CLEAN_ANONYMOUS
     cookie_state_hash: str | None = None
     profile_age_days: int | None = None

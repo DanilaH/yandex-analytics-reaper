@@ -24,11 +24,11 @@ Market Prior
 → Calibration
 ```
 
-## Current status
+## Current scope
 
-**Phase 1 — Foundation is being finalized in PR #1.**
+**Phase 1 — Foundation** is the implemented repository baseline. **Phase 2 — Yandex market state** is the next implementation phase.
 
-Implemented in the bootstrap branch:
+Foundation includes:
 
 - source capability contracts;
 - immutable filesystem raw-snapshot store;

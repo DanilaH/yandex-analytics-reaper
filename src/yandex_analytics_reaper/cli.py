@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain.models import ProbeContext

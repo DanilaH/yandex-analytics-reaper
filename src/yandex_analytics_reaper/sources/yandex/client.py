@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 import httpx
 
@@ -31,7 +32,7 @@ class YandexPublicClient:
             },
         )
 
-    def __enter__(self) -> "YandexPublicClient":
+    def __enter__(self) -> YandexPublicClient:
         return self
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:

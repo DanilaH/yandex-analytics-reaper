@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pydantic import ValidationError
@@ -88,6 +88,24 @@ def test_normalizer_rejects_invalid_source_timestamp() -> None:
 
     with pytest.raises(ValueError, match="invalid Unix timestamp"):
         YandexGameNormalizer().normalize_details(details, _context())
+
+
+def test_normalization_context_requires_aware_ordered_timestamps() -> None:
+    instant = datetime(2026, 8, 28, 18, 0, tzinfo=UTC)
+
+    with pytest.raises(ValidationError):
+        NormalizationContext(
+            observed_at=datetime(2026, 8, 28, 18, 0),
+            available_at=instant,
+            retrieved_at=instant,
+        )
+
+    with pytest.raises(ValidationError, match="available_at cannot be later"):
+        NormalizationContext(
+            observed_at=instant,
+            available_at=instant + timedelta(seconds=1),
+            retrieved_at=instant,
+        )
 
 
 def test_probe_context_rejects_redundant_authenticated_state() -> None:

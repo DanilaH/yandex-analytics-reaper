@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from yandex_analytics_reaper.domain import (
     GameMetricObservation,
@@ -17,9 +17,15 @@ class NormalizationContext(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    observed_at: datetime
-    available_at: datetime
-    retrieved_at: datetime
+    observed_at: AwareDatetime
+    available_at: AwareDatetime
+    retrieved_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_availability_order(self) -> Self:
+        if self.available_at > self.retrieved_at:
+            raise ValueError("available_at cannot be later than retrieved_at")
+        return self
 
 
 class NormalizedListingObservation(BaseModel):

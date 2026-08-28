@@ -94,6 +94,15 @@ def test_get_games_parser_keeps_yandex_rating_separate_from_player_rating() -> N
     assert game.has_products is False
 
 
+def test_get_games_parser_distinguishes_missing_language_fields() -> None:
+    payload = {"games": [{"appID": 1}]}
+
+    game = YandexGetGamesParser().parse(json.dumps(payload).encode()).games[0]
+
+    assert game.languages is None
+    assert game.platforms is None
+
+
 def test_play_page_parser_reads_play_page_data() -> None:
     payload = {
         "gameData": {

@@ -35,8 +35,8 @@ class ListingStateObservation(BaseModel):
     developer_id: str | None = None
     app_version: str | None = None
     published_at: datetime | None = None
-    languages: tuple[str, ...] = ()
-    supported_platforms: tuple[str, ...] = ()
+    languages: tuple[str, ...] | None = None
+    supported_platforms: tuple[str, ...] | None = None
     orientation: str | None = None
     cloud_save: bool | None = None
     leaderboards: bool | None = None

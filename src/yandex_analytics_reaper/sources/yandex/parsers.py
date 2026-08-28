@@ -58,8 +58,8 @@ class GameDetails(GameCard):
     description: str | None = None
     instruction: str | None = None
     seo_description: str | None = None
-    languages: tuple[str, ...] = ()
-    platforms: tuple[str, ...] = ()
+    languages: tuple[str, ...] | None = None
+    platforms: tuple[str, ...] | None = None
     orientation: str | None = None
     cloud_save: bool | None = None
     leaderboards: bool | None = None
@@ -113,11 +113,7 @@ def _developer(value: object) -> Developer | None:
     if data is None:
         return None
     raw_id = data.get("id")
-    developer_id = (
-        raw_id
-        if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool)
-        else None
-    )
+    developer_id = raw_id if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool) else None
     return Developer(id=developer_id, name=_as_str(data.get("name")))
 
 
@@ -161,9 +157,9 @@ def _tuple_ints(value: object) -> tuple[int, ...]:
     return tuple(item for item in (_as_int(v) for v in value) if item is not None)
 
 
-def _tuple_strs(value: object) -> tuple[str, ...]:
+def _tuple_strs(value: object) -> tuple[str, ...] | None:
     if not isinstance(value, list):
-        return ()
+        return None
     return tuple(v for v in value if isinstance(v, str))
 
 
@@ -219,7 +215,7 @@ def _details(card: GameCard, value: Mapping[str, object]) -> GameDetails:
         sponsored=card.sponsored,
         row=card.row,
         column=card.column,
-        categories_names=_tuple_strs(value.get("categoriesNames")),
+        categories_names=_tuple_strs(value.get("categoriesNames")) or (),
         score=score,
         first_published=_as_int(value.get("firstPublished")),
         min_load_time=_as_float(value.get("minLoadTime")),
@@ -289,7 +285,7 @@ class YandexFeedParser:
 
 
 class YandexGetGamesParser:
-    version = "1"
+    version = "2"
 
     def parse(self, body: bytes) -> GetGamesResult:
         data = _string_mapping(_load_json(body))

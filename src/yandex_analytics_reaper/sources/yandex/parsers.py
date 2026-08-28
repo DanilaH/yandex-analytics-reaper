@@ -4,7 +4,7 @@ import html as html_lib
 import json
 import re
 from collections.abc import Mapping
-from typing import Any
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,7 +35,7 @@ class GameCard(BaseModel):
     player_rating: float | None = None
     rating_count: int | None = None
     yandex_rating: int | None = None
-    badge: dict[str, Any] = Field(default_factory=dict)
+    badge: dict[str, object] = Field(default_factory=dict)
     source_marker: str | None = None
     sponsored: bool = False
     row: int | None = None
@@ -65,7 +65,7 @@ class GameDetails(GameCard):
     leaderboards: bool | None = None
     purchases_enabled: bool | None = None
     has_products: bool | None = None
-    media: dict[str, Any] = Field(default_factory=dict)
+    media: dict[str, object] = Field(default_factory=dict)
 
 
 class GetGamesResult(BaseModel):
@@ -87,20 +87,34 @@ class PlayPageData(BaseModel):
     leaderboards: bool | None = None
     purchases_enabled: bool | None = None
     has_products: bool | None = None
-    raw_game_data: dict[str, Any] = Field(default_factory=dict)
+    raw_game_data: dict[str, object] = Field(default_factory=dict)
 
 
-def _load_json(body: bytes) -> Any:
+def _load_json(body: bytes) -> object:
     try:
-        return json.loads(body)
+        value: object = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError("response is not valid JSON") from exc
+    return value
+
+
+def _string_mapping(value: object) -> dict[str, object] | None:
+    """Validate a JSON object boundary once so Any does not leak through the parser."""
+
+    if not isinstance(value, dict):
+        return None
+    if not all(isinstance(key, str) for key in value):
+        return None
+    return cast(dict[str, object], value)
 
 
 def _developer(value: object) -> Developer | None:
-    if not isinstance(value, Mapping):
+    data = _string_mapping(value)
+    if data is None:
         return None
-    return Developer(id=value.get("id"), name=_as_str(value.get("name")))
+    raw_id = data.get("id")
+    developer_id = raw_id if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool) else None
+    return Developer(id=developer_id, name=_as_str(data.get("name")))
 
 
 def _as_int(value: object) -> int | None:
@@ -133,6 +147,10 @@ def _as_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+def _as_bool(value: object) -> bool | None:
+    return value if isinstance(value, bool) else None
+
+
 def _tuple_ints(value: object) -> tuple[int, ...]:
     if not isinstance(value, list):
         return ()
@@ -145,17 +163,17 @@ def _tuple_strs(value: object) -> tuple[str, ...]:
     return tuple(v for v in value if isinstance(v, str))
 
 
-def _is_sponsored(game: Mapping[str, Any]) -> bool:
-    badge = game.get("badge")
-    badge_type = badge.get("badgeType") if isinstance(badge, Mapping) else None
+def _is_sponsored(game: Mapping[str, object]) -> bool:
+    badge = _string_mapping(game.get("badge"))
+    badge_type = badge.get("badgeType") if badge is not None else None
     return bool(game.get("source") or game.get("click_link") or badge_type == "badge.direct")
 
 
-def _card(value: Mapping[str, Any]) -> GameCard | None:
+def _card(value: Mapping[str, object]) -> GameCard | None:
     app_id = _as_int(value.get("appID"))
     if app_id is None:
         return None
-    badge = value.get("badge") if isinstance(value.get("badge"), dict) else {}
+    badge = _string_mapping(value.get("badge")) or {}
     return GameCard(
         app_id=app_id,
         title=_as_str(value.get("title")),
@@ -173,47 +191,91 @@ def _card(value: Mapping[str, Any]) -> GameCard | None:
     )
 
 
+def _details(card: GameCard, value: Mapping[str, object]) -> GameDetails:
+    features = _string_mapping(value.get("features")) or {}
+    extra = _string_mapping(value.get("extraFeatures")) or {}
+    score_raw = _string_mapping(value.get("score")) or {}
+    score = {
+        key: raw_count
+        for key, raw_count in score_raw.items()
+        if isinstance(raw_count, int) and not isinstance(raw_count, bool)
+    }
+    media = _string_mapping(value.get("media")) or {}
+    return GameDetails(
+        app_id=card.app_id,
+        title=card.title,
+        developer=card.developer,
+        category_ids=card.category_ids,
+        tag_ids=card.tag_ids,
+        player_rating=card.player_rating,
+        rating_count=card.rating_count,
+        yandex_rating=card.yandex_rating,
+        badge=card.badge,
+        source_marker=card.source_marker,
+        sponsored=card.sponsored,
+        row=card.row,
+        column=card.column,
+        categories_names=_tuple_strs(value.get("categoriesNames")),
+        score=score,
+        first_published=_as_int(value.get("firstPublished")),
+        min_load_time=_as_float(value.get("minLoadTime")),
+        description=_as_str(value.get("description")),
+        instruction=_as_str(value.get("instruction")),
+        seo_description=_as_str(value.get("seoDescription")),
+        languages=_tuple_strs(features.get("languages")),
+        platforms=_tuple_strs(features.get("platforms")),
+        orientation=_as_str(features.get("orientation")),
+        cloud_save=_as_bool(features.get("cloud_save")),
+        leaderboards=_as_bool(extra.get("leaderboards")),
+        purchases_enabled=_as_bool(extra.get("purchases")),
+        has_products=_as_bool(extra.get("hasProducts")),
+        media=media,
+    )
+
+
 class YandexFeedParser:
     version = "1"
 
     def parse(self, body: bytes) -> FeedPage:
-        data = _load_json(body)
-        if not isinstance(data, Mapping):
+        data = _string_mapping(_load_json(body))
+        if data is None:
             raise ValueError("feed root must be an object")
 
         games: list[GameCard] = []
         seen: set[int] = set()
         feed = data.get("feed")
         if isinstance(feed, list):
-            for block in feed:
-                if not isinstance(block, Mapping):
+            for raw_block in feed:
+                block = _string_mapping(raw_block)
+                if block is None:
                     continue
                 widgets = block.get("widgets")
                 if isinstance(widgets, list):
-                    for widget in widgets:
-                        if not isinstance(widget, Mapping) or widget.get("type") != "game":
+                    for raw_widget in widgets:
+                        widget = _string_mapping(raw_widget)
+                        if widget is None or widget.get("type") != "game":
                             continue
-                        game_data = widget.get("data")
-                        if isinstance(game_data, Mapping):
+                        game_data = _string_mapping(widget.get("data"))
+                        if game_data is not None:
                             card = _card(game_data)
                             if card is not None and card.app_id not in seen:
                                 seen.add(card.app_id)
                                 games.append(card)
                 items = block.get("items")
                 if isinstance(items, list):
-                    for item in items:
-                        if isinstance(item, Mapping):
+                    for raw_item in items:
+                        item = _string_mapping(raw_item)
+                        if item is not None:
                             card = _card(item)
                             if card is not None and card.app_id not in seen:
                                 seen.add(card.app_id)
                                 games.append(card)
 
-        page_info_value = data.get("pageInfo")
-        page_info_map = page_info_value if isinstance(page_info_value, Mapping) else {}
+        page_info_map = _string_mapping(data.get("pageInfo")) or {}
         page_info = PageInfo(
             next_page_id=_as_str(page_info_map.get("nextPageId")),
             rtx_reqid=_as_str(page_info_map.get("rtxReqId")),
-            has_next_page=bool(page_info_map.get("hasNextPage")),
+            has_next_page=_as_bool(page_info_map.get("hasNextPage")) or False,
         )
         return FeedPage(
             games=tuple(games),
@@ -226,69 +288,21 @@ class YandexGetGamesParser:
     version = "1"
 
     def parse(self, body: bytes) -> GetGamesResult:
-        data = _load_json(body)
-        if not isinstance(data, Mapping):
+        data = _string_mapping(_load_json(body))
+        if data is None:
             raise ValueError("get_games root must be an object")
         raw_games = data.get("games")
         if not isinstance(raw_games, list):
             return GetGamesResult(games=())
 
         games: list[GameDetails] = []
-        for value in raw_games:
-            if not isinstance(value, Mapping):
+        for raw_value in raw_games:
+            value = _string_mapping(raw_value)
+            if value is None:
                 continue
             card = _card(value)
-            if card is None:
-                continue
-            features = value.get("features") if isinstance(value.get("features"), Mapping) else {}
-            extra = (
-                value.get("extraFeatures")
-                if isinstance(value.get("extraFeatures"), Mapping)
-                else {}
-            )
-            score_raw = value.get("score") if isinstance(value.get("score"), Mapping) else {}
-            score = {
-                str(k): v
-                for k, v in score_raw.items()
-                if isinstance(k, (str, int)) and isinstance(v, int) and not isinstance(v, bool)
-            }
-            media = value.get("media") if isinstance(value.get("media"), dict) else {}
-            games.append(
-                GameDetails(
-                    **card.model_dump(),
-                    categories_names=_tuple_strs(value.get("categoriesNames")),
-                    score=score,
-                    first_published=_as_int(value.get("firstPublished")),
-                    min_load_time=_as_float(value.get("minLoadTime")),
-                    description=_as_str(value.get("description")),
-                    instruction=_as_str(value.get("instruction")),
-                    seo_description=_as_str(value.get("seoDescription")),
-                    languages=_tuple_strs(features.get("languages")),
-                    platforms=_tuple_strs(features.get("platforms")),
-                    orientation=_as_str(features.get("orientation")),
-                    cloud_save=(
-                        features.get("cloud_save")
-                        if isinstance(features.get("cloud_save"), bool)
-                        else None
-                    ),
-                    leaderboards=(
-                        extra.get("leaderboards")
-                        if isinstance(extra.get("leaderboards"), bool)
-                        else None
-                    ),
-                    purchases_enabled=(
-                        extra.get("purchases")
-                        if isinstance(extra.get("purchases"), bool)
-                        else None
-                    ),
-                    has_products=(
-                        extra.get("hasProducts")
-                        if isinstance(extra.get("hasProducts"), bool)
-                        else None
-                    ),
-                    media=media,
-                )
-            )
+            if card is not None:
+                games.append(_details(card, value))
         return GetGamesResult(games=tuple(games))
 
 
@@ -303,65 +317,48 @@ class YandexPlayPageParser:
             page_html = body.decode("utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("game page is not UTF-8") from exc
-        payload = self._extract_script(page_html, "__playPageData__")
-        if not isinstance(payload, Mapping):
+
+        payload = _string_mapping(self._extract_script(page_html, "__playPageData__"))
+        if payload is None:
             raise ValueError("__playPageData__ was not found")
-        raw_game = payload.get("gameData")
-        game_data = raw_game if isinstance(raw_game, dict) else {}
-        adv = (
-            game_data.get("advUsedBlocks")
-            if isinstance(game_data.get("advUsedBlocks"), Mapping)
-            else {}
-        )
-        extra = (
-            game_data.get("extraFeatures")
-            if isinstance(game_data.get("extraFeatures"), Mapping)
-            else {}
-        )
-        settings = (
-            game_data.get("settings")
-            if isinstance(game_data.get("settings"), Mapping)
-            else {}
-        )
-        settings_adv = settings.get("adv") if isinstance(settings.get("adv"), Mapping) else {}
+        game_data = _string_mapping(payload.get("gameData")) or {}
+        adv = _string_mapping(game_data.get("advUsedBlocks")) or {}
+        extra = _string_mapping(game_data.get("extraFeatures")) or {}
+        settings = _string_mapping(game_data.get("settings")) or {}
+        settings_adv = _string_mapping(settings.get("adv")) or {}
         sticky = settings_adv.get("sticky")
-        sticky_enabled: bool | None
+
+        sticky_enabled: bool | None = None
         if isinstance(sticky, bool):
             sticky_enabled = sticky
-        elif isinstance(sticky, Mapping) and isinstance(sticky.get("enabled"), bool):
-            sticky_enabled = sticky["enabled"]
         else:
-            sticky_enabled = None
+            sticky_config = _string_mapping(sticky)
+            if sticky_config is not None:
+                sticky_enabled = _as_bool(sticky_config.get("enabled"))
+
         return PlayPageData(
             app_id=_as_int(game_data.get("appID")),
             app_version=_as_str(game_data.get("appVersion")),
             published_time=_as_int(game_data.get("publishedTime")),
             yandex_rating=_as_int(game_data.get("gqRating")),
-            rewarded_ads=adv.get("rewarded") if isinstance(adv.get("rewarded"), bool) else None,
-            fullscreen_ads=(
-                adv.get("fullscreen") if isinstance(adv.get("fullscreen"), bool) else None
-            ),
+            rewarded_ads=_as_bool(adv.get("rewarded")),
+            fullscreen_ads=_as_bool(adv.get("fullscreen")),
             sticky_ads=sticky_enabled,
-            leaderboards=(
-                extra.get("leaderboards") if isinstance(extra.get("leaderboards"), bool) else None
-            ),
-            purchases_enabled=(
-                extra.get("purchases") if isinstance(extra.get("purchases"), bool) else None
-            ),
-            has_products=(
-                extra.get("hasProducts") if isinstance(extra.get("hasProducts"), bool) else None
-            ),
+            leaderboards=_as_bool(extra.get("leaderboards")),
+            purchases_enabled=_as_bool(extra.get("purchases")),
+            has_products=_as_bool(extra.get("hasProducts")),
             raw_game_data=game_data,
         )
 
     @staticmethod
-    def _extract_script(page_html: str, script_id: str) -> Any | None:
+    def _extract_script(page_html: str, script_id: str) -> object | None:
         pattern = re.compile(_SCRIPT_TEMPLATE.format(script_id=re.escape(script_id)), re.S | re.I)
         match = pattern.search(page_html)
         if match is None:
             return None
         raw = html_lib.unescape(match.group(1)).strip()
         try:
-            return json.loads(raw)
+            value: object = json.loads(raw)
         except json.JSONDecodeError:
             return None
+        return value

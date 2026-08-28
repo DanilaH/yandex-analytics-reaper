@@ -4,7 +4,7 @@
 
 Finish, independently review, and merge each task/phase before expanding scope unless the roadmap is explicitly amended.
 
-## Phase 1 — Foundation (current PR)
+## Phase 1 — Foundation
 
 - [x] repository bootstrap
 - [x] strict Python project configuration
@@ -16,13 +16,14 @@ Finish, independently review, and merge each task/phase before expanding scope u
 - [x] explicit manual probe CLI
 - [x] fixture/unit tests
 - [x] living specification structure and agent workflow
-- [ ] independent final diff review
-- [ ] green `ruff check .`
-- [ ] green `mypy src`
-- [ ] green `pytest`
-- [ ] merge foundation
+- [x] independent final diff review
+- [x] green `ruff check .`
+- [x] green `mypy src`
+- [x] green `pytest`
 
 **Definition of Done:** the repository has strict quality gates, immutable raw capture, source/capability boundaries, source DTO parsing, reviewed living specs, and no known blocking review findings. Normalized market-state persistence is intentionally not part of Phase 1.
+
+Phase 1 is complete when this foundation lands on `main`.
 
 ## Phase 2 — Yandex market state
 

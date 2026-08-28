@@ -2,7 +2,7 @@
 
 Private market-intelligence tooling for discovering and evaluating Yandex Games opportunities.
 
-The system is designed around two jobs:
+The system has two jobs:
 
 ```text
 OPPORTUNITY DISCOVERY
@@ -12,7 +12,7 @@ CANDIDATE EVALUATION
 candidate → evidence → BUILD / WATCH / SKIP
 ```
 
-It does **not** treat competitor proxies as an exact prediction of game success. The core analytical model is:
+It does **not** treat competitor proxies as an exact prediction of game success. The analytical model is:
 
 ```text
 Market Prior
@@ -26,30 +26,44 @@ Market Prior
 
 ## Current status
 
-Repository foundation / Phase 1.
+**Phase 1 — Foundation is being finalized in PR #1.**
 
-Implemented in this bootstrap:
+Implemented in the bootstrap branch:
 
 - source capability contracts;
 - immutable filesystem raw-snapshot store;
-- evidence envelope and explicit unknown semantics;
-- platform-neutral domain models;
+- platform-neutral domain primitives;
+- evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
-- parsers for `feed`, `get_games`, and `__playPageData__`;
-- low-volume CLI probe that persists raw responses before parsing;
-- taxonomy/candidate model foundations;
-- tests, Ruff, mypy, and GitHub Actions;
-- reviewed pre-development specification under `docs/predev/`.
+- source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
+- manual CLI probes that persist raw responses before parsing;
+- fixture/unit tests;
+- Ruff, strict mypy, pytest, and GitHub Actions quality gates;
+- reviewed living specifications under `docs/spec/`.
 
 Not implemented yet:
 
-- database persistence;
+- source DTO → domain normalizers;
+- normalized/database persistence and lineage persistence;
 - scheduled collection;
-- final taxonomy classifier;
-- historical backfill;
-- backtest engine;
+- validated taxonomy classifier;
+- historical backfill/backtesting;
+- external trend connectors;
 - UI/dashboard;
-- ML scoring.
+- calibrated ML/ranking model.
+
+See `ROADMAP.md` for the authoritative sequence and phase Definition of Done.
+
+## Repository structure
+
+```text
+src/yandex_analytics_reaper/   application/source/domain code
+tests/                         unit/fixture-driven tests
+data/                          local runtime data; collected data is gitignored
+docs/spec/                     living analytical/domain specifications
+docs/research/                 dated factual probes/research evidence
+docs/history/                  historical review/decision records
+```
 
 ## Requirements
 
@@ -57,9 +71,19 @@ Not implemented yet:
 
 ## Setup
 
+POSIX shell:
+
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 ```
 
@@ -71,9 +95,13 @@ mypy src
 pytest
 ```
 
-## Run a small Yandex probe
+All three are merge gates. A red CI run is not considered merge-ready.
 
-This command fetches one feed page, stores the raw response, and prints a parsed summary:
+## Manual Yandex probes
+
+The current CLI is a **manual probe/debug interface**, not the production scheduled collector.
+
+Feed:
 
 ```bash
 yandex-reaper probe-feed --count 20 --output data/raw
@@ -85,22 +113,28 @@ Search:
 yandex-reaper probe-search "merge" --output data/raw
 ```
 
-Fetch rich game metadata:
+Rich game metadata:
 
 ```bash
 yandex-reaper probe-games 438560 354517 --output data/raw
 ```
 
-The CLI intentionally performs only explicit user-triggered requests. Scheduling/orchestration belongs to a later phase.
+Game page / `__playPageData__`:
 
-## Read before changing architecture
+```bash
+yandex-reaper probe-page 438560 --output data/raw
+```
 
-1. `AGENTS.md`
-2. `ARCHITECTURE.md`
-3. `ROADMAP.md`
-4. `docs/predev/00_SYSTEM_PRINCIPLES_AND_DOR.md`
-5. `docs/predev/07_PRODUCTION_DATA_MODEL_V2.md`
+Each probe persists the raw response before parsing.
 
-The live-probe evidence that motivated the current Yandex adapter is preserved in:
+## Read before changing the project
+
+1. `AGENTS.md` — engineering/agent workflow;
+2. `ARCHITECTURE.md` — package and ingestion boundaries;
+3. `ROADMAP.md` — current phase and sequencing;
+4. relevant living spec under `docs/spec/`;
+5. relevant dated evidence under `docs/research/` when source behavior matters.
+
+The live-probe evidence that motivated the Yandex adapter is preserved in:
 
 `docs/research/YANDEX_PRELAUNCH_DATA_FEASIBILITY_2026-08-28.md`

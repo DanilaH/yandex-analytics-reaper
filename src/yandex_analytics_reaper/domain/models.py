@@ -50,7 +50,7 @@ class SessionProfile(StrEnum):
 class ProbeContext(BaseModel):
     """Context that may affect catalog/search/exposure observations."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     language: str = "ru"
     device_type: str = "desktop"

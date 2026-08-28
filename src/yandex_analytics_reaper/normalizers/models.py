@@ -15,7 +15,7 @@ from yandex_analytics_reaper.domain import (
 class NormalizationContext(BaseModel):
     """Times shared by observations emitted from one parsed source response."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     observed_at: datetime
     available_at: datetime
@@ -25,7 +25,7 @@ class NormalizationContext(BaseModel):
 class NormalizedListingObservation(BaseModel):
     """Stable domain output from a source-specific listing DTO."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     listing: PlatformListing
     developer: PlatformDeveloper | None

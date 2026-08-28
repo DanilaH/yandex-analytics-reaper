@@ -19,7 +19,6 @@ class YandexGameNormalizer:
     """Convert Yandex source DTOs into stable platform-neutral domain observations."""
 
     version = "1"
-    _platform = Platform.YANDEX_GAMES
 
     def normalize_card(
         self,
@@ -49,7 +48,7 @@ class YandexGameNormalizer:
     ) -> NormalizedListingObservation:
         first_published_at = _unix_time(details.first_published)
         listing, developer = self._identity(details, first_published=first_published_at)
-        metrics = (*self._card_metrics(details, context.observed_at),)
+        metrics = self._card_metrics(details, context.observed_at)
         if details.min_load_time is not None:
             metrics += (
                 GameMetricObservation(
@@ -198,7 +197,7 @@ def _developer(card: GameCard) -> PlatformDeveloper | None:
     external_id = str(card.developer.id)
     return PlatformDeveloper(
         id=f"{Platform.YANDEX_GAMES.value}:{external_id}",
-        platform=Platform.YANDEX_GAMES.value,
+        platform=Platform.YANDEX_GAMES,
         external_developer_id=external_id,
         display_name=card.developer.name,
     )
@@ -209,5 +208,5 @@ def _unix_time(value: int | None) -> datetime | None:
         return None
     try:
         return datetime.fromtimestamp(value, UTC)
-    except (OSError, OverflowError, ValueError):
-        return None
+    except (OSError, OverflowError, ValueError) as exc:
+        raise ValueError(f"invalid Unix timestamp from source: {value}") from exc

@@ -5,6 +5,8 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
+from .models import Platform
+
 
 class GameMetricName(StrEnum):
     YANDEX_GAMES_RATING = "yandex_games_rating"
@@ -14,10 +16,10 @@ class GameMetricName(StrEnum):
 
 
 class PlatformDeveloper(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     id: str
-    platform: str
+    platform: Platform
     external_developer_id: str
     display_name: str | None = None
 
@@ -25,7 +27,7 @@ class PlatformDeveloper(BaseModel):
 class ListingStateObservation(BaseModel):
     """Platform-neutral semantic snapshot of listing fields observed at one time."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     platform_listing_id: str
     observed_at: datetime
@@ -48,7 +50,7 @@ class ListingStateObservation(BaseModel):
 class GameMetricObservation(BaseModel):
     """One observed semantic metric; missing source values produce no metric observation."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     platform_listing_id: str
     observed_at: datetime

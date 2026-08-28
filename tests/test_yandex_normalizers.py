@@ -3,8 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
+from pydantic import ValidationError
 
-from yandex_analytics_reaper.domain import GameMetricName, SessionProfile
+from yandex_analytics_reaper.domain import GameMetricName, Platform, ProbeContext, SessionProfile
 from yandex_analytics_reaper.normalizers import NormalizationContext, YandexGameNormalizer
 from yandex_analytics_reaper.sources.yandex.parsers import Developer, GameDetails, PlayPageData
 
@@ -38,6 +39,7 @@ def test_details_normalizer_converts_source_dto_to_domain_semantics() -> None:
     assert normalized.listing.id == "yandex_games:438560"
     assert normalized.listing.external_app_id == "438560"
     assert normalized.developer is not None
+    assert normalized.developer.platform is Platform.YANDEX_GAMES
     assert normalized.developer.external_developer_id == "10"
     assert normalized.listing_state.developer_id == "yandex_games:10"
     assert normalized.listing_state.languages == ("ru", "en")
@@ -81,5 +83,16 @@ def test_play_page_normalizer_rejects_missing_identity() -> None:
         YandexGameNormalizer().normalize_play_page(PlayPageData(), _context())
 
 
-def test_session_profile_is_the_only_auth_semantic_in_probe_context() -> None:
-    assert SessionProfile.AUTHENTICATED_TEST.value == "authenticated_test"
+def test_normalizer_rejects_invalid_source_timestamp() -> None:
+    details = GameDetails(app_id=1, first_published=10**30)
+
+    with pytest.raises(ValueError, match="invalid Unix timestamp"):
+        YandexGameNormalizer().normalize_details(details, _context())
+
+
+def test_probe_context_rejects_redundant_authenticated_state() -> None:
+    with pytest.raises(ValidationError, match="authenticated_state"):
+        ProbeContext(authenticated_state=True)
+
+    context = ProbeContext(session_profile=SessionProfile.AUTHENTICATED_TEST)
+    assert context.session_profile is SessionProfile.AUTHENTICATED_TEST

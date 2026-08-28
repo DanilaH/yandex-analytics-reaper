@@ -17,20 +17,12 @@ class MeasurementKind(StrEnum):
     ESTIMATED = "estimated"
     DERIVED = "derived"
     INFERRED = "inferred"
-    EDITORIAL = "editorial"
 
 
 class SemanticConfidence(StrEnum):
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
-    UNKNOWN = "unknown"
-
-
-class FreshnessStatus(StrEnum):
-    FRESH = "fresh"
-    STALE = "stale"
-    HISTORICAL = "historical"
     UNKNOWN = "unknown"
 
 
@@ -41,9 +33,15 @@ class CoverageStatus(StrEnum):
     UNKNOWN = "unknown"
 
 
-class PointInTimeIntegrity(StrEnum):
-    STRICT_POINT_IN_TIME = "strict_point_in_time"
-    HISTORICAL_SNAPSHOT = "historical_snapshot"
+class HistoricalAvailability(StrEnum):
+    POINT_IN_TIME = "point_in_time"
+    RECONSTRUCTED = "reconstructed"
+    UNKNOWN = "unknown"
+
+
+class RevisionStatus(StrEnum):
+    IMMUTABLE = "immutable"
+    REVISED = "revised"
     RETROACTIVELY_RECALCULATED = "retroactively_recalculated"
     UNKNOWN = "unknown"
 
@@ -75,13 +73,15 @@ class EvidenceEnvelope(BaseModel):
 
     source_id: str
     observed_at: datetime
+    available_at: datetime | None = None
+    retrieved_at: datetime | None = None
     period_start: datetime | None = None
     period_end: datetime | None = None
     provenance: Provenance
     measurement_kind: MeasurementKind
     semantic_confidence: SemanticConfidence = SemanticConfidence.UNKNOWN
-    freshness_status: FreshnessStatus = FreshnessStatus.UNKNOWN
     coverage_status: CoverageStatus = CoverageStatus.UNKNOWN
-    point_in_time_integrity: PointInTimeIntegrity = PointInTimeIntegrity.UNKNOWN
+    historical_availability: HistoricalAvailability = HistoricalAvailability.UNKNOWN
+    revision_status: RevisionStatus = RevisionStatus.UNKNOWN
     uncertainty: Uncertainty | None = None
     lineage_refs: tuple[str, ...] = ()

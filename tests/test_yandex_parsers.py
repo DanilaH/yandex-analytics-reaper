@@ -124,3 +124,21 @@ def test_play_page_parser_reads_play_page_data() -> None:
     assert parsed.fullscreen_ads is False
     assert parsed.sticky_ads is True
     assert parsed.has_products is True
+
+
+def test_play_page_parser_respects_disabled_sticky_config() -> None:
+    payload = {
+        "gameData": {
+            "appID": 1,
+            "settings": {"adv": {"sticky": {"enabled": False}}},
+        }
+    }
+    html = (
+        '<html><script id="__playPageData__" type="application/json">'
+        + json.dumps(payload)
+        + "</script></html>"
+    )
+
+    parsed = YandexPlayPageParser().parse(html.encode())
+
+    assert parsed.sticky_ads is False

@@ -31,6 +31,8 @@ class RawSnapshotMetadata(BaseModel):
     source_id: str
     retrieved_at: datetime
     request_key: str
+    method: str
+    url: str
     request_context: dict[str, Any]
     content_path: str
     metadata_path: str
@@ -40,16 +42,24 @@ class RawSnapshotMetadata(BaseModel):
     schema_hash: str | None = None
 
 
+def _redact_value(value: object) -> Any:
+    if isinstance(value, Mapping):
+        return _redact_mapping(value)
+    if isinstance(value, list):
+        return [_redact_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_redact_value(item) for item in value]
+    return value
+
+
 def _redact_mapping(value: Mapping[str, object]) -> dict[str, Any]:
     redacted: dict[str, Any] = {}
     for key, raw_value in value.items():
         lowered = key.lower()
         if lowered in SENSITIVE_KEYS or "token" in lowered or "secret" in lowered:
             redacted[key] = "<redacted>"
-        elif isinstance(raw_value, Mapping):
-            redacted[key] = _redact_mapping(raw_value)
         else:
-            redacted[key] = raw_value
+            redacted[key] = _redact_value(raw_value)
     return redacted
 
 
@@ -103,6 +113,8 @@ class FilesystemRawSnapshotStore:
             source_id=response.source_id,
             retrieved_at=retrieved,
             request_key=response.request_key,
+            method=response.method,
+            url=response.url,
             request_context=_redact_mapping(response.request_context),
             content_path=str(content_path.relative_to(self.root)),
             metadata_path=str(metadata_path.relative_to(self.root)),

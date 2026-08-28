@@ -328,8 +328,8 @@ class YandexPlayPageParser:
         sticky_enabled: bool | None
         if isinstance(sticky, bool):
             sticky_enabled = sticky
-        elif isinstance(sticky, Mapping):
-            sticky_enabled = bool(sticky)
+        elif isinstance(sticky, Mapping) and isinstance(sticky.get("enabled"), bool):
+            sticky_enabled = sticky["enabled"]
         else:
             sticky_enabled = None
         return PlayPageData(

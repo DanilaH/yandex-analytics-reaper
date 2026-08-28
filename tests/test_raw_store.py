@@ -22,6 +22,7 @@ def _response() -> CollectedResponse:
             "query": "merge",
             "Authorization": "Bearer secret",
             "nested": {"csrf_token": "secret", "safe": "ok"},
+            "items": [{"Authorization": "also-secret", "safe": "list-ok"}],
         },
     )
 
@@ -38,6 +39,10 @@ def test_raw_store_persists_exact_body_and_redacts_metadata(tmp_path: Path) -> N
     assert saved["request_context"]["Authorization"] == "<redacted>"
     assert saved["request_context"]["nested"]["csrf_token"] == "<redacted>"
     assert saved["request_context"]["nested"]["safe"] == "ok"
+    assert saved["request_context"]["items"][0]["Authorization"] == "<redacted>"
+    assert saved["request_context"]["items"][0]["safe"] == "list-ok"
+    assert saved["method"] == "GET"
+    assert saved["url"] == "https://example.test/data"
     assert metadata.schema_hash is not None
 
 

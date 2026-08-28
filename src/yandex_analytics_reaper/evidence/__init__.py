@@ -1,21 +1,21 @@
 from .models import (
     CoverageStatus,
     EvidenceEnvelope,
-    FreshnessStatus,
+    HistoricalAvailability,
     MeasurementKind,
     MissingReason,
-    PointInTimeIntegrity,
     Provenance,
+    RevisionStatus,
     SemanticConfidence,
 )
 
 __all__ = [
     "CoverageStatus",
     "EvidenceEnvelope",
-    "FreshnessStatus",
+    "HistoricalAvailability",
     "MeasurementKind",
     "MissingReason",
-    "PointInTimeIntegrity",
     "Provenance",
+    "RevisionStatus",
     "SemanticConfidence",
 ]

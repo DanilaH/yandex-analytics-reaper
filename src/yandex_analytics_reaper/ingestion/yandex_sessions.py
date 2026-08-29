@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.cookiejar import CookieJar, LoadError, MozillaCookieJar
@@ -46,7 +47,7 @@ class PreparedYandexSession:
         state_error: Exception | None = None
         try:
             if self._persistent_created_at is not None:
-                self._manager._persist_persistent_state(  # noqa: SLF001
+                self._manager._persist_persistent_state(
                     self.client,
                     created_at=self._persistent_created_at,
                 )
@@ -90,7 +91,7 @@ class YandexSessionManager:
         base_url: str,
         timeout_seconds: float,
         user_agent: str,
-        clock: callable[[], datetime] | None = None,
+        clock: Callable[[], datetime] | None = None,
     ) -> None:
         self.state_root = state_root
         self.base_url = base_url
@@ -218,23 +219,25 @@ class YandexSessionManager:
 
 
 def _cookie_state_hash(jar: CookieJar) -> str:
-    state = [
-        {
-            "domain": cookie.domain,
-            "expires": cookie.expires,
-            "name": cookie.name,
-            "path": cookie.path,
-            "secure": bool(cookie.secure),
-            "value": cookie.value,
-        }
-        for cookie in jar
-    ]
-    state.sort(key=lambda item: (item["domain"], item["path"], item["name"]))
+    state: list[tuple[str, str, str, str, bool, int | None]] = []
+    for cookie in jar:
+        if cookie.is_expired():
+            continue
+        state.append(
+            (
+                cookie.domain or "",
+                cookie.path or "",
+                cookie.name,
+                cookie.value or "",
+                bool(cookie.secure),
+                cookie.expires,
+            )
+        )
+    state.sort(key=lambda item: (item[0], item[1], item[2]))
     encoded = json.dumps(
         state,
         ensure_ascii=False,
         separators=(",", ":"),
-        sort_keys=True,
     ).encode()
     return hashlib.sha256(encoded).hexdigest()
 

@@ -7,6 +7,8 @@ import pytest
 from pydantic import ValidationError
 
 from yandex_analytics_reaper.domain import (
+    Platform,
+    PlatformListing,
     QueryFamilyMember,
     QueryFamilyVersion,
     QueryVariantKind,
@@ -18,7 +20,11 @@ from yandex_analytics_reaper.experiments import (
     CollectionCadenceManifest,
 )
 from yandex_analytics_reaper.experiments.collection_cadence_protocol import _canonical_numeric
-from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLiteQueryFamilyStore
+from yandex_analytics_reaper.storage import (
+    FilesystemRawSnapshotStore,
+    SQLiteIdentityStore,
+    SQLiteQueryFamilyStore,
+)
 
 
 def _listing_ids() -> tuple[str, ...]:
@@ -49,6 +55,25 @@ def _manifest(**updates: object) -> CollectionCadenceManifest:
     }
     values.update(updates)
     return CollectionCadenceManifest.model_validate(values)
+
+
+def _persist_family(database_path: Path, created_at: datetime) -> None:
+    SQLiteQueryFamilyStore(database_path).persist(
+        QueryFamilyVersion(
+            family_id="merge-intent",
+            version=1,
+            label="Merge intent",
+            source_id="yandex_public",
+            language="ru",
+            created_at=created_at,
+            members=(
+                QueryFamilyMember(
+                    query_text="merge",
+                    kind=QueryVariantKind.SEED,
+                ),
+            ),
+        )
+    )
 
 
 def test_cadence_manifest_requires_predeclared_freeze_before_reference_window() -> None:
@@ -86,21 +111,9 @@ def test_cadence_manifest_rejects_fake_daily_spacing_across_midnight() -> None:
 
 def test_query_family_must_exist_before_manifest_freeze(tmp_path: Path) -> None:
     database_path = tmp_path / "market.sqlite3"
-    SQLiteQueryFamilyStore(database_path).persist(
-        QueryFamilyVersion(
-            family_id="merge-intent",
-            version=1,
-            label="Merge intent",
-            source_id="yandex_public",
-            language="ru",
-            created_at=datetime(2026, 9, 1, 9, 30, tzinfo=UTC),
-            members=(
-                QueryFamilyMember(
-                    query_text="merge",
-                    kind=QueryVariantKind.SEED,
-                ),
-            ),
-        )
+    _persist_family(
+        database_path,
+        datetime(2026, 9, 1, 9, 30, tzinfo=UTC),
     )
     manifest = _manifest()
 
@@ -112,6 +125,35 @@ def test_query_family_must_exist_before_manifest_freeze(tmp_path: Path) -> None:
             raw_store=FilesystemRawSnapshotStore(tmp_path / "raw"),
             database_path=database_path,
         ).analyze(manifest)
+
+
+def test_listing_cohort_must_exist_before_manifest_freeze(tmp_path: Path) -> None:
+    database_path = tmp_path / "market.sqlite3"
+    frozen_at = datetime(2026, 9, 1, 9, 0, tzinfo=UTC)
+    _persist_family(database_path, frozen_at - timedelta(hours=1))
+    identity_store = SQLiteIdentityStore(database_path)
+    for app_id in range(1, 21):
+        seen_at = frozen_at - timedelta(hours=1)
+        if app_id == 20:
+            seen_at = frozen_at + timedelta(minutes=1)
+        identity_store.persist_listing_identity(
+            PlatformListing(
+                id=f"yandex_games:{app_id}",
+                platform=Platform.YANDEX_GAMES,
+                external_app_id=str(app_id),
+            ),
+            None,
+            seen_at,
+        )
+
+    with pytest.raises(
+        CollectionCadenceEvidenceError,
+        match="first seen after frozen_at: yandex_games:20",
+    ):
+        CollectionCadenceExperiment(
+            raw_store=FilesystemRawSnapshotStore(tmp_path / "raw"),
+            database_path=database_path,
+        ).analyze(_manifest(frozen_at=frozen_at))
 
 
 def test_cadence_numeric_state_preserves_large_integer_identity() -> None:

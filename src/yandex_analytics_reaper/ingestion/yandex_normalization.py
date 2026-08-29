@@ -16,6 +16,7 @@ from yandex_analytics_reaper.evidence import (
 from yandex_analytics_reaper.normalizers import (
     NormalizationContext,
     NormalizedListingHistories,
+    NormalizedListingObservation,
     YandexGameNormalizer,
     YandexListingHistoryNormalizer,
 )
@@ -77,17 +78,14 @@ class YandexNormalizationPersistence:
 
     def _persist(
         self,
-        normalized: object,
+        normalized: NormalizedListingObservation,
         histories: NormalizedListingHistories,
     ) -> PersistedYandexNormalization:
-        from yandex_analytics_reaper.normalizers import NormalizedListingObservation
-
-        listing_observation = NormalizedListingObservation.model_validate(normalized)
-        context = listing_observation.context
+        context = normalized.context
         evidence = _evidence(context)
         self.identity_store.persist_listing_identity(
-            listing_observation.listing,
-            listing_observation.developer,
+            normalized.listing,
+            normalized.developer,
             context.observed_at,
         )
         metric_ids = self.metric_store.persist_metrics(
@@ -99,7 +97,7 @@ class YandexNormalizationPersistence:
                     normalizer_version=self.game_normalizer.version,
                     lineage=item.lineage,
                 )
-                for item in listing_observation.metrics
+                for item in normalized.metrics
             )
         )
         history_items = tuple(
@@ -110,6 +108,11 @@ class YandexNormalizationPersistence:
             for item in (histories.update, histories.status, histories.media)
             if item is not None
         )
+        history_listing_ids = {
+            item.observation.platform_listing_id for item in history_items
+        }
+        if history_listing_ids != {normalized.listing.id}:
+            raise RuntimeError("Yandex normalizers disagreed on platform listing identity")
         history_ids = self.history_store.persist(
             ListingHistoryWrite(
                 observations=history_items,
@@ -118,13 +121,8 @@ class YandexNormalizationPersistence:
                 normalizer_version=self.history_normalizer.version,
             )
         )
-        history_listing_ids = {
-            item.observation.platform_listing_id for item in history_items
-        }
-        if history_listing_ids != {listing_observation.listing.id}:
-            raise RuntimeError("Yandex normalizers disagreed on platform listing identity")
         return PersistedYandexNormalization(
-            platform_listing_id=listing_observation.listing.id,
+            platform_listing_id=normalized.listing.id,
             metric_observation_ids=metric_ids,
             history_observation_ids=history_ids,
         )

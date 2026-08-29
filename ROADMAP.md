@@ -46,6 +46,8 @@ Phase 1 is complete when this foundation lands on `main`.
 - [x] comparable-set construction
 - [x] update/status/media histories
 - [ ] decide actual collection cadence from measured volatility
+  - [x] freeze `collection-cadence-v1` protocol and merge raw-first reference/downsampling analyzer tooling
+  - [ ] execute the empirical calibration over at least 28 consecutive daily reference checkpoints and record capability/depth cadence decisions
 
 **Definition of Done:** given an `as_of` timestamp, reconstruct the observed Yandex market state with source lineage and known observation coverage.
 

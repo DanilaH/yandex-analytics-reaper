@@ -10,8 +10,9 @@ from datetime import UTC, datetime
 from http.cookiejar import CookieJar, LoadError, MozillaCookieJar
 from pathlib import Path
 from typing import Self
+from uuid import uuid4
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
 from yandex_analytics_reaper.sources.yandex import YandexPublicClient
@@ -29,6 +30,10 @@ class _PersistentSessionMetadata(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     created_at: AwareDatetime
+    session_instance_id: str | None = Field(
+        default=None,
+        pattern=r"^session:[0-9a-f]{32}$",
+    )
 
 
 @dataclass(slots=True)
@@ -39,6 +44,7 @@ class PreparedYandexSession:
     context: ProbeContext
     _manager: YandexSessionManager
     _persistent_created_at: datetime | None = None
+    _persistent_session_instance_id: str | None = None
 
     def __enter__(self) -> Self:
         return self
@@ -47,9 +53,12 @@ class PreparedYandexSession:
         state_error: Exception | None = None
         try:
             if self._persistent_created_at is not None:
+                if self._persistent_session_instance_id is None:
+                    raise RuntimeError("persistent session instance identity is missing")
                 self._manager._persist_persistent_state(
                     self.client,
                     created_at=self._persistent_created_at,
+                    session_instance_id=self._persistent_session_instance_id,
                 )
         except Exception as persist_exc:
             if exc is not None:
@@ -104,7 +113,11 @@ class YandexSessionManager:
 
         if context.session_profile is SessionProfile.CLEAN_ANONYMOUS:
             effective_context = context.model_copy(
-                update={"cookie_state_hash": None, "profile_age_days": 0}
+                update={
+                    "session_instance_id": None,
+                    "cookie_state_hash": None,
+                    "profile_age_days": 0,
+                }
             )
             return PreparedYandexSession(
                 client=self._new_client(),
@@ -113,9 +126,10 @@ class YandexSessionManager:
             )
 
         if context.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
-            jar, created_at = self._load_persistent_state(now)
+            jar, created_at, session_instance_id = self._load_persistent_state(now)
             effective_context = context.model_copy(
                 update={
+                    "session_instance_id": session_instance_id,
                     "cookie_state_hash": _cookie_state_hash(jar),
                     "profile_age_days": _profile_age_days(created_at, now),
                 }
@@ -125,6 +139,7 @@ class YandexSessionManager:
                 context=ProbeContext.model_validate(effective_context.model_dump()),
                 _manager=self,
                 _persistent_created_at=created_at,
+                _persistent_session_instance_id=session_instance_id,
             )
 
         raise SessionConfigurationError(
@@ -157,7 +172,10 @@ class YandexSessionManager:
     def _metadata_path(self) -> Path:
         return self._profile_dir / "metadata.json"
 
-    def _load_persistent_state(self, now: datetime) -> tuple[MozillaCookieJar, datetime]:
+    def _load_persistent_state(
+        self,
+        now: datetime,
+    ) -> tuple[MozillaCookieJar, datetime, str]:
         profile_exists = self._profile_dir.exists()
         cookie_exists = self._cookie_path.is_file()
         metadata_exists = self._metadata_path.is_file()
@@ -168,7 +186,7 @@ class YandexSessionManager:
             )
 
         if not profile_exists:
-            return MozillaCookieJar(), now
+            return MozillaCookieJar(), now, _new_session_instance_id()
 
         try:
             metadata = _PersistentSessionMetadata.model_validate_json(
@@ -186,13 +204,14 @@ class YandexSessionManager:
             jar.load(ignore_discard=True, ignore_expires=False)
         except (OSError, LoadError) as exc:
             raise SessionStateError("persistent anonymous cookie jar is invalid") from exc
-        return jar, created_at
+        return jar, created_at, metadata.session_instance_id or _new_session_instance_id()
 
     def _persist_persistent_state(
         self,
         client: YandexPublicClient,
         *,
         created_at: datetime,
+        session_instance_id: str,
     ) -> None:
         cookie_tmp = self._cookie_path.with_suffix(".tmp")
         metadata_tmp = self._metadata_path.with_suffix(".tmp")
@@ -206,7 +225,10 @@ class YandexSessionManager:
 
             jar.save(ignore_discard=True, ignore_expires=False)
             _make_private(cookie_tmp)
-            metadata = _PersistentSessionMetadata(created_at=created_at)
+            metadata = _PersistentSessionMetadata(
+                created_at=created_at,
+                session_instance_id=session_instance_id,
+            )
             metadata_tmp.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
             _make_private(metadata_tmp)
             os.replace(cookie_tmp, self._cookie_path)
@@ -247,6 +269,10 @@ def _profile_age_days(created_at: datetime, now: datetime) -> int:
     if now < created_at:
         raise SessionStateError("persistent anonymous session creation time is in the future")
     return (now - created_at).days
+
+
+def _new_session_instance_id() -> str:
+    return f"session:{uuid4().hex}"
 
 
 def _make_private(path: Path) -> None:

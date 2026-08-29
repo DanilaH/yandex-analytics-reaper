@@ -58,5 +58,9 @@ class ProbeContext(BaseModel):
     country_observed: str | None = None
     collector_region: str | None = None
     session_profile: SessionProfile = SessionProfile.CLEAN_ANONYMOUS
+    session_instance_id: str | None = Field(
+        default=None,
+        pattern=r"^session:[0-9a-f]{32}$",
+    )
     cookie_state_hash: str | None = None
     profile_age_days: int | None = Field(default=None, ge=0)

@@ -5,6 +5,7 @@ from .observations import (
     ListingStateObservation,
     PlatformDeveloper,
 )
+from .probes import ProbeKind, ProbePage, ProbeRun, ProbeRunStatus
 
 __all__ = [
     "Game",
@@ -15,5 +16,9 @@ __all__ = [
     "PlatformDeveloper",
     "PlatformListing",
     "ProbeContext",
+    "ProbeKind",
+    "ProbePage",
+    "ProbeRun",
+    "ProbeRunStatus",
     "SessionProfile",
 ]

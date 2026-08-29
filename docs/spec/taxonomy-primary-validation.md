@@ -75,10 +75,24 @@ Semantics:
 The v1 contract SHA-256 content identity is:
 
 ```text
-6cd79128d565e4673dc61e76612587cd0ad849eafa3ab4e37468e3bc51c72576
+83d983d0062d61a6fb434b9b18debc536aba712b7a31ee584fdb7268f8f93d57
 ```
 
-It covers the exact modeled archetype order, `other/unknown` special states, disposition registry, review fields/rules, and the frozen manual annotation-contract content hash.
+It covers:
+
+- the validation spec and review-contract versions;
+- the exact `taxonomy-diversity-sample-v1` and `taxonomy-gold-set-v1` input protocol versions;
+- the frozen manual annotation-contract content hash;
+- exact modeled archetype order and `other` / `unknown` special states;
+- exact disposition registry;
+- declaration, review-row, report-entry, and report field surfaces;
+- the 100–200 reviewed-label bounds;
+- exact gold-set binding, review-order, evidence, rationale, zero-support, and insufficient-evidence rules;
+- UTC datetime canonicalization and deterministic JSON content-hash canonicalization;
+- the rule that support diagnostics are not automatic validation thresholds;
+- the separation from agreement/confusion analysis.
+
+Because no real primary-archetype review had used v1 yet, this identity was completed before first empirical use rather than preserving an incomplete decorative hash.
 
 ## Declaration
 
@@ -108,11 +122,11 @@ evidence_listing_ids[]
 rationale
 ```
 
-Rationale is always required.
+Rationale is always required, nonblank, and already trimmed. Evidence IDs are normalized to trimmed IDs, must be nonblank, and must be unique within a review row.
 
 Evidence IDs are manual anchors into the exact adjudicated gold set. Every cited listing must itself be adjudicated to the archetype being reviewed. A substantive disposition other than `insufficient_evidence` requires at least one cited listing.
 
-If the gold set contains **zero** examples of an archetype, v1 forces `insufficient_evidence`. A reviewer cannot mark an unobserved label `keep` merely because its definition seems reasonable in the abstract.
+If the gold set contains **zero** examples of an archetype, v1 forces `insufficient_evidence`. A reviewer cannot mark an unobserved label `keep` merely because its definition seems reasonable in the abstract. Conversely, a supported archetype may still receive `insufficient_evidence` when the available examples are not enough to make a confident boundary judgment.
 
 ## Report diagnostics
 

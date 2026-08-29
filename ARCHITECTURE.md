@@ -149,10 +149,10 @@ The filesystem raw store supports deterministic metadata and exact-body replay b
 
 ## Experiment/replay boundary
 
-Calibration experiments consume already persisted evidence; they do not own collection. The first implementation is `experiments/feed_depth.py`.
+Calibration experiments consume already persisted evidence; they do not own collection. Current implementations are `experiments/feed_depth.py` and `experiments/session_profile_stability.py`.
 
 ```text
-explicit ProbeRun IDs
+explicit ProbeRun IDs / matched blocks
 → load ProbeRun + ProbeContext + ordered ProbePages
 → replay immutable raw bodies
 → verify content hash
@@ -164,11 +164,13 @@ explicit ProbeRun IDs
 → emit report
 ```
 
-The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial membership is explicit in the analysis invocation/report.
+The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial/block membership is explicit in the analysis invocation/report.
 
-`feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. Session-profile stability and other context dimensions remain separate roadmap experiments. A legitimate source exhaustion before the configured ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
+`feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. A legitimate source exhaustion before the configured ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
 
-Synthetic fixture tests validate the analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth item remains incomplete until the frozen minimum real-sample requirements are met and the report yields a recommendation.
+`session-profile-stability-v1` uses explicit four-run matched blocks (`C-P-P-C` or `P-C-C-P`) and one stable persistent `session_instance_id` across the report. It compares cross-profile similarity with conservative same-profile repeatability at every candidate depth, without consuming the still-pending feed-depth recommendation.
+
+Synthetic fixture tests validate analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth and session-profile items remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
 
 ## Schema drift
 

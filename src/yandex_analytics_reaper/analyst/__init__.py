@@ -34,6 +34,17 @@ from .features import (
     AnalystReleaseWindow,
     validate_analyst_market_features,
 )
+from .pilot import (
+    ANALYST_PILOT_VERIFICATION_SPEC_VERSION,
+    AnalystPilotError,
+    AnalystPilotRepresentativeTrace,
+    AnalystPilotTraceContribution,
+    AnalystPilotVerificationPayload,
+    AnalystPilotVerificationReport,
+    AnalystPilotVerifier,
+    AnalystRawEvidenceVerification,
+    validate_analyst_pilot_verification,
+)
 from .snapshot import (
     ANALYST_SNAPSHOT_SPEC_VERSION,
     AnalystComparableSetBinding,
@@ -52,6 +63,7 @@ from .snapshot import (
 __all__ = [
     "ANALYST_MARKET_EXPORT_SPEC_VERSION",
     "ANALYST_MARKET_FEATURES_SPEC_VERSION",
+    "ANALYST_PILOT_VERIFICATION_SPEC_VERSION",
     "ANALYST_SNAPSHOT_SPEC_VERSION",
     "AnalystComparableMembership",
     "AnalystComparableSetBinding",
@@ -75,8 +87,15 @@ __all__ = [
     "AnalystMarketFeaturesReport",
     "AnalystNumericDistribution",
     "AnalystOrganicExposureSummary",
+    "AnalystPilotError",
+    "AnalystPilotRepresentativeTrace",
+    "AnalystPilotTraceContribution",
+    "AnalystPilotVerificationPayload",
+    "AnalystPilotVerificationReport",
+    "AnalystPilotVerifier",
     "AnalystQuerySupplyPage",
     "AnalystQuerySupplySummary",
+    "AnalystRawEvidenceVerification",
     "AnalystRawSnapshotReference",
     "AnalystReleaseDistribution",
     "AnalystReleaseWindow",
@@ -92,6 +111,7 @@ __all__ = [
     "AnalystUpdateObservation",
     "validate_analyst_market_export",
     "validate_analyst_market_features",
+    "validate_analyst_pilot_verification",
     "validate_analyst_snapshot_report",
     "write_analyst_export_csv",
 ]

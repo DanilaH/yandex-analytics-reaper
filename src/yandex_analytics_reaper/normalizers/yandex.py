@@ -78,6 +78,7 @@ class YandexGameNormalizer:
             title=details.title,
             developer_id=developer.id if developer is not None else None,
             developer_name=developer.display_name if developer is not None else None,
+            first_published_at=first_published_at,
             languages=details.languages,
             supported_platforms=details.platforms,
             orientation=details.orientation,
@@ -247,6 +248,7 @@ def _details_state_lineage(
     base = _source_object_path(details)
     lineage = list(_card_state_lineage(details, state, context))
     mapping = (
+        (state.first_published_at, f"{base}.firstPublished", "first_published_at"),
         (state.languages, f"{base}.features.languages", "languages"),
         (
             state.supported_platforms,

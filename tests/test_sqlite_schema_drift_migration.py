@@ -41,7 +41,8 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
         assert version is not None
         assert version[0] == 4
         columns = {
-            row[1]
+            str(row[1])
             for row in connection.execute("PRAGMA table_info(schema_observations)").fetchall()
         }
         assert "comparison_scope_id" in columns
+        assert "content_hash" in columns

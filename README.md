@@ -43,6 +43,7 @@ Implemented:
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
 - immutable versioned search query-family declarations with exact ordered query membership and SQLite persistence;
+- provisional `yandex_search_union_v1` comparable-set construction from explicit clean search runs, with raw replay, organic union/dedupe, exact member evidence, and immutable SQLite persistence;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -57,7 +58,7 @@ Not implemented yet:
 
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - empirical session-profile classifications from the required real matched-block sample;
-- query-family execution/result union and comparable-set construction;
+- automated query-family execution/scheduling and taxonomy-refined comparable sets;
 - authenticated test-session credential provider;
 - production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
@@ -241,7 +242,17 @@ The report replays immutable raw bodies, verifies stored page linkage and frozen
 
 SQLite persistence is immutable by `(family_id, version)`: repeating the exact same declaration is idempotent, while changing label/source/language/member text/kind/order under an existing version is rejected. Create a new version instead.
 
-This layer deliberately does not generate synonyms, execute the family, union result sets, or build comparable sets. Existing manual search probes continue to persist the exact `query_text` actually sent; later execution/comparable-set work must bind those runs to an exact declared family/version rather than infer membership fuzzily.
+Existing manual search probes continue to persist the exact `query_text` actually sent. Query-family membership is never reconstructed by fuzzy matching after collection.
+
+## Comparable-set construction
+
+`docs/spec/comparable-set.md` owns the first construction semantics. `yandex_search_union_v1` consumes one exact persisted query-family version plus exactly one explicit completed `clean_anonymous` search run per family member. Runs must share one exact `ProbeContext` and requested page limit.
+
+`YandexSearchComparableSetBuilder` replays immutable raw search pages, verifies the raw query/context/pagination request metadata, content integrity, parser version, and stored `ProbePage` linkage, then unions parsed organic Yandex listings in deterministic family/page/card order. Sponsored cards do not contribute membership. Repeated organic listings add evidence without duplicating set members.
+
+`SQLiteComparableSetStore` persists the exact family version, run mapping, first-occurrence member order, observation interval, parser identity, and ordered raw membership evidence. Identical `(set_id, version)` writes are idempotent; conflicting content is rejected, and reads fail closed if referenced family/run/page provenance drifts.
+
+This is deliberately a **provisional search-derived candidate peer set**. The Phase 3 taxonomy is still draft, so `yandex_search_union_v1` does not claim every member is a validated gameplay comparable and does not silently filter with an unvalidated classifier. A later construction version may add frozen taxonomy/classifier refinement without rewriting historical search-union sets.
 
 ## Read before changing the project
 

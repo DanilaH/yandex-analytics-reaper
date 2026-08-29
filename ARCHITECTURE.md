@@ -45,7 +45,7 @@ src/yandex_analytics_reaper/
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
   experiments/    versioned replay/calibration evaluators over stored evidence
-  ingestion/      application-owned collection/run/session orchestration
+  ingestion/      application-owned collection/run/session + normalization orchestration
   normalizers/    source DTO → stable domain observation boundary
   schema_drift/   versioned raw-shape profiling/contracts/drift events
   sources/        source capability contracts
@@ -142,6 +142,8 @@ prepare session + effective context
 
 The CLI delegates session preparation and run lifecycle to ingestion services; it must not duplicate cookie/pagination/terminal-state business logic. A failed/partial run keeps the raw snapshot ID that caused the terminal condition when a response was actually received. If failure occurs before any response exists, terminal raw provenance remains absent rather than being invented.
 
+For the manual `get_games` / game-page paths, raw persistence and schema/parser validation still happen first. After a successful parse, `YandexNormalizationPersistence` composes the existing identity, metric, and listing-history stores to persist normalized observations and field lineage from that exact raw snapshot. It is an application service, not a source client or scheduler, and storage remains unaware of source DTOs/normalizer DTO bundles.
+
 If a probe fails and persistent-session state also cannot be saved, the probe/source error remains the primary exception and the state-save failure is secondary diagnostic context. A corrupt or incomplete persistent session fails closed rather than being silently reset into a different cohort.
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
@@ -150,7 +152,17 @@ The filesystem raw store supports deterministic metadata and exact-body replay b
 
 ## Experiment/replay boundary
 
-Calibration experiments consume already persisted evidence; they do not own collection. Current implementations are `experiments/feed_depth.py` and `experiments/session_profile_stability.py`.
+Calibration experiments consume already persisted evidence; they do not own collection. Current implementations include:
+
+```text
+experiments/feed_depth.py
+experiments/session_profile_stability.py
+experiments/collection_cadence.py
+experiments/collection_cadence_evidence.py
+experiments/collection_cadence_protocol.py
+```
+
+Feed-depth/session-profile replay follows the common probe-run path:
 
 ```text
 explicit ProbeRun IDs / matched blocks
@@ -165,13 +177,32 @@ explicit ProbeRun IDs / matched blocks
 → emit report
 ```
 
-The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial/block membership is explicit in the analysis invocation/report.
+The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial/block/checkpoint membership is explicit in the analysis invocation/report.
 
 `feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. A legitimate source exhaustion before the configured ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
 
 `session-profile-stability-v1` uses explicit four-run matched blocks (`C-P-P-C` or `P-C-C-P`) and one stable persistent `session_instance_id` across the report. It compares cross-profile similarity with conservative same-profile repeatability at every candidate depth, without consuming the still-pending feed-depth recommendation.
 
-Synthetic fixture tests validate analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth and session-profile items remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
+`collection-cadence-v1` adds a second replay shape because it joins normalized state evidence with contextual ranking evidence:
+
+```text
+predeclared manifest (frozen_at + listing cohort + query-family version)
++ 28+ explicit daily checkpoints
++ normalized metric/history observations
++ feed/search ProbeRun IDs
+→ require manifest/query family to predate the reference window
+→ select only point-in-time observations within the frozen checkpoint window
+→ verify normalizer provenance + field lineage + raw snapshot replay
+→ replay feed/search runs and exact ProbePage linkage
+→ build complete daily reference series
+→ retrospectively downsample at 1 / 2 / 3 / 7 days
+→ compare carried state/ranking with observed daily reference
+→ emit capability/depth recommendations only when coverage gates pass
+```
+
+The hardened cadence report records a deterministic manifest identity, the exact submitted run bindings, and the exact normalized observation/raw snapshot IDs used for eligible state points. This prevents a later backfill from silently changing the evidence behind a saved report.
+
+Synthetic fixture tests validate analyzer mechanics but are not empirical calibration evidence. Feed-depth, session-profile, and collection-cadence roadmap parents remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
 
 ## Comparable-set construction boundary
 

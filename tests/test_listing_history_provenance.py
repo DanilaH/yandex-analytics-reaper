@@ -86,6 +86,34 @@ def test_history_write_requires_normalizer_and_lineage_version_agreement(
         )
 
 
+def test_history_write_rejects_duplicate_type_and_mixed_listing(tmp_path: Path) -> None:
+    _, write = _fixture(tmp_path / "market.sqlite3")
+
+    with pytest.raises(ValidationError, match="cannot repeat one observation type"):
+        ListingHistoryWrite(
+            observations=write.observations + (write.observations[0],),
+            evidence=write.evidence,
+            normalizer_name=write.normalizer_name,
+            normalizer_version=write.normalizer_version,
+        )
+
+    second = write.observations[1]
+    mixed = second.model_copy(
+        update={
+            "observation": second.observation.model_copy(
+                update={"platform_listing_id": "yandex_games:2"}
+            )
+        }
+    )
+    with pytest.raises(ValidationError, match="exactly one listing"):
+        ListingHistoryWrite(
+            observations=(write.observations[0], mixed),
+            evidence=write.evidence,
+            normalizer_name=write.normalizer_name,
+            normalizer_version=write.normalizer_version,
+        )
+
+
 def test_store_revalidates_model_copy_before_persistence(tmp_path: Path) -> None:
     store, write = _fixture(tmp_path / "market.sqlite3")
     tampered = write.model_copy(update={"normalizer_version": "999"})

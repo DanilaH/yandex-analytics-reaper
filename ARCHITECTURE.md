@@ -218,7 +218,7 @@ __playPageData__.gameData raw snapshot
 
 `YandexGetGamesParser@4` preserves missing/non-object `media` as `None` and a present empty object as `{}`. The distinction is source semantics and must not be collapsed by the normalizer.
 
-The history normalizer never converts a requested ID omitted from one successful `get_games` response into `deleted` or `unpublished`. For an already-known listing it may emit only the conservative `unknown / requested_but_not_returned` observation. Transport/source failure is not a listing status.
+The v1 history normalizer persists only directly observed `published` presence. It does not convert request omission into `unknown`, `unpublished`, or `deleted`, because current normalization does not prove exact requested-ID membership for that raw response. A future negative-status path must live behind explicit request↔successful-response binding. Transport/source failure is likewise not a listing status.
 
 Each update/status/media item has required field-level lineage. `SQLiteListingHistoryStore` writes the normalized envelope, shared history evidence, typed row, and lineage transactionally; a conflict rolls back the bundle. The store revalidates the write and requires normalizer metadata to agree with lineage transformation metadata. Point-in-time readers fail closed when a stored typed history row has the wrong observation type, missing evidence, or missing field lineage.
 

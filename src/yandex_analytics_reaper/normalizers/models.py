@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from yandex_analytics_reaper.domain import (
     GameMetricObservation,
@@ -57,5 +57,6 @@ class NormalizedListingObservation(BaseModel):
     listing: PlatformListing
     developer: PlatformDeveloper | None
     listing_state: ListingStateObservation
+    listing_state_lineage: tuple[FieldLineage, ...] = Field(min_length=1)
     metrics: tuple[NormalizedMetricObservation, ...] = ()
     context: NormalizationContext

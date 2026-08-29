@@ -24,6 +24,7 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
     )
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE listing_state_observations")
         connection.execute("DROP TABLE collection_cadence_plan_checkpoints")
         connection.execute("DROP TABLE collection_cadence_plan_listings")
         connection.execute("DROP TABLE collection_cadence_plans")
@@ -50,7 +51,7 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 10
+        assert version[0] == 11
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -69,6 +70,7 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
             "comparable_set_member_evidence",
             "listing_history_evidence",
             "collection_cadence_plans",
+            "listing_state_observations",
         } <= tables
 
         context_columns = {

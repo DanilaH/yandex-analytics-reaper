@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -428,6 +428,46 @@ CREATE TABLE IF NOT EXISTS collection_cadence_plan_checkpoints (
     UNIQUE (plan_id, checkpoint_at),
     CHECK (ordinal >= 0)
 );
+""",
+    11: """
+CREATE TABLE IF NOT EXISTS listing_state_observations (
+    observation_id TEXT PRIMARY KEY
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    platform_listing_id TEXT NOT NULL
+        REFERENCES platform_listings(id) ON DELETE CASCADE,
+    title TEXT,
+    developer_id TEXT,
+    app_version TEXT,
+    published_at TEXT,
+    languages_json TEXT,
+    supported_platforms_json TEXT,
+    orientation TEXT,
+    cloud_save INTEGER,
+    leaderboards INTEGER,
+    purchases_enabled INTEGER,
+    has_products INTEGER,
+    rewarded_ads INTEGER,
+    fullscreen_ads INTEGER,
+    sticky_ads INTEGER,
+    provenance TEXT NOT NULL,
+    measurement_kind TEXT NOT NULL,
+    semantic_confidence TEXT NOT NULL,
+    coverage_status TEXT NOT NULL,
+    historical_availability TEXT NOT NULL,
+    revision_status TEXT NOT NULL,
+    uncertainty_json TEXT,
+    lineage_refs_json TEXT NOT NULL DEFAULT '[]',
+    CHECK (cloud_save IS NULL OR cloud_save IN (0, 1)),
+    CHECK (leaderboards IS NULL OR leaderboards IN (0, 1)),
+    CHECK (purchases_enabled IS NULL OR purchases_enabled IN (0, 1)),
+    CHECK (has_products IS NULL OR has_products IN (0, 1)),
+    CHECK (rewarded_ads IS NULL OR rewarded_ads IN (0, 1)),
+    CHECK (fullscreen_ads IS NULL OR fullscreen_ads IN (0, 1)),
+    CHECK (sticky_ads IS NULL OR sticky_ads IN (0, 1))
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_state_history
+ON listing_state_observations (platform_listing_id, observation_id);
 """,
 }
 

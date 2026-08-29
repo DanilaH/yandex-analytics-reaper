@@ -5,14 +5,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from yandex_analytics_reaper.domain import Platform, PlatformListing
-from yandex_analytics_reaper.storage import SQLiteIdentityStore, SQLiteListingHistoryStore
+from yandex_analytics_reaper.storage import SQLiteIdentityStore, SQLiteListingStateStore
 
 
-def test_v8_database_migrates_to_listing_history_schema_without_identity_loss(
+def test_v10_database_migrates_to_listing_state_schema_without_identity_loss(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "market.sqlite3"
-    observed_at = datetime(2026, 8, 29, 9, 0, tzinfo=UTC)
     SQLiteIdentityStore(path).persist_listing_identity(
         PlatformListing(
             id="yandex_games:1",
@@ -20,21 +19,14 @@ def test_v8_database_migrates_to_listing_history_schema_without_identity_loss(
             external_app_id="1",
         ),
         None,
-        observed_at,
+        datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
     )
 
     with sqlite3.connect(path) as connection:
         connection.execute("DROP TABLE listing_state_observations")
-        connection.execute("DROP TABLE collection_cadence_plan_checkpoints")
-        connection.execute("DROP TABLE collection_cadence_plan_listings")
-        connection.execute("DROP TABLE collection_cadence_plans")
-        connection.execute("DROP TABLE listing_media_observations")
-        connection.execute("DROP TABLE listing_status_observations")
-        connection.execute("DROP TABLE listing_update_observations")
-        connection.execute("DROP TABLE listing_history_evidence")
-        connection.execute("PRAGMA user_version = 8")
+        connection.execute("PRAGMA user_version = 10")
 
-    SQLiteListingHistoryStore(path)
+    SQLiteListingStateStore(path)
 
     listing = SQLiteIdentityStore(path).get_listing("yandex_games:1")
     assert listing is not None
@@ -49,11 +41,19 @@ def test_v8_database_migrates_to_listing_history_schema_without_identity_loss(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         }
+        assert "listing_state_observations" in tables
+        columns = {
+            str(row[1])
+            for row in connection.execute(
+                "PRAGMA table_info(listing_state_observations)"
+            ).fetchall()
+        }
         assert {
-            "listing_history_evidence",
-            "listing_update_observations",
-            "listing_status_observations",
-            "listing_media_observations",
-            "collection_cadence_plans",
-            "listing_state_observations",
-        } <= tables
+            "title",
+            "developer_id",
+            "published_at",
+            "languages_json",
+            "supported_platforms_json",
+            "leaderboards",
+            "rewarded_ads",
+        } <= columns

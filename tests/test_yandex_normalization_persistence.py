@@ -15,6 +15,7 @@ from yandex_analytics_reaper.storage import (
     FilesystemRawSnapshotStore,
     SQLiteLineageStore,
     SQLiteListingHistoryStore,
+    SQLiteListingStateStore,
     SQLiteMetricStore,
 )
 
@@ -39,7 +40,7 @@ def _response(
     )
 
 
-def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
+def test_get_games_normalization_persists_state_metrics_histories_and_raw_lineage(
     tmp_path: Path,
 ) -> None:
     retrieved_at = datetime(2026, 8, 29, 10, 0, tzinfo=UTC)
@@ -48,8 +49,15 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
             "games": [
                 {
                     "appID": 438560,
+                    "title": "Example Merge",
+                    "developer": {"id": 77, "name": "Example Dev"},
                     "gqRating": 86,
                     "ratingCount": 6,
+                    "features": {
+                        "languages": ["ru", "en"],
+                        "platforms": ["desktop", "mobile"],
+                    },
+                    "extraFeatures": {"leaderboards": False},
                     "media": {"cover": "one"},
                 }
             ]
@@ -73,8 +81,21 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
 
     assert first == second
     assert first.platform_listing_id == "yandex_games:438560"
+    assert first.listing_state_observation_id.startswith("state:")
     assert len(first.metric_observation_ids) == 2
     assert len(first.history_observation_ids) == 2
+
+    state_store = SQLiteListingStateStore(database_path)
+    states = state_store.states_for_raw_snapshots(
+        (metadata.id,),
+        listing_ids=(first.platform_listing_id,),
+    )
+    assert len(states) == 1
+    assert states[0].observation_id == first.listing_state_observation_id
+    assert states[0].observation.title == "Example Merge"
+    assert states[0].observation.developer_id == "yandex_games:77"
+    assert states[0].observation.languages == ("ru", "en")
+    assert states[0].observation.leaderboards is False
 
     metric_store = SQLiteMetricStore(database_path)
     rating = metric_store.metric_history(
@@ -98,7 +119,11 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
     assert len(media[0].observation.manifest_hash) == 64
 
     lineage_store = SQLiteLineageStore(database_path)
-    observation_ids = (*first.metric_observation_ids, *first.history_observation_ids)
+    observation_ids = (
+        first.listing_state_observation_id,
+        *first.metric_observation_ids,
+        *first.history_observation_ids,
+    )
     for observation_id in observation_ids:
         lineage = lineage_store.for_observation(observation_id)
         assert lineage
@@ -108,7 +133,7 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
         assert raw_store.get_body("yandex_public", metadata.id) == body
 
 
-def test_play_page_normalization_persists_update_history_from_same_raw_snapshot(
+def test_play_page_normalization_persists_state_and_update_from_same_raw_snapshot(
     tmp_path: Path,
 ) -> None:
     retrieved_at = datetime(2026, 8, 29, 11, 0, tzinfo=UTC)
@@ -118,6 +143,8 @@ def test_play_page_normalization_persists_update_history_from_same_raw_snapshot(
             "appVersion": "1.2.3",
             "publishedTime": 1_756_000_100,
             "gqRating": 86,
+            "extraFeatures": {"hasProducts": False},
+            "advUsedBlocks": {"fullscreen": False},
         }
     }
     body = (
@@ -141,6 +168,15 @@ def test_play_page_normalization_persists_update_history_from_same_raw_snapshot(
         page,
         metadata,
     )
+
+    states = SQLiteListingStateStore(database_path).states_for_raw_snapshots(
+        (metadata.id,),
+        listing_ids=(persisted.platform_listing_id,),
+    )
+    assert len(states) == 1
+    assert states[0].observation.app_version == "1.2.3"
+    assert states[0].observation.has_products is False
+    assert states[0].observation.fullscreen_ads is False
 
     updates = SQLiteListingHistoryStore(database_path).update_history(
         persisted.platform_listing_id

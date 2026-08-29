@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from yandex_analytics_reaper.domain import ProbeContext, ProbeRunStatus
+from yandex_analytics_reaper.domain import ProbeContext, ProbeRunStatus, SessionProfile
 from yandex_analytics_reaper.ingestion import ProbeCollectionError, YandexPaginatedProbeRunner
 from yandex_analytics_reaper.schema_drift import SQLiteSchemaDriftRegistry
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
@@ -123,6 +123,13 @@ def _page(
     }
 
 
+def _clean_context(**updates: object) -> ProbeContext:
+    context = ProbeContext(profile_age_days=0)
+    if not updates:
+        return context
+    return ProbeContext.model_validate(context.model_copy(update=updates).model_dump())
+
+
 def _runner(
     tmp_path: Path,
     client: FakeYandexClient,
@@ -139,6 +146,22 @@ def _runner(
     return runner, probe_store
 
 
+def test_runner_rejects_unprepared_session_context(tmp_path: Path) -> None:
+    runner, _ = _runner(tmp_path, FakeYandexClient(feed_responses=[]))
+
+    with pytest.raises(ValueError, match="clean_anonymous probe requires"):
+        runner.run_feed(ProbeContext(), page_limit=1)
+
+    with pytest.raises(ValueError, match="persistent_anonymous probe requires"):
+        runner.run_feed(
+            ProbeContext(
+                session_profile=SessionProfile.PERSISTENT_ANONYMOUS,
+                profile_age_days=0,
+            ),
+            page_limit=1,
+        )
+
+
 def test_feed_runner_groups_cursor_chain_and_completes_on_source_exhaustion(
     tmp_path: Path,
 ) -> None:
@@ -150,7 +173,7 @@ def test_feed_runner_groups_cursor_chain_and_completes_on_source_exhaustion(
     )
     runner, probe_store = _runner(tmp_path, client)
 
-    result = runner.run_feed(ProbeContext(), page_limit=3, count=20)
+    result = runner.run_feed(_clean_context(), page_limit=3, count=20)
 
     assert result.record.run.status is ProbeRunStatus.COMPLETED
     assert len(result.record.pages) == 2
@@ -171,7 +194,7 @@ def test_feed_runner_completes_at_requested_limit_even_if_more_pages_exist(
     )
     runner, _ = _runner(tmp_path, client)
 
-    result = runner.run_feed(ProbeContext(), page_limit=1)
+    result = runner.run_feed(_clean_context(), page_limit=1)
 
     assert result.record.run.status is ProbeRunStatus.COMPLETED
     assert len(result.record.pages) == 1
@@ -189,7 +212,7 @@ def test_mid_run_http_failure_marks_run_partial_and_preserves_prior_pages(tmp_pa
     runner, probe_store = _runner(tmp_path, client)
 
     with pytest.raises(ProbeCollectionError, match="HTTP 503"):
-        runner.run_feed(ProbeContext(), page_limit=3)
+        runner.run_feed(_clean_context(), page_limit=3)
 
     with probe_store.database.connect() as connection:
         run_id = str(connection.execute("SELECT id FROM probe_runs").fetchone()["id"])
@@ -212,7 +235,7 @@ def test_first_page_breaking_schema_marks_run_failed(tmp_path: Path) -> None:
     runner, probe_store = _runner(tmp_path, client)
 
     with pytest.raises(ProbeCollectionError, match="breaking source-schema drift"):
-        runner.run_feed(ProbeContext(), page_limit=2)
+        runner.run_feed(_clean_context(), page_limit=2)
 
     with probe_store.database.connect() as connection:
         run_id = str(connection.execute("SELECT id FROM probe_runs").fetchone()["id"])
@@ -233,7 +256,7 @@ def test_missing_continuation_token_keeps_valid_page_and_marks_partial(tmp_path:
     runner, probe_store = _runner(tmp_path, client)
 
     with pytest.raises(ProbeCollectionError, match="nextPageId"):
-        runner.run_feed(ProbeContext(), page_limit=2)
+        runner.run_feed(_clean_context(), page_limit=2)
 
     with probe_store.database.connect() as connection:
         run_id = str(connection.execute("SELECT id FROM probe_runs").fetchone()["id"])
@@ -257,7 +280,7 @@ def test_terminal_persistence_failure_does_not_mask_source_error(
     monkeypatch.setattr(probe_store, "finish_run", fail_finish)
 
     with pytest.raises(ProbeCollectionError, match="HTTP 503") as exc_info:
-        runner.run_feed(ProbeContext(), page_limit=1)
+        runner.run_feed(_clean_context(), page_limit=1)
 
     notes = getattr(exc_info.value, "__notes__", [])
     assert any("terminal write failed" in note for note in notes)
@@ -272,7 +295,7 @@ def test_search_runner_preserves_query_and_follows_same_cursor_chain(tmp_path: P
     )
     runner, _ = _runner(tmp_path, client)
 
-    result = runner.run_search(" merge ", ProbeContext(language="ru"), page_limit=2)
+    result = runner.run_search(" merge ", _clean_context(language="ru"), page_limit=2)
 
     assert result.record.run.query_text == "merge"
     assert result.record.run.status is ProbeRunStatus.COMPLETED

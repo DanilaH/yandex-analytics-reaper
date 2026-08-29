@@ -5,6 +5,7 @@ import json
 import math
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from statistics import median
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -38,12 +39,12 @@ class AnalystPilotError(ValueError):
     """The real analyst pilot cannot be verified without weakening its evidence contract."""
 
 
-class AnalystTraceContribution(BaseModel):
+class AnalystPilotTraceContribution(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     platform_listing_id: str
     source_value: str | int | float
-    derived_numeric_value: float
+    numeric_value: float
     observation_id: str
     raw_snapshot_ids: tuple[str, ...] = Field(min_length=1)
     source_field_paths: tuple[str, ...] = Field(min_length=1)
@@ -51,46 +52,37 @@ class AnalystTraceContribution(BaseModel):
     normalizer_version: str
 
 
-class AnalystNumericFeatureTrace(BaseModel):
+class AnalystPilotRepresentativeTrace(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    set_id: str
+    set_version: int = Field(ge=1)
     feature_name: Literal[
+        "rating_count",
         "yandex_games_rating",
         "player_rating",
-        "rating_count",
         "first_published_age_days",
     ]
     coverage: AnalystCoverage
-    minimum: float
-    p25: float
-    median: float
-    p75: float
-    maximum: float
-    mean: float
-    contributions: tuple[AnalystTraceContribution, ...] = Field(min_length=1)
+    reported_median: float
+    recomputed_median: float
+    contributions: tuple[AnalystPilotTraceContribution, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def validate_trace(self) -> Self:
         if len(self.contributions) != self.coverage.observed_count:
             raise ValueError("trace contribution count must match observed coverage")
-        if self.coverage.observed_count < 1:
-            raise ValueError("numeric feature trace requires at least one observed value")
-        values = sorted(item.derived_numeric_value for item in self.contributions)
-        expected = _numeric_summary(values)
-        actual = (self.minimum, self.p25, self.median, self.p75, self.maximum, self.mean)
-        for expected_value, actual_value in zip(expected, actual, strict=True):
-            if not math.isclose(expected_value, actual_value, rel_tol=0.0, abs_tol=1e-12):
-                raise ValueError("trace numeric summary does not match contributions")
+        expected = float(median(item.numeric_value for item in self.contributions))
+        if not math.isclose(self.recomputed_median, expected, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("recomputed_median does not match trace contributions")
+        if not math.isclose(
+            self.reported_median,
+            self.recomputed_median,
+            rel_tol=0.0,
+            abs_tol=1e-12,
+        ):
+            raise ValueError("reported feature median does not match trace median")
         return self
-
-
-class AnalystPilotSetVerification(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    set_id: str
-    set_version: int = Field(ge=1)
-    member_count: int = Field(ge=1)
-    traces: tuple[AnalystNumericFeatureTrace, ...] = Field(min_length=1)
 
 
 class AnalystRawEvidenceVerification(BaseModel):
@@ -121,7 +113,8 @@ class AnalystPilotVerificationPayload(BaseModel):
     market_features_content_hash: str
     collection_parameters_status: Literal["provisional_uncalibrated"]
     comparable_set_count: int = Field(ge=2)
-    comparable_sets: tuple[AnalystPilotSetVerification, ...] = Field(min_length=2)
+    query_family_ids: tuple[str, ...] = Field(min_length=2)
+    representative_traces: tuple[AnalystPilotRepresentativeTrace, ...] = Field(min_length=2)
     raw_evidence: AnalystRawEvidenceVerification
     machine_detected_limitations: tuple[str, ...] = Field(min_length=1)
 
@@ -138,12 +131,14 @@ class AnalystPilotVerificationPayload(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_set_count(self) -> Self:
-        if self.comparable_set_count != len(self.comparable_sets):
-            raise ValueError("comparable_set_count does not match comparable_sets")
-        keys = [(item.set_id, item.set_version) for item in self.comparable_sets]
-        if len(set(keys)) != len(keys):
-            raise ValueError("pilot comparable-set identities must be unique")
+    def validate_scope(self) -> Self:
+        if len(set(self.query_family_ids)) != len(self.query_family_ids):
+            raise ValueError("pilot query_family_ids must be unique")
+        if self.comparable_set_count != len(self.representative_traces):
+            raise ValueError("pilot requires one representative trace per comparable set")
+        trace_keys = [(item.set_id, item.set_version) for item in self.representative_traces]
+        if len(set(trace_keys)) != len(trace_keys):
+            raise ValueError("pilot representative trace identities must be unique")
         return self
 
 
@@ -160,7 +155,7 @@ class AnalystPilotVerificationReport(AnalystPilotVerificationPayload):
 
 
 class AnalystPilotVerifier:
-    """Verify that a real M1 pilot remains reproducible down to immutable raw evidence."""
+    """Verify a real M1 pilot down to one representative aggregate and raw replay."""
 
     def __init__(self, *, raw_store: FilesystemRawSnapshotStore) -> None:
         self.raw_store = raw_store
@@ -178,7 +173,9 @@ class AnalystPilotVerifier:
 
         if len(snapshot.comparable_sets) < 2:
             raise AnalystPilotError("real analyst pilot requires at least two comparable sets")
-        query_family_ids = {item.query_family_id for item in snapshot.comparable_sets}
+        query_family_ids = tuple(
+            dict.fromkeys(item.query_family_id for item in snapshot.comparable_sets)
+        )
         if len(query_family_ids) < 2:
             raise AnalystPilotError(
                 "real analyst pilot requires at least two distinct query families"
@@ -191,7 +188,7 @@ class AnalystPilotVerifier:
             )
 
         rows_by_id = {item.platform_listing_id: item for item in market_export.listings}
-        set_reports: list[AnalystPilotSetVerification] = []
+        traces: list[AnalystPilotRepresentativeTrace] = []
         for binding, features in zip(
             snapshot.comparable_sets,
             market_features.comparable_sets,
@@ -200,18 +197,11 @@ class AnalystPilotVerifier:
             if (binding.set_id, binding.version) != (features.set_id, features.set_version):
                 raise AnalystPilotError("snapshot/features comparable-set order or identity changed")
             rows = tuple(rows_by_id[listing_id] for listing_id in binding.member_listing_ids)
-            traces = _build_traces(rows, features, snapshot.created_at)
-            if not traces:
-                raise AnalystPilotError(
-                    f"comparable set {binding.set_id}@{binding.version} has no traceable "
-                    "quantitative rich-metadata feature"
-                )
-            set_reports.append(
-                AnalystPilotSetVerification(
-                    set_id=binding.set_id,
-                    set_version=binding.version,
-                    member_count=len(binding.member_listing_ids),
-                    traces=traces,
+            traces.append(
+                _representative_trace(
+                    rows,
+                    features,
+                    snapshot.created_at,
                 )
             )
 
@@ -223,7 +213,6 @@ class AnalystPilotVerifier:
             verified_raw_snapshot_count=len(raw_ids),
             raw_snapshot_ids=raw_ids,
         )
-        limitations = _machine_detected_limitations(snapshot, market_features)
 
         payload = AnalystPilotVerificationPayload(
             spec_version=ANALYST_PILOT_VERIFICATION_SPEC_VERSION,
@@ -232,10 +221,14 @@ class AnalystPilotVerifier:
             market_export_content_hash=market_export.content_hash,
             market_features_content_hash=market_features.content_hash,
             collection_parameters_status=snapshot.collection_parameters_status,
-            comparable_set_count=len(set_reports),
-            comparable_sets=tuple(set_reports),
+            comparable_set_count=len(snapshot.comparable_sets),
+            query_family_ids=query_family_ids,
+            representative_traces=tuple(traces),
             raw_evidence=raw_evidence,
-            machine_detected_limitations=limitations,
+            machine_detected_limitations=_machine_detected_limitations(
+                snapshot,
+                market_features,
+            ),
         )
         return AnalystPilotVerificationReport.model_validate(
             {**payload.model_dump(mode="python"), "content_hash": _payload_hash(payload)}
@@ -278,50 +271,59 @@ def _validate_artifact_chain(
         raise AnalystPilotError("collection-parameter status changed across pilot artifacts")
 
 
-def _build_traces(
+def _representative_trace(
     rows: Sequence[AnalystListingRow],
     features: AnalystComparableSetFeatures,
     reference_time: datetime,
-) -> tuple[AnalystNumericFeatureTrace, ...]:
-    traces: list[AnalystNumericFeatureTrace] = []
-    numeric_specs: tuple[
+) -> AnalystPilotRepresentativeTrace:
+    numeric_candidates: tuple[
         tuple[
-            Literal["yandex_games_rating", "player_rating", "rating_count"],
+            Literal["rating_count", "yandex_games_rating", "player_rating"],
             Callable[[AnalystListingRow], AnalystResolvedValue],
             AnalystNumericDistribution,
         ],
         ...,
     ] = (
+        ("rating_count", lambda row: row.rating_count, features.rating_count),
         (
             "yandex_games_rating",
             lambda row: row.yandex_games_rating,
             features.yandex_games_rating,
         ),
         ("player_rating", lambda row: row.player_rating, features.player_rating),
-        ("rating_count", lambda row: row.rating_count, features.rating_count),
     )
-    for feature_name, selector, distribution in numeric_specs:
-        trace = _trace_numeric_feature(rows, feature_name, selector, distribution)
-        if trace is not None:
-            traces.append(trace)
+    for feature_name, selector, distribution in numeric_candidates:
+        if distribution.coverage.observed_count:
+            return _numeric_trace(
+                rows,
+                features.set_id,
+                features.set_version,
+                feature_name,
+                selector,
+                distribution,
+            )
 
-    release_trace = _trace_release_feature(
-        rows,
-        features.first_published.age_days,
-        reference_time,
+    if features.first_published.age_days.coverage.observed_count:
+        return _release_trace(
+            rows,
+            features,
+            reference_time,
+        )
+    raise AnalystPilotError(
+        f"comparable set {features.set_id}@{features.set_version} has no traceable "
+        "quantitative rich-metadata feature"
     )
-    if release_trace is not None:
-        traces.append(release_trace)
-    return tuple(traces)
 
 
-def _trace_numeric_feature(
+def _numeric_trace(
     rows: Sequence[AnalystListingRow],
-    feature_name: Literal["yandex_games_rating", "player_rating", "rating_count"],
+    set_id: str,
+    set_version: int,
+    feature_name: Literal["rating_count", "yandex_games_rating", "player_rating"],
     selector: Callable[[AnalystListingRow], AnalystResolvedValue],
     distribution: AnalystNumericDistribution,
-) -> AnalystNumericFeatureTrace | None:
-    contributions: list[AnalystTraceContribution] = []
+) -> AnalystPilotRepresentativeTrace:
+    contributions: list[AnalystPilotTraceContribution] = []
     for row in rows:
         resolved = selector(row)
         if resolved.value is None:
@@ -331,29 +333,30 @@ def _trace_numeric_feature(
                 f"{feature_name} for {row.platform_listing_id} is not numeric"
             )
         evidence = _required_evidence(resolved, feature_name, row.platform_listing_id)
-        number = float(resolved.value)
         contributions.append(
-            _trace_contribution(
+            _contribution(
                 row.platform_listing_id,
                 resolved.value,
-                number,
+                float(resolved.value),
                 evidence,
             )
         )
-    if not contributions:
-        if distribution.coverage.observed_count != 0:
-            raise AnalystPilotError(f"{feature_name} coverage does not match listing evidence")
-        return None
-    return _make_trace(feature_name, distribution, contributions)
+    return _trace_from_contributions(
+        set_id,
+        set_version,
+        feature_name,
+        distribution,
+        contributions,
+    )
 
 
-def _trace_release_feature(
+def _release_trace(
     rows: Sequence[AnalystListingRow],
-    distribution: AnalystNumericDistribution,
+    features: AnalystComparableSetFeatures,
     reference_time: datetime,
-) -> AnalystNumericFeatureTrace | None:
+) -> AnalystPilotRepresentativeTrace:
     reference = _utc(reference_time)
-    contributions: list[AnalystTraceContribution] = []
+    contributions: list[AnalystPilotTraceContribution] = []
     for row in rows:
         resolved = row.first_published_at
         if resolved.value is None:
@@ -374,68 +377,63 @@ def _trace_release_feature(
                 f"first_published_at for {row.platform_listing_id} is after snapshot time"
             )
         contributions.append(
-            _trace_contribution(
+            _contribution(
                 row.platform_listing_id,
                 resolved.value,
                 age_days,
                 evidence,
             )
         )
-    if not contributions:
-        if distribution.coverage.observed_count != 0:
-            raise AnalystPilotError("first_published coverage does not match listing evidence")
-        return None
-    return _make_trace("first_published_age_days", distribution, contributions)
+    return _trace_from_contributions(
+        features.set_id,
+        features.set_version,
+        "first_published_age_days",
+        features.first_published.age_days,
+        contributions,
+    )
 
 
-def _make_trace(
+def _trace_from_contributions(
+    set_id: str,
+    set_version: int,
     feature_name: Literal[
+        "rating_count",
         "yandex_games_rating",
         "player_rating",
-        "rating_count",
         "first_published_age_days",
     ],
     distribution: AnalystNumericDistribution,
-    contributions: Sequence[AnalystTraceContribution],
-) -> AnalystNumericFeatureTrace:
-    values = [item.derived_numeric_value for item in contributions]
-    summary = _numeric_summary(values)
-    reported = (
-        _required_float(distribution.minimum),
-        _required_float(distribution.p25),
-        _required_float(distribution.median),
-        _required_float(distribution.p75),
-        _required_float(distribution.maximum),
-        _required_float(distribution.mean),
-    )
-    for expected, actual in zip(summary, reported, strict=True):
-        if not math.isclose(expected, actual, rel_tol=0.0, abs_tol=1e-12):
-            raise AnalystPilotError(f"{feature_name} aggregate does not match traced contributions")
+    contributions: Sequence[AnalystPilotTraceContribution],
+) -> AnalystPilotRepresentativeTrace:
+    if not contributions:
+        raise AnalystPilotError(f"{feature_name} has observed coverage but no trace contributions")
     if distribution.coverage.observed_count != len(contributions):
-        raise AnalystPilotError(f"{feature_name} coverage does not match traced contributions")
-    return AnalystNumericFeatureTrace(
+        raise AnalystPilotError(f"{feature_name} coverage does not match trace contributions")
+    reported_median = _required_float(distribution.median)
+    recomputed_median = float(median(item.numeric_value for item in contributions))
+    if not math.isclose(reported_median, recomputed_median, rel_tol=0.0, abs_tol=1e-12):
+        raise AnalystPilotError(f"{feature_name} median does not match trace contributions")
+    return AnalystPilotRepresentativeTrace(
+        set_id=set_id,
+        set_version=set_version,
         feature_name=feature_name,
         coverage=distribution.coverage,
-        minimum=summary[0],
-        p25=summary[1],
-        median=summary[2],
-        p75=summary[3],
-        maximum=summary[4],
-        mean=summary[5],
+        reported_median=reported_median,
+        recomputed_median=recomputed_median,
         contributions=tuple(contributions),
     )
 
 
-def _trace_contribution(
+def _contribution(
     platform_listing_id: str,
     source_value: str | int | float,
-    derived_numeric_value: float,
+    numeric_value: float,
     evidence: AnalystEvidenceReference,
-) -> AnalystTraceContribution:
-    return AnalystTraceContribution(
+) -> AnalystPilotTraceContribution:
+    return AnalystPilotTraceContribution(
         platform_listing_id=platform_listing_id,
         source_value=source_value,
-        derived_numeric_value=derived_numeric_value,
+        numeric_value=numeric_value,
         observation_id=evidence.observation_id,
         raw_snapshot_ids=evidence.raw_snapshot_ids,
         source_field_paths=evidence.source_field_paths,
@@ -601,31 +599,6 @@ def _machine_detected_limitations(
     return tuple(limitations)
 
 
-def _numeric_summary(values: Sequence[float]) -> tuple[float, float, float, float, float, float]:
-    if not values:
-        raise AnalystPilotError("cannot summarize an empty trace")
-    ordered = sorted(values)
-    return (
-        ordered[0],
-        _percentile(ordered, 0.25),
-        _percentile(ordered, 0.50),
-        _percentile(ordered, 0.75),
-        ordered[-1],
-        math.fsum(ordered) / len(ordered),
-    )
-
-
-def _percentile(values: Sequence[float], fraction: float) -> float:
-    index = (len(values) - 1) * fraction
-    lower_index = math.floor(index)
-    upper_index = math.ceil(index)
-    lower = values[lower_index]
-    upper = values[upper_index]
-    if lower_index == upper_index:
-        return lower
-    return lower + (upper - lower) * (index - lower_index)
-
-
 def _parse_timestamp(value: str) -> datetime:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -644,7 +617,7 @@ def _utc(value: datetime) -> datetime:
 
 def _required_float(value: float | None) -> float:
     if value is None:
-        raise AnalystPilotError("traceable distribution is missing a numeric summary")
+        raise AnalystPilotError("traceable distribution is missing a median")
     return value
 
 

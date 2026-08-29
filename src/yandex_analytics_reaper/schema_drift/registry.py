@@ -38,16 +38,25 @@ class SQLiteSchemaDriftRegistry:
         metadata: RawSnapshotMetadata,
         body: bytes,
         *,
+        comparison_scope_id: str,
         contract: SchemaContract | None = None,
     ) -> SchemaAnalysis:
+        scope_id = _require_non_blank(comparison_scope_id, "comparison_scope_id")
         if contract is not None and contract.request_key != metadata.request_key:
             raise ValueError("schema contract request_key does not match raw snapshot")
+        _require_body_matches_metadata(metadata, body)
 
         contract_id = contract.contract_id if contract is not None else "uncontracted"
-        analysis_id = _analysis_id(metadata.id, ANALYZER_VERSION, contract_id)
+        analysis_id = _analysis_id(
+            metadata.id,
+            ANALYZER_VERSION,
+            contract_id,
+            scope_id,
+        )
         with self.database.connect() as connection:
             existing = self._load_analysis(connection, analysis_id)
             if existing is not None:
+                _assert_analysis_matches_metadata(existing, metadata, scope_id)
                 return existing
 
             profile = profile_json_snapshot(metadata, body)
@@ -56,6 +65,7 @@ class SQLiteSchemaDriftRegistry:
                 profile,
                 analyzer_version=ANALYZER_VERSION,
                 contract_id=contract_id,
+                comparison_scope_id=scope_id,
             )
             events = _evaluate(
                 analysis_id=analysis_id,
@@ -63,16 +73,15 @@ class SQLiteSchemaDriftRegistry:
                 previous=previous,
                 contract=contract,
             )
-            self._persist_analysis(
-                connection,
-                SchemaAnalysis(
-                    analysis_id=analysis_id,
-                    analyzer_version=ANALYZER_VERSION,
-                    contract_id=contract_id,
-                    profile=profile,
-                    events=events,
-                ),
+            analysis = SchemaAnalysis(
+                analysis_id=analysis_id,
+                analyzer_version=ANALYZER_VERSION,
+                contract_id=contract_id,
+                comparison_scope_id=scope_id,
+                profile=profile,
+                events=events,
             )
+            self._persist_analysis(connection, analysis)
             stored = self._load_analysis(connection, analysis_id)
             if stored is None:
                 raise RuntimeError("schema analysis was not persisted")
@@ -82,18 +91,23 @@ class SQLiteSchemaDriftRegistry:
         self,
         metadata: RawSnapshotMetadata,
         *,
+        comparison_scope_id: str,
         parser_name: str,
         parser_version: str,
         error: str,
     ) -> SchemaAnalysis:
-        parser_name = parser_name.strip()
-        parser_version = parser_version.strip()
-        error = error.strip()
-        if not parser_name or not parser_version or not error:
-            raise ValueError("parser failure requires non-blank parser name/version/error")
+        scope_id = _require_non_blank(comparison_scope_id, "comparison_scope_id")
+        parser_name = _require_non_blank(parser_name, "parser_name")
+        parser_version = _require_non_blank(parser_version, "parser_version")
+        error = _require_non_blank(error, "error")
 
         contract_id = f"parser:{parser_name}:{parser_version}"
-        analysis_id = _analysis_id(metadata.id, ANALYZER_VERSION, contract_id)
+        analysis_id = _analysis_id(
+            metadata.id,
+            ANALYZER_VERSION,
+            contract_id,
+            scope_id,
+        )
         profile = SchemaProfile(
             raw_snapshot_id=metadata.id,
             source_id=metadata.source_id,
@@ -114,26 +128,31 @@ class SQLiteSchemaDriftRegistry:
             analysis_id=analysis_id,
             analyzer_version=ANALYZER_VERSION,
             contract_id=contract_id,
+            comparison_scope_id=scope_id,
             profile=profile,
             events=(event,),
         )
         with self.database.connect() as connection:
             existing = self._load_analysis(connection, analysis_id)
             if existing is not None:
+                _assert_analysis_matches_metadata(existing, metadata, scope_id)
+                if existing != analysis:
+                    raise ValueError("conflicting parser-failure analysis for the same identity")
                 return existing
             self._persist_analysis(connection, analysis)
             return analysis
 
     def analyses_for_snapshot(self, raw_snapshot_id: str) -> tuple[SchemaAnalysis, ...]:
+        snapshot_id = _require_non_blank(raw_snapshot_id, "raw_snapshot_id")
         with self.database.connect() as connection:
             rows = connection.execute(
                 """
                 SELECT id
                 FROM schema_observations
                 WHERE raw_snapshot_id = ?
-                ORDER BY analyzer_version, contract_id, id
+                ORDER BY analyzer_version, contract_id, comparison_scope_id, id
                 """,
-                (raw_snapshot_id,),
+                (snapshot_id,),
             ).fetchall()
             analyses = [self._load_analysis(connection, str(row["id"])) for row in rows]
         return tuple(item for item in analyses if item is not None)
@@ -145,8 +164,8 @@ class SQLiteSchemaDriftRegistry:
         *,
         analyzer_version: str,
         contract_id: str,
+        comparison_scope_id: str,
     ) -> SchemaProfile | None:
-        retrieved_at = _timestamp(current.retrieved_at)
         row = connection.execute(
             """
             SELECT id
@@ -155,11 +174,9 @@ class SQLiteSchemaDriftRegistry:
               AND request_key = ?
               AND analyzer_version = ?
               AND contract_id = ?
+              AND comparison_scope_id = ?
               AND profile_status = ?
-              AND (
-                    retrieved_at < ?
-                    OR (retrieved_at = ? AND raw_snapshot_id < ?)
-              )
+              AND retrieved_at < ?
             ORDER BY retrieved_at DESC, raw_snapshot_id DESC
             LIMIT 1
             """,
@@ -168,10 +185,9 @@ class SQLiteSchemaDriftRegistry:
                 current.request_key,
                 analyzer_version,
                 contract_id,
+                comparison_scope_id,
                 SchemaProfileStatus.PROFILED.value,
-                retrieved_at,
-                retrieved_at,
-                current.raw_snapshot_id,
+                _timestamp(current.retrieved_at),
             ),
         ).fetchone()
         if row is None:
@@ -192,6 +208,7 @@ class SQLiteSchemaDriftRegistry:
                 raw_snapshot_id,
                 analyzer_version,
                 contract_id,
+                comparison_scope_id,
                 source_id,
                 request_key,
                 retrieved_at,
@@ -199,13 +216,14 @@ class SQLiteSchemaDriftRegistry:
                 profile_status,
                 root_type,
                 error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 analysis.analysis_id,
                 profile.raw_snapshot_id,
                 analysis.analyzer_version,
                 analysis.contract_id,
+                analysis.comparison_scope_id,
                 profile.source_id,
                 profile.request_key,
                 _timestamp(profile.retrieved_at),
@@ -299,7 +317,16 @@ class SQLiteSchemaDriftRegistry:
             SELECT *
             FROM schema_drift_events
             WHERE schema_observation_id = ?
-            ORDER BY severity DESC, kind, COALESCE(field_path, ''), id
+            ORDER BY
+                CASE severity
+                    WHEN 'breaking' THEN 3
+                    WHEN 'warning' THEN 2
+                    WHEN 'info' THEN 1
+                    ELSE 0
+                END DESC,
+                kind,
+                COALESCE(field_path, ''),
+                id
             """,
             (analysis_id,),
         ).fetchall()
@@ -320,6 +347,7 @@ class SQLiteSchemaDriftRegistry:
             analysis_id=str(row["id"]),
             analyzer_version=str(row["analyzer_version"]),
             contract_id=str(row["contract_id"]),
+            comparison_scope_id=str(row["comparison_scope_id"]),
             profile=profile,
             events=tuple(_event_from_row(item) for item in event_rows),
         )
@@ -350,7 +378,7 @@ def _evaluate(
                 message=f"raw JSON could not be profiled: {current.error or 'unknown error'}",
             )
         )
-        return tuple(events.values())
+        return _sorted_events(events.values())
 
     current_fields = {item.path: item for item in current.fields}
     if contract is not None:
@@ -362,9 +390,7 @@ def _evaluate(
                     kind=DriftKind.ROOT_TYPE_MISMATCH,
                     severity=DriftSeverity.BREAKING,
                     current_types=((current.root_type,) if current.root_type is not None else ()),
-                    message=(
-                        f"root type {current.root_type} violates contract {contract.contract_id}"
-                    ),
+                    message=f"root type {current.root_type} violates contract {contract.contract_id}",
                 )
             )
         for expectation in contract.fields:
@@ -495,20 +521,18 @@ def _evaluate(
                 )
             )
 
-    return tuple(
-        sorted(
-            events.values(),
-            key=lambda item: (
-                -_severity_rank(item.severity),
-                item.kind.value,
-                item.field_path or "",
-            ),
-        )
-    )
+    return _sorted_events(events.values())
 
 
-def _analysis_id(raw_snapshot_id: str, analyzer_version: str, contract_id: str) -> str:
-    payload = f"{raw_snapshot_id}\0{analyzer_version}\0{contract_id}".encode()
+def _analysis_id(
+    raw_snapshot_id: str,
+    analyzer_version: str,
+    contract_id: str,
+    comparison_scope_id: str,
+) -> str:
+    payload = (
+        f"{raw_snapshot_id}\0{analyzer_version}\0{contract_id}\0{comparison_scope_id}"
+    ).encode()
     return "schema:" + hashlib.sha256(payload).hexdigest()[:32]
 
 
@@ -549,6 +573,26 @@ def _make_event(
         details=details or {},
         message=message,
     )
+
+
+def _sorted_events(events: object) -> tuple[DriftEvent, ...]:
+    if not isinstance(events, (list, tuple, dict_values_type())):
+        events = tuple(events)  # type: ignore[arg-type]
+    return tuple(
+        sorted(
+            events,  # type: ignore[arg-type]
+            key=lambda item: (
+                -_severity_rank(item.severity),
+                item.kind.value,
+                item.field_path or "",
+                item.event_id,
+            ),
+        )
+    )
+
+
+def dict_values_type() -> type[object]:
+    return type({}.values())
 
 
 def _field_from_row(row: sqlite3.Row) -> FieldProfile:
@@ -599,6 +643,35 @@ def _severity_rank(severity: DriftSeverity) -> int:
         DriftSeverity.WARNING: 2,
         DriftSeverity.BREAKING: 3,
     }[severity]
+
+
+def _require_body_matches_metadata(metadata: RawSnapshotMetadata, body: bytes) -> None:
+    if hashlib.sha256(body).hexdigest() != metadata.content_hash:
+        raise ValueError("raw body content hash does not match snapshot metadata")
+
+
+def _assert_analysis_matches_metadata(
+    analysis: SchemaAnalysis,
+    metadata: RawSnapshotMetadata,
+    comparison_scope_id: str,
+) -> None:
+    profile = analysis.profile
+    if (
+        profile.raw_snapshot_id != metadata.id
+        or profile.source_id != metadata.source_id
+        or profile.request_key != metadata.request_key
+        or profile.retrieved_at != metadata.retrieved_at
+        or profile.schema_hash != metadata.schema_hash
+        or analysis.comparison_scope_id != comparison_scope_id
+    ):
+        raise ValueError("cached schema analysis metadata conflicts with raw snapshot metadata")
+
+
+def _require_non_blank(value: str, field_name: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field_name} cannot be blank")
+    return stripped
 
 
 def _timestamp(value: datetime) -> str:

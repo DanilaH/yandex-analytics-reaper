@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -336,6 +336,65 @@ ON comparable_set_versions (set_id, version DESC);
 
 CREATE INDEX IF NOT EXISTS idx_comparable_set_evidence_run
 ON comparable_set_member_evidence (probe_run_id, page_index, raw_snapshot_id);
+""",
+    9: """
+CREATE TABLE IF NOT EXISTS listing_history_evidence (
+    observation_id TEXT PRIMARY KEY
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    provenance TEXT NOT NULL,
+    measurement_kind TEXT NOT NULL,
+    semantic_confidence TEXT NOT NULL,
+    coverage_status TEXT NOT NULL,
+    historical_availability TEXT NOT NULL,
+    revision_status TEXT NOT NULL,
+    uncertainty_json TEXT,
+    lineage_refs_json TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS listing_update_observations (
+    observation_id TEXT PRIMARY KEY
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    platform_listing_id TEXT NOT NULL
+        REFERENCES platform_listings(id) ON DELETE CASCADE,
+    app_version TEXT,
+    source_published_at TEXT,
+    CHECK (app_version IS NOT NULL OR source_published_at IS NOT NULL)
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_update_history
+ON listing_update_observations (platform_listing_id, observation_id);
+
+CREATE TABLE IF NOT EXISTS listing_status_observations (
+    observation_id TEXT PRIMARY KEY
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    platform_listing_id TEXT NOT NULL
+        REFERENCES platform_listings(id) ON DELETE CASCADE,
+    status TEXT NOT NULL,
+    status_reason TEXT NOT NULL,
+    CHECK (status = 'published'),
+    CHECK (
+        status_reason IN (
+            'observed_in_catalogue_metadata',
+            'observed_on_game_page'
+        )
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_status_history
+ON listing_status_observations (platform_listing_id, observation_id);
+
+CREATE TABLE IF NOT EXISTS listing_media_observations (
+    observation_id TEXT PRIMARY KEY
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    platform_listing_id TEXT NOT NULL
+        REFERENCES platform_listings(id) ON DELETE CASCADE,
+    manifest_hash TEXT NOT NULL,
+    CHECK (length(manifest_hash) = 64),
+    CHECK (manifest_hash NOT GLOB '*[^0-9a-f]*')
+);
+
+CREATE INDEX IF NOT EXISTS idx_listing_media_history
+ON listing_media_observations (platform_listing_id, observation_id);
 """,
 }
 

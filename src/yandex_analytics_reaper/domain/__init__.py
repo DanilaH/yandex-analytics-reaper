@@ -5,6 +5,13 @@ from .comparables import (
     ComparableSetRun,
     ComparableSetVersion,
 )
+from .histories import (
+    ListingMediaObservation,
+    ListingStatus,
+    ListingStatusObservation,
+    ListingStatusReason,
+    ListingUpdateObservation,
+)
 from .models import Game, Platform, PlatformListing, ProbeContext, SessionProfile
 from .observations import (
     GameMetricName,
@@ -24,7 +31,12 @@ __all__ = [
     "Game",
     "GameMetricName",
     "GameMetricObservation",
+    "ListingMediaObservation",
     "ListingStateObservation",
+    "ListingStatus",
+    "ListingStatusObservation",
+    "ListingStatusReason",
+    "ListingUpdateObservation",
     "Platform",
     "PlatformDeveloper",
     "PlatformListing",

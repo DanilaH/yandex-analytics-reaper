@@ -146,7 +146,7 @@ normalized_observations
   normalizer_version
 ```
 
-The envelope is persisted for numeric metric observations. A persisted metric requires `retrieved_at`; all stored temporal values must be timezone-aware and satisfy:
+A persisted semantic observation requires `retrieved_at`; all stored temporal values must be timezone-aware and satisfy:
 
 ```text
 observed_at <= available_at <= retrieved_at
@@ -160,7 +160,9 @@ Examples:
 
 ```text
 game_metric_observations
-listing_state_observations
+listing_update_observations
+listing_status_observations
+listing_media_observations
 surface_exposures
 search_results
 ```
@@ -187,9 +189,9 @@ $.games[1].gqRating
 → game_metric_observations.value_numeric
 ```
 
-For Yandex feed/get-games card metrics, source object paths come from the parser, so the lineage distinguishes `feed[].widgets[].data`, `feed[].items[]`, and `games[]` instead of guessing the response shape. For HTML game pages, embedded-script locators are explicit (for example `$.__playPageData__.gameData.gqRating`) rather than pretending the HTML document itself has a JSON root.
+For Yandex feed/get-games card metrics and listing histories, source object paths come from the parser, so lineage distinguishes `feed[].widgets[].data`, `feed[].items[]`, and `games[]` instead of guessing the response shape. For HTML game pages, embedded-script locators are explicit (for example `$.__playPageData__.gameData.gqRating`) rather than pretending the HTML document itself has a JSON root.
 
-Metric row + field-level lineage are written in the same SQLite transaction. Duplicate/conflicting source→target transformation records are errors and roll back the associated metric write.
+Metric rows and listing-history bundles write their typed data, evidence, and field lineage transactionally. Duplicate/conflicting source→target transformation records are errors and roll back the associated semantic write.
 
 A decision-relevant dossier value must eventually be traceable through derived feature → domain observation → lineage → raw snapshot metadata/body.
 
@@ -224,20 +226,53 @@ A listing identity must exist before metrics referencing it can be persisted.
 
 Do not attach contextual dimensions unless empirical evidence shows the metric itself varies by context.
 
-## Listing-state observations
+## Listing update/status/media histories
 
-Track current/changed listing metadata such as:
+`listing-histories.md` owns the semantic rules. The logical model deliberately separates update metadata, availability/status, and media-manifest observations instead of overloading one nullable listing-state row.
+
+Shared evidence dimensions live in:
 
 ```text
-title
-app_version
-published_time
-languages/platforms/orientation
-leaderboard/purchase/product flags
-ad-use metadata
-status
-status_reason
+listing_history_evidence
+  observation_id
+  provenance
+  measurement_kind
+  semantic_confidence
+  coverage_status
+  historical_availability
+  revision_status
+  uncertainty_json
+  lineage_refs_json
 ```
+
+Typed histories are:
+
+```text
+listing_update_observations
+  observation_id
+  platform_listing_id
+  app_version
+  source_published_at
+
+listing_status_observations
+  observation_id
+  platform_listing_id
+  status
+  status_reason
+
+listing_media_observations
+  observation_id
+  platform_listing_id
+  manifest_hash
+```
+
+`source_published_at` preserves Yandex `publishedTime` without claiming it is a general `updated_at`. The v1 status history stores only directly observed public presence as `published`, with provenance distinguishing catalogue metadata from game-page presence. Request omission is not persisted as a status until a future batch path can prove exact requested IDs against the same successful immutable response. Transport failure is likewise not a listing status.
+
+Media history stores a canonical SHA-256 fingerprint rather than copying the opaque Yandex media DTO into the platform-neutral schema. `YandexGetGamesParser@4` distinguishes missing/non-object media (`None`) from a present empty object (`{}`). The raw manifest remains recoverable through required field lineage.
+
+Every persisted history item requires at least one field-lineage row. One history bundle is transactional across the normalized envelope, evidence, typed row, and lineage. Observation identity excludes the observed value, so an identical replay is idempotent while a conflicting value or evidence envelope under the same identity is rejected.
+
+History readers are ordered by `observed_at`, `retrieved_at`, and observation ID and support an `as_of` bound on observed time. Missing newer rows mean “not observed more recently,” not “known unchanged.” Readers fail closed on a wrong stored observation type, missing history evidence, or missing field lineage.
 
 ## Probe runs / exposure
 

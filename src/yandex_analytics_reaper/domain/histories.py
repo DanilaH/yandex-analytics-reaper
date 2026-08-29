@@ -1,0 +1,86 @@
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Self
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator, model_validator
+
+
+class ListingStatus(StrEnum):
+    PUBLISHED = "published"
+
+
+class ListingStatusReason(StrEnum):
+    OBSERVED_IN_CATALOGUE_METADATA = "observed_in_catalogue_metadata"
+    OBSERVED_ON_GAME_PAGE = "observed_on_game_page"
+
+
+class ListingUpdateObservation(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    platform_listing_id: str
+    observed_at: AwareDatetime
+    app_version: str | None = None
+    source_published_at: AwareDatetime | None = None
+
+    @field_validator("platform_listing_id")
+    @classmethod
+    def require_listing_id(cls, value: str) -> str:
+        return _require_exact_non_blank(value, "platform_listing_id")
+
+    @field_validator("app_version")
+    @classmethod
+    def validate_app_version(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _require_exact_non_blank(value, "app_version")
+
+    @model_validator(mode="after")
+    def require_update_field(self) -> Self:
+        if self.app_version is None and self.source_published_at is None:
+            raise ValueError("update observation requires app_version or source_published_at")
+        return self
+
+
+class ListingStatusObservation(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    platform_listing_id: str
+    observed_at: AwareDatetime
+    status: ListingStatus
+    reason: ListingStatusReason
+
+    @field_validator("platform_listing_id")
+    @classmethod
+    def require_listing_id(cls, value: str) -> str:
+        return _require_exact_non_blank(value, "platform_listing_id")
+
+
+class ListingMediaObservation(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    platform_listing_id: str
+    observed_at: AwareDatetime
+    manifest_hash: str
+
+    @field_validator("platform_listing_id")
+    @classmethod
+    def require_listing_id(cls, value: str) -> str:
+        return _require_exact_non_blank(value, "platform_listing_id")
+
+    @field_validator("manifest_hash")
+    @classmethod
+    def validate_manifest_hash(cls, value: str) -> str:
+        if len(value) != 64 or any(
+            character not in "0123456789abcdef" for character in value
+        ):
+            raise ValueError("manifest_hash must be a lowercase SHA-256 hex digest")
+        return value
+
+
+def _require_exact_non_blank(value: str, field: str) -> str:
+    if not value:
+        raise ValueError(f"{field} cannot be blank")
+    if value != value.strip():
+        raise ValueError(f"{field} must already be trimmed")
+    return value

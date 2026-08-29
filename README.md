@@ -44,6 +44,7 @@ Implemented:
 - frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
 - immutable versioned search query-family declarations with exact ordered query membership and SQLite persistence;
 - provisional `yandex_search_union_v1` comparable-set construction from explicit clean search runs, with raw replay, organic union/dedupe, exact member evidence, and immutable SQLite persistence;
+- append-only update/status/media histories with direct-presence status semantics, field-level raw lineage, point-in-time readers, and immutable SQLite persistence;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -253,6 +254,14 @@ Existing manual search probes continue to persist the exact `query_text` actuall
 `SQLiteComparableSetStore` persists the exact family version, run mapping, first-occurrence member order, observation interval, parser identity, and ordered raw membership evidence. Identical `(set_id, version)` writes are idempotent; conflicting content is rejected, and reads fail closed if referenced family/run/page provenance drifts.
 
 This is deliberately a **provisional search-derived candidate peer set**. The Phase 3 taxonomy is still draft, so `yandex_search_union_v1` does not claim every member is a validated gameplay comparable and does not silently filter with an unvalidated classifier. A later construction version may add frozen taxonomy/classifier refinement without rewriting historical search-union sets.
+
+## Listing histories
+
+`docs/spec/listing-histories.md` owns append-only update/status/media semantics. The current implementation consumes only already-proven `get_games` and `__playPageData__` fields; it does not add a scheduler or infer lifecycle states from transport failures/result omission.
+
+`YandexListingHistoryNormalizer@1` preserves `publishedTime` as `source_published_at`, records only directly observed public presence as `published`, and fingerprints the exact parsed media manifest with canonical SHA-256. `YandexGetGamesParser@4` preserves missing `media` separately from a present empty `{}` manifest. Negative status from omitted catalogue results is intentionally not persisted until an exact request↔response binding proves the omission.
+
+`SQLiteListingHistoryStore` writes normalized envelopes, evidence, typed update/status/media rows, and required field lineage transactionally. Observation identity is deterministic and excludes the observed value, so identical writes are idempotent while conflicting values/evidence are rejected. Readers are ordered for point-in-time reconstruction and fail closed on missing evidence/lineage.
 
 ## Read before changing the project
 

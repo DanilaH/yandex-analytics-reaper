@@ -26,6 +26,10 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
     )
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE listing_media_observations")
+        connection.execute("DROP TABLE listing_status_observations")
+        connection.execute("DROP TABLE listing_update_observations")
+        connection.execute("DROP TABLE listing_history_evidence")
         connection.execute("DROP TABLE comparable_set_member_evidence")
         connection.execute("DROP TABLE comparable_set_members")
         connection.execute("DROP TABLE comparable_set_runs")
@@ -48,7 +52,7 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 8
+        assert version[0] == 9
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(schema_observations)").fetchall()
@@ -65,4 +69,5 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
             "probe_contexts",
             "query_family_versions",
             "comparable_set_versions",
+            "listing_history_evidence",
         } <= tables

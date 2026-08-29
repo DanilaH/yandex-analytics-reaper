@@ -44,7 +44,7 @@ Phase 1 is complete when this foundation lands on `main`.
   - [ ] execute the empirical matched-block calibration with the frozen sample/time/order guards and record per-depth classifications
 - [x] search query-family model
 - [x] comparable-set construction
-- [ ] update/status/media histories
+- [x] update/status/media histories
 - [ ] decide actual collection cadence from measured volatility
 
 **Definition of Done:** given an `as_of` timestamp, reconstruct the observed Yandex market state with source lineage and known observation coverage.

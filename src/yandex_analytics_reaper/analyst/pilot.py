@@ -567,7 +567,10 @@ def _machine_detected_limitations(
 ) -> tuple[str, ...]:
     limitations: list[str] = [
         "collection parameters remain provisional_uncalibrated until calibration tracks finish",
-        "search-derived comparable sets remain provisional candidate peer sets until taxonomy validation",
+        (
+            "search-derived comparable sets remain provisional candidate peer sets "
+            "until taxonomy validation"
+        ),
     ]
     if not snapshot.feed_runs:
         limitations.append("feed exposure was not collected for this pilot snapshot")

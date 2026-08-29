@@ -26,6 +26,11 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
     )
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE query_family_members")
+        connection.execute("DROP TABLE query_family_versions")
+        connection.execute("DROP TABLE probe_pages")
+        connection.execute("DROP TABLE probe_runs")
+        connection.execute("DROP TABLE probe_contexts")
         connection.execute("DROP TABLE schema_drift_events")
         connection.execute("DROP TABLE schema_field_profiles")
         connection.execute("DROP TABLE schema_observations")
@@ -39,10 +44,17 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 4
+        assert version[0] == 7
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(schema_observations)").fetchall()
         }
         assert "comparison_scope_id" in columns
         assert "content_hash" in columns
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert {"probe_contexts", "query_family_versions"} <= tables

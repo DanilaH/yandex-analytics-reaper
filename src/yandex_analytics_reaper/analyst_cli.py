@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from yandex_analytics_reaper.analyst import AnalystSnapshotBuilder, AnalystSnapshotDeclaration
 from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import QueryFamilyVersion
@@ -66,6 +67,21 @@ def _read_text(path: str) -> str:
         raise SystemExit(str(exc)) from exc
 
 
+def _write_report(path: str, content: str) -> None:
+    report_path = Path(path)
+    try:
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        with report_path.open("x", encoding="utf-8") as handle:
+            handle.write(content)
+            handle.write("\n")
+    except FileExistsError as exc:
+        raise SystemExit(
+            f"report already exists: {report_path}; choose a new output path"
+        ) from exc
+    except OSError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def _persist_query_family(args: argparse.Namespace) -> None:
     raw_store = _raw_store(args.output)
     try:
@@ -115,6 +131,28 @@ def _build_search_comparable_set(args: argparse.Namespace) -> None:
     print(stored.model_dump_json(indent=2))
 
 
+def _build_snapshot(args: argparse.Namespace) -> None:
+    raw_store = _raw_store(args.output)
+    database_path = _database_path(raw_store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "persist comparable/search evidence before building an analyst snapshot"
+        )
+    try:
+        declaration = AnalystSnapshotDeclaration.model_validate_json(
+            _read_text(args.declaration)
+        )
+        report = AnalystSnapshotBuilder(
+            raw_store=raw_store,
+            database_path=database_path,
+        ).build(declaration)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    _write_report(args.report, report.model_dump_json(indent=2))
+    print(f"analyst_snapshot={report.snapshot_id} content_hash={report.content_hash}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-analyst",
@@ -146,6 +184,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
     )
     comparable.set_defaults(handler=_build_search_comparable_set)
+
+    snapshot = sub.add_parser(
+        "build-snapshot",
+        help="Bind comparable/feed/rich-metadata evidence into analyst-snapshot-v1.",
+    )
+    snapshot.add_argument("declaration", help="Path to an AnalystSnapshotDeclaration JSON file.")
+    snapshot.add_argument("--report", required=True, help="Create-only snapshot report JSON path.")
+    snapshot.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    snapshot.set_defaults(handler=_build_snapshot)
     return parser
 
 

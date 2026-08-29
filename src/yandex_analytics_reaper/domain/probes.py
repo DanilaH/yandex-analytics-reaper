@@ -34,6 +34,7 @@ class ProbeRun(BaseModel):
     completed_at: AwareDatetime | None = None
     status: ProbeRunStatus = ProbeRunStatus.RUNNING
     error: str | None = None
+    error_raw_snapshot_id: str | None = None
 
     @field_validator("id", "source_id", "request_key", "context_id")
     @classmethod
@@ -43,14 +44,14 @@ class ProbeRun(BaseModel):
             raise ValueError("probe run identity fields cannot be blank")
         return stripped
 
-    @field_validator("query_text")
+    @field_validator("query_text", "error_raw_snapshot_id")
     @classmethod
-    def normalize_query(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
         stripped = value.strip()
         if not stripped:
-            raise ValueError("probe query_text cannot be blank")
+            raise ValueError("optional probe text fields cannot be blank when provided")
         return stripped
 
     @model_validator(mode="after")
@@ -60,15 +61,20 @@ class ProbeRun(BaseModel):
         if self.kind is ProbeKind.RECOMMENDATION_FEED and self.query_text is not None:
             raise ValueError("feed probe run cannot carry query_text")
         if self.status is ProbeRunStatus.RUNNING:
-            if self.completed_at is not None or self.error is not None:
-                raise ValueError("running probe cannot have completed_at/error")
+            if (
+                self.completed_at is not None
+                or self.error is not None
+                or self.error_raw_snapshot_id is not None
+            ):
+                raise ValueError("running probe cannot have terminal metadata")
         else:
             if self.completed_at is None:
                 raise ValueError("terminal probe run requires completed_at")
             if self.completed_at < self.started_at:
                 raise ValueError("probe completed_at cannot be earlier than started_at")
-            if self.status is ProbeRunStatus.COMPLETED and self.error is not None:
-                raise ValueError("completed probe run cannot carry an error")
+            if self.status is ProbeRunStatus.COMPLETED:
+                if self.error is not None or self.error_raw_snapshot_id is not None:
+                    raise ValueError("completed probe run cannot carry error metadata")
             if self.status in {ProbeRunStatus.PARTIAL, ProbeRunStatus.FAILED}:
                 if self.error is None or not self.error.strip():
                     raise ValueError("partial/failed probe run requires an error")

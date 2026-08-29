@@ -26,6 +26,9 @@ ANNOTATION_CONTRACT_V1_CONTENT_HASH = (
     "5ca971d9cec8a9282ec23388049fb68d3e78a030a335c32bdf92d908f388e8b3"
 )
 LABEL_REGISTRY_VERSION: Literal[1] = 1
+_SAMPLE_PARSER_NAME = "YandexFeedParser"
+_SAMPLE_PARSER_VERSION = "2"
+_SAMPLE_MAX_PER_DEVELOPER = 2
 _CONTROLLED_DIMENSIONS = (
     ControlledLabelDimension.MECHANICS,
     ControlledLabelDimension.OBJECTIVES,
@@ -373,7 +376,21 @@ def _validate_sample_shape(sample: TaxonomyDiversitySampleReport) -> None:
         raise TaxonomyGoldSetError("manual gold-set tooling requires a real 100–200 member sample")
     if len(sample.selected) != sample.target_size:
         raise TaxonomyGoldSetError("taxonomy sample selected membership does not match target_size")
+    if sample.candidate_pool_size < len(sample.selected):
+        raise TaxonomyGoldSetError("taxonomy sample candidate pool is smaller than selected membership")
+    if sample.parser_name != _SAMPLE_PARSER_NAME or sample.parser_version != _SAMPLE_PARSER_VERSION:
+        raise TaxonomyGoldSetError("manual gold-set tooling requires the frozen sampling parser")
+    if sample.max_per_developer != _SAMPLE_MAX_PER_DEVELOPER:
+        raise TaxonomyGoldSetError("manual gold-set tooling requires the frozen sampling developer cap")
+    input_run_ids = sample.input_run_ids
+    if any(not run_id or run_id != run_id.strip() for run_id in input_run_ids):
+        raise TaxonomyGoldSetError("taxonomy sample input run IDs must be nonblank and trimmed")
+    if len(input_run_ids) != len(set(input_run_ids)):
+        raise TaxonomyGoldSetError("taxonomy sample input run IDs must be unique")
     _validate_sha256(sample.sample_content_hash, "taxonomy sample content hash")
+    expected_hash = _taxonomy_sample_content_hash(sample)
+    if sample.sample_content_hash != expected_hash:
+        raise TaxonomyGoldSetError("taxonomy sample content hash does not match report content")
     ordinals = tuple(member.ordinal for member in sample.selected)
     if ordinals != tuple(range(len(sample.selected))):
         raise TaxonomyGoldSetError("taxonomy sample member ordinals are not contiguous from zero")
@@ -394,6 +411,19 @@ def _validate_sample_binding(
         raise TaxonomyGoldSetError(
             "manual labels must cover every taxonomy sample member exactly in sample ordinal order"
         )
+
+
+def _taxonomy_sample_content_hash(sample: TaxonomyDiversitySampleReport) -> str:
+    payload = {
+        "spec_version": sample.spec_version,
+        "sample_id": sample.sample_id,
+        "target_size": sample.target_size,
+        "max_per_developer": sample.max_per_developer,
+        "input_run_ids": sample.input_run_ids,
+        "selected": [member.model_dump(mode="json") for member in sample.selected],
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _utc_datetime(value: datetime, field_name: str) -> datetime:

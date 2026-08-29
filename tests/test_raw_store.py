@@ -55,7 +55,16 @@ def test_raw_store_resolves_persisted_metadata_by_source_and_snapshot_id(tmp_pat
     resolved = store.get_metadata(metadata.source_id, metadata.id)
 
     assert resolved == metadata
-    assert (tmp_path / resolved.content_path).read_bytes() == _response().body
+    assert store.get_body(metadata.source_id, metadata.id) == _response().body
+
+
+def test_raw_store_body_replay_rejects_tampered_content(tmp_path: Path) -> None:
+    store = FilesystemRawSnapshotStore(tmp_path)
+    metadata = store.persist(_response())
+    (tmp_path / metadata.content_path).write_bytes(b"tampered")
+
+    with pytest.raises(ValueError, match="body hash"):
+        store.get_body(metadata.source_id, metadata.id)
 
 
 def test_raw_store_rejects_invalid_or_missing_snapshot_identity(tmp_path: Path) -> None:

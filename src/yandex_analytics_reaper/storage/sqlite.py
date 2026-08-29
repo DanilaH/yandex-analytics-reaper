@@ -105,40 +105,52 @@ ON observation_lineage (raw_snapshot_id, normalized_observation_id);
 """,
     4: """
 CREATE TABLE IF NOT EXISTS schema_observations (
-    raw_snapshot_id TEXT PRIMARY KEY,
+    id TEXT PRIMARY KEY,
+    raw_snapshot_id TEXT NOT NULL,
+    analyzer_version TEXT NOT NULL,
+    contract_id TEXT NOT NULL,
     source_id TEXT NOT NULL,
     request_key TEXT NOT NULL,
     retrieved_at TEXT NOT NULL,
     schema_hash TEXT,
     profile_status TEXT NOT NULL,
     root_type TEXT,
-    error TEXT
+    error TEXT,
+    UNIQUE (raw_snapshot_id, analyzer_version, contract_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_schema_observations_source_request_time
-ON schema_observations (source_id, request_key, retrieved_at, raw_snapshot_id);
+ON schema_observations (
+    source_id,
+    request_key,
+    analyzer_version,
+    contract_id,
+    retrieved_at,
+    raw_snapshot_id
+);
 
 CREATE TABLE IF NOT EXISTS schema_field_profiles (
-    raw_snapshot_id TEXT NOT NULL
-        REFERENCES schema_observations(raw_snapshot_id) ON DELETE CASCADE,
+    schema_observation_id TEXT NOT NULL
+        REFERENCES schema_observations(id) ON DELETE CASCADE,
     field_path TEXT NOT NULL,
     value_types_json TEXT NOT NULL,
     present_count INTEGER NOT NULL,
     parent_count INTEGER NOT NULL,
     presence_ratio REAL NOT NULL,
-    PRIMARY KEY (raw_snapshot_id, field_path),
+    PRIMARY KEY (schema_observation_id, field_path),
     CHECK (present_count >= 0),
     CHECK (parent_count >= present_count),
     CHECK (presence_ratio >= 0.0 AND presence_ratio <= 1.0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_schema_field_profiles_path
-ON schema_field_profiles (field_path, raw_snapshot_id);
+ON schema_field_profiles (field_path, schema_observation_id);
 
 CREATE TABLE IF NOT EXISTS schema_drift_events (
     id TEXT PRIMARY KEY,
-    raw_snapshot_id TEXT NOT NULL
-        REFERENCES schema_observations(raw_snapshot_id) ON DELETE CASCADE,
+    schema_observation_id TEXT NOT NULL
+        REFERENCES schema_observations(id) ON DELETE CASCADE,
+    raw_snapshot_id TEXT NOT NULL,
     kind TEXT NOT NULL,
     severity TEXT NOT NULL,
     field_path TEXT,

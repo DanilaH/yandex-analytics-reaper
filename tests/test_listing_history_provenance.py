@@ -18,6 +18,7 @@ from yandex_analytics_reaper.normalizers import (
 )
 from yandex_analytics_reaper.sources.yandex.parsers import PlayPageData
 from yandex_analytics_reaper.storage import (
+    ListingHistoryObservationWrite,
     ListingHistoryWrite,
     SQLiteIdentityStore,
     SQLiteListingHistoryStore,
@@ -38,6 +39,14 @@ def _fixture(
         PlayPageData(app_id=1, app_version="3.0.0"),
         context,
     )
+    observations = tuple(
+        ListingHistoryObservationWrite(
+            observation=item.observation,
+            lineage=item.lineage,
+        )
+        for item in (histories.update, histories.status, histories.media)
+        if item is not None
+    )
     SQLiteIdentityStore(path).persist_listing_identity(
         PlatformListing(
             id="yandex_games:1",
@@ -48,7 +57,7 @@ def _fixture(
         observed_at,
     )
     write = ListingHistoryWrite(
-        histories=histories,
+        observations=observations,
         evidence=EvidenceEnvelope(
             source_id="yandex_public",
             observed_at=observed_at,
@@ -70,7 +79,7 @@ def test_history_write_requires_normalizer_and_lineage_version_agreement(
 
     with pytest.raises(ValidationError, match="transformation_version"):
         ListingHistoryWrite(
-            histories=write.histories,
+            observations=write.observations,
             evidence=write.evidence,
             normalizer_name=write.normalizer_name,
             normalizer_version="999",
@@ -112,4 +121,25 @@ def test_history_reader_fails_closed_when_evidence_is_missing(tmp_path: Path) ->
         )
 
     with pytest.raises(RuntimeError, match="missing evidence"):
+        store.status_history("yandex_games:1")
+
+
+def test_history_reader_fails_closed_on_lineage_normalizer_mismatch(
+    tmp_path: Path,
+) -> None:
+    store, write = _fixture(tmp_path / "market.sqlite3")
+    persisted_ids = store.persist(write)
+    status_id = persisted_ids[1]
+
+    with store.database.connect() as connection:
+        connection.execute(
+            """
+            UPDATE observation_lineage
+            SET transformation_version = '999'
+            WHERE normalized_observation_id = ?
+            """,
+            (status_id,),
+        )
+
+    with pytest.raises(RuntimeError, match="lineage provenance is invalid"):
         store.status_history("yandex_games:1")

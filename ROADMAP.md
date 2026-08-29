@@ -115,14 +115,14 @@ Pending feed-depth/session/cadence experiments remain pending and must not be re
 
 Compute only transparent current-state features that are supported by already proven public Yandex data:
 
-- [ ] comparable-set size / observed supply
-- [ ] query-level search-supply observations
-- [ ] `gqRating` distribution and coverage
-- [ ] player-rating / `ratingCount` distribution and coverage
-- [ ] first-published / recent-release distribution where source data is present
-- [ ] organic feed/search exposure summaries from the explicit analyst snapshot
-- [ ] developer concentration/basic supply composition where evidence permits
-- [ ] missing/unknown/evidence-coverage diagnostics alongside every aggregate
+- [x] comparable-set size / observed supply
+- [x] query-level search-supply observations
+- [x] `gqRating` distribution and coverage
+- [x] player-rating / `ratingCount` distribution and coverage
+- [x] first-published / recent-release distribution where source data is present
+- [x] organic feed/search exposure summaries from the explicit analyst snapshot
+- [x] developer concentration/basic supply composition where evidence permits
+- [x] missing/unknown/evidence-coverage diagnostics alongside every aggregate
 
 Do **not** fabricate unavailable competitor DAU, retention, playtime, CTR, revenue, or ARPDAU.
 

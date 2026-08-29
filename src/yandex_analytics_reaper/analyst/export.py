@@ -10,6 +10,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
 from yandex_analytics_reaper.domain import (
     GameMetricName,
     ListingStateObservation,
@@ -28,6 +29,7 @@ from yandex_analytics_reaper.storage import (
     SQLiteListingStateStore,
     SQLiteMetricStore,
     SQLiteProbeRunStore,
+    SQLiteQueryFamilyStore,
 )
 
 from .snapshot import AnalystSnapshotReport, validate_analyst_snapshot_report
@@ -268,6 +270,7 @@ class AnalystMarketExporter:
         self.history_store = SQLiteListingHistoryStore(database_path)
         self.lineage_store = SQLiteLineageStore(database_path)
         self.comparable_store = SQLiteComparableSetStore(database_path)
+        self.query_family_store = SQLiteQueryFamilyStore(database_path)
         self.probe_store = SQLiteProbeRunStore(database_path)
 
     def build(self, snapshot: AnalystSnapshotReport) -> AnalystMarketExportReport:
@@ -471,16 +474,48 @@ class AnalystMarketExporter:
                 raise AnalystExportError(
                     f"comparable set disappeared: {binding.set_id}@{binding.version}"
                 )
+            family = self.query_family_store.get(
+                comparable.query_family_id,
+                comparable.query_family_version,
+            )
+            if family is None:
+                raise AnalystExportError(
+                    "comparable set references a missing query-family version: "
+                    f"{comparable.query_family_id}@{comparable.query_family_version}"
+                )
+            rebuilt = YandexSearchComparableSetBuilder(
+                raw_store=self.raw_store,
+                probe_store=self.probe_store,
+            ).build(
+                family,
+                binding.search_run_ids,
+                set_id=comparable.set_id,
+                version=comparable.version,
+                created_at=comparable.created_at,
+            )
+            if rebuilt != comparable:
+                raise AnalystExportError(
+                    f"comparable set failed raw replay: {binding.set_id}@{binding.version}"
+                )
             if (
                 tuple(item.probe_run_id for item in comparable.runs)
                 != binding.search_run_ids
                 or tuple(item.platform_listing_id for item in comparable.members)
                 != binding.member_listing_ids
+                or comparable.query_family_id != binding.query_family_id
+                or comparable.query_family_version != binding.query_family_version
+                or comparable.construction_method.value != binding.construction_method
                 or comparable.context_id != binding.context_id
                 or comparable.requested_page_limit != binding.requested_page_limit
+                or comparable.observed_from != binding.observed_from
+                or comparable.observed_to != binding.observed_to
             ):
                 raise AnalystExportError(
                     f"comparable set changed since snapshot: {binding.set_id}@{binding.version}"
+                )
+            if comparable.parser_name != type(parser).__name__:
+                raise AnalystExportError(
+                    f"comparable parser name is unsupported: {comparable.parser_name}"
                 )
             if comparable.parser_version != parser.version:
                 raise AnalystExportError(
@@ -591,6 +626,10 @@ class AnalystMarketExporter:
         parser = YandexFeedParser()
         rows: list[AnalystFeedExposure] = []
         for binding in snapshot.feed_runs:
+            if binding.parser_name != type(parser).__name__:
+                raise AnalystExportError(
+                    f"feed parser name is unsupported: {binding.parser_name}"
+                )
             if binding.parser_version != parser.version:
                 raise AnalystExportError(
                     f"current feed parser v{parser.version} cannot replay feed parser "

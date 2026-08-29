@@ -45,6 +45,20 @@ def test_primary_archetype_registry_uses_market_buckets_not_low_level_actions() 
     assert "build_place" not in values
 
 
+def test_unknown_primary_archetype_is_distinct_from_genuine_other() -> None:
+    unknown = GameTaxonomyDraft(
+        primary_archetype=PrimaryGameplayArchetype.UNKNOWN,
+    )
+    other = GameTaxonomyDraft(
+        primary_archetype=PrimaryGameplayArchetype.OTHER,
+    )
+
+    assert PrimaryGameplayArchetype.UNKNOWN is not PrimaryGameplayArchetype.OTHER
+    assert unknown.primary_archetype.value == "unknown"
+    assert other.primary_archetype.value == "other"
+    assert unknown.model_dump(mode="json")["primary_archetype"] == "unknown"
+
+
 def test_controlled_dimensions_reject_undeclared_axes() -> None:
     with pytest.raises(ValidationError, match="extra"):
         ControlledTaxonomyDimensions.model_validate(

@@ -27,6 +27,7 @@ class PrimaryGameplayArchetype(StrEnum):
     STORY_ADVENTURE = "story_adventure"
     CUSTOMIZATION = "customization"
     OTHER = "other"
+    UNKNOWN = "unknown"
 
 
 class SessionModel(StrEnum):

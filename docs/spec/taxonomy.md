@@ -98,9 +98,9 @@ objective = escape / complete_story
 
 Do not create primary buckets such as `shoot`, `collect`, `build_place`, or `explore` merely because those actions are present in gameplay.
 
-`other` means the game is genuinely outside the current registry. `unknown` means available evidence is insufficient to classify it reliably.
+`other` means the game is genuinely outside the current registry. `unknown` means available evidence is insufficient to classify it reliably. These are distinct first-class values and must never be collapsed.
 
-A classifier must be allowed to return `unknown`; it must not guess merely to satisfy the schema. The explicit implementation split between `unknown` and `other` is the next roadmap item; until that lands, the draft model must not be treated as ready for automated production classification.
+A classifier must be allowed to return `unknown`; it must not guess merely to satisfy the schema. `other` is valid only when the evidence is sufficient to conclude that the dominant gameplay pattern genuinely falls outside the current registry.
 
 ## Controlled dimensions
 

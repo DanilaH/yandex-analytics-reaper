@@ -10,6 +10,7 @@ from yandex_analytics_reaper.domain import (
     ComparableSetRun,
     ComparableSetVersion,
     Platform,
+    ProbeContext,
     ProbeKind,
     ProbeRunStatus,
     QueryFamilyVersion,
@@ -17,7 +18,11 @@ from yandex_analytics_reaper.domain import (
 )
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
 from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
-from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLiteProbeRunStore
+from yandex_analytics_reaper.storage import (
+    FilesystemRawSnapshotStore,
+    ProbeRunRecord,
+    SQLiteProbeRunStore,
+)
 
 _SOURCE_ID = "yandex_public"
 _REQUEST_KEY = "catalogue.search"
@@ -64,11 +69,11 @@ class YandexSearchComparableSetBuilder:
                 "comparable-set construction requires exactly one run per query-family member"
             )
 
-        declared_queries = {
+        declared_queries: dict[str, int] = {
             member.query_text: ordinal for ordinal, member in enumerate(family.members)
         }
-        records_by_query = {}
-        expected_context = None
+        records_by_query: dict[str, ProbeRunRecord] = {}
+        expected_context: ProbeContext | None = None
         expected_context_id: str | None = None
         requested_page_limit: int | None = None
         observed_from: datetime | None = None

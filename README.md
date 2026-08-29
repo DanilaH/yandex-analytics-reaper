@@ -26,7 +26,7 @@ Market Prior
 
 ## Current scope
 
-**Phase 1 — Foundation** is complete. **Phase 2 — Yandex market state** is in progress.
+**Phase 1 — Foundation** is complete. **Phase 2 — Yandex market state** still has empirical calibration gates pending, while implementation has progressed through the supporting tooling for **Phase 3 — Taxonomy validation**. Phase 3 real sample/annotation/review/agreement execution remains pending; no validated taxonomy has been frozen yet.
 
 Implemented:
 
@@ -47,6 +47,12 @@ Implemented:
 - provisional `yandex_search_union_v1` comparable-set construction from explicit clean search runs, with raw replay, organic union/dedupe, exact member evidence, and immutable SQLite persistence;
 - append-only update/status/media histories with direct-presence status semantics, field-level raw lineage, point-in-time readers, and immutable SQLite persistence;
 - shared versioned SQLite migrations for the operational store;
+- pragmatic draft taxonomy with one primary gameplay archetype, explicit `unknown` vs `other`, and immutable controlled label registries for mechanics/objectives/meta/tone;
+- frozen `taxonomy-diversity-sample-v1` deterministic raw-replay sampler for a purposive 100–200-game sample;
+- frozen manual annotation/adjudication contracts with exact sample binding and adjudicated gold-set tooling;
+- frozen primary-archetype review protocol with exact gold-set binding and support/confidence diagnostics;
+- frozen independent-annotation primary agreement/confusion protocol with symmetric confusion pairs, `unknown`/`other` diagnostics, and explicit adjudication-alignment metrics;
+- offline `yandex-reaper-taxonomy` file-in/file-out execution CLI for annotation validation, gold-set construction, primary review, and agreement/confusion artifacts with create-only report writes;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
@@ -61,6 +67,10 @@ Not implemented yet:
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - empirical session-profile classifications from the required real matched-block sample;
 - empirical collection-cadence decisions from the required 28+ consecutive daily reference checkpoints;
+- real 100–200-game taxonomy sample execution against persisted Yandex evidence;
+- real independent manual annotation/adjudication and resulting gold-set artifact;
+- real primary-archetype review and agreement/confusion evidence needed to revise the draft taxonomy;
+- taxonomy revision and first validated taxonomy freeze;
 - automated query-family execution/scheduling and taxonomy-refined comparable sets;
 - authenticated test-session credential provider;
 - production scheduled collection using empirically selected cadence;

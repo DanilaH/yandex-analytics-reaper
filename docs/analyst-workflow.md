@@ -215,7 +215,7 @@ explicit not_observed missingness
 per-field normalized observation + raw/source-field evidence
 comparable membership with exact query/run/raw/source-object provenance
 per-query/page totalGamesCount query-supply observations
-organic search exposures
+organic and sponsored search exposures as separate rows
 organic and sponsored feed exposures as separate rows
 ```
 

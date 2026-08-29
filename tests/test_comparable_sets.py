@@ -240,16 +240,22 @@ def test_store_round_trips_idempotently_and_rejects_conflicting_version(
     assert store.get(comparable_set.set_id, 1) == comparable_set
     assert store.latest(comparable_set.set_id) == comparable_set
 
-    changed = comparable_set.model_copy(update={"parser_version": "999"})
+    changed = comparable_set.model_copy(
+        update={"created_at": comparable_set.created_at + timedelta(seconds=1)}
+    )
     with pytest.raises(ValueError, match="conflicting comparable-set content"):
         store.persist(changed)
 
 
-def test_store_rejects_family_membership_or_raw_page_provenance_mismatch(
+def test_store_rejects_frozen_method_family_or_raw_page_provenance_mismatch(
     tmp_path: Path,
 ) -> None:
     _, comparable_set, _, probe_store = _build_fixture(tmp_path)
     store = SQLiteComparableSetStore(probe_store.path)
+
+    wrong_parser = comparable_set.model_copy(update={"parser_version": "999"})
+    with pytest.raises(ValueError, match="frozen Yandex source/parser"):
+        store.persist(wrong_parser)
 
     wrong_runs = comparable_set.model_copy(
         update={
@@ -291,4 +297,24 @@ def test_store_fails_closed_on_corrupt_evidence_order(tmp_path: Path) -> None:
         )
 
     with pytest.raises(RuntimeError, match="evidence ordinals are not contiguous"):
+        store.get(comparable_set.set_id, comparable_set.version)
+
+
+def test_store_fails_closed_when_referenced_probe_page_drifts(tmp_path: Path) -> None:
+    _, comparable_set, _, probe_store = _build_fixture(tmp_path)
+    store = SQLiteComparableSetStore(probe_store.path)
+    store.persist(comparable_set)
+    first = comparable_set.evidence[0]
+
+    with store.database.connect() as connection:
+        connection.execute(
+            """
+            UPDATE probe_pages
+            SET raw_snapshot_id = ?
+            WHERE run_id = ? AND page_index = ?
+            """,
+            ("raw:tampered", first.probe_run_id, first.page_index),
+        )
+
+    with pytest.raises(RuntimeError, match="stored comparable-set provenance is invalid"):
         store.get(comparable_set.set_id, comparable_set.version)

@@ -102,3 +102,13 @@ class DriftEvent(BaseModel):
     current_presence_ratio: float | None = None
     details: dict[str, str] = Field(default_factory=dict)
     message: str
+
+
+class SchemaAnalysis(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    analysis_id: str
+    analyzer_version: str
+    contract_id: str
+    profile: SchemaProfile
+    events: tuple[DriftEvent, ...] = ()

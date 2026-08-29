@@ -154,6 +154,22 @@ class SQLiteProbeRunStore:
             if current_count >= run.requested_page_limit:
                 raise ValueError("probe run already reached requested_page_limit")
 
+            if current_count == 0:
+                if page.request_page_id is not None or page.request_rtx_reqid is not None:
+                    raise ValueError("first probe page cannot carry pagination request tokens")
+            else:
+                previous = self._load_page(connection, run.id, current_count - 1)
+                if previous is None:
+                    raise RuntimeError("contiguous probe page history is missing its previous page")
+                if not previous.has_next_page:
+                    raise ValueError("cannot append after source reported has_next_page=false")
+                if previous.response_next_page_id != page.request_page_id:
+                    raise ValueError("probe page_id does not continue previous page cursor")
+                if previous.response_rtx_reqid != page.request_rtx_reqid:
+                    raise ValueError("probe rtx_reqid does not continue previous page token")
+                if page.retrieved_at < previous.retrieved_at:
+                    raise ValueError("probe page retrieval time cannot move backwards")
+
             try:
                 connection.execute(
                     """

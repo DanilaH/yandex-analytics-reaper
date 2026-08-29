@@ -19,7 +19,10 @@ from yandex_analytics_reaper.domain import (
     SessionProfile,
 )
 from yandex_analytics_reaper.evidence import MeasurementKind, Provenance
-from yandex_analytics_reaper.normalizers import YandexGameNormalizer, YandexListingHistoryNormalizer
+from yandex_analytics_reaper.normalizers import (
+    YandexGameNormalizer,
+    YandexListingHistoryNormalizer,
+)
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
 from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
 from yandex_analytics_reaper.storage import (
@@ -61,6 +64,7 @@ _SEARCH_REQUEST_KEY = "catalogue.search"
 _SEARCH_PARSER_VERSION = "2"
 _SEARCH_PAGE_LIMIT = 10
 _MAX_CHECKPOINT_AGE_SECONDS = 2 * 60 * 60
+_DAY_SECONDS = 24 * 60 * 60
 _PAGINATION_KEYS = {"page_id", "rtx-reqid"}
 
 
@@ -113,7 +117,10 @@ class CollectionCadenceManifest(BaseModel):
             raise ValueError(f"cadence manifest must use spec_version={SPEC_VERSION}")
         checkpoints = self.checkpoints
         utc_times = [item.checkpoint_at.astimezone(UTC) for item in checkpoints]
-        if any(current <= previous for previous, current in zip(utc_times, utc_times[1:], strict=False)):
+        if any(
+            current <= previous
+            for previous, current in zip(utc_times, utc_times[1:], strict=False)
+        ):
             raise ValueError("cadence checkpoints must be strictly increasing")
         dates = [item.date() for item in utc_times]
         if len(dates) != len(set(dates)):
@@ -125,8 +132,8 @@ class CollectionCadenceManifest(BaseModel):
             item.hour * 3600 + item.minute * 60 + item.second
             for item in utc_times
         ]
-        if max(clock_seconds) - min(clock_seconds) > _MAX_CHECKPOINT_AGE_SECONDS:
-            raise ValueError("cadence checkpoint UTC clock times must span at most two hours")
+        if _circular_clock_span_seconds(clock_seconds) > _MAX_CHECKPOINT_AGE_SECONDS:
+            raise ValueError("cadence checkpoint UTC clock times must fit one two-hour band")
 
         feed_ids = [item.feed_run_id for item in checkpoints]
         search_ids = [run_id for item in checkpoints for run_id in item.search_run_ids]
@@ -397,12 +404,22 @@ class CollectionCadenceExperiment:
             depth: [] for depth in RANKING_DEPTHS
         }
         for checkpoint in manifest.checkpoints:
-            trial = self.feed_experiment.load_trial(checkpoint.feed_run_id)
-            _validate_checkpoint_age(
-                trial.started_at,
+            record = self.probe_store.get_run(checkpoint.feed_run_id)
+            if record is None:
+                raise CollectionCadenceEvidenceError(
+                    f"feed probe run does not exist: {checkpoint.feed_run_id}"
+                )
+            if record.run.completed_at is None:
+                raise CollectionCadenceEvidenceError(
+                    f"feed run {record.run.id} is missing completed_at"
+                )
+            _validate_checkpoint_interval(
+                record.run.started_at,
+                record.run.completed_at,
                 checkpoint.checkpoint_at,
-                f"feed run {trial.run_id}",
+                f"feed run {record.run.id}",
             )
+            trial = self.feed_experiment.load_trial(checkpoint.feed_run_id)
             reference_date = checkpoint.checkpoint_at.astimezone(UTC).date()
             for depth in RANKING_DEPTHS:
                 rankings[depth].append(
@@ -504,7 +521,12 @@ class CollectionCadenceExperiment:
                     f"search run {run.id} language does not match query family"
                 )
             _validate_clean_context(context)
-            _validate_checkpoint_age(run.started_at, checkpoint.checkpoint_at, f"search run {run.id}")
+            _validate_checkpoint_interval(
+                run.started_at,
+                run.completed_at,
+                checkpoint.checkpoint_at,
+                f"search run {run.id}",
+            )
             if expected_context is None:
                 expected_context = context
             elif context != expected_context:
@@ -684,7 +706,11 @@ def _latest_metric(
     eligible = [
         item
         for item in history
-        if _is_checkpoint_fresh(item.metric.observed_at, checkpoint_at)
+        if _is_checkpoint_fresh(
+            item.metric.observed_at,
+            item.evidence.retrieved_at,
+            checkpoint_at,
+        )
     ]
     return max(
         eligible,
@@ -704,7 +730,11 @@ def _latest_media(
     eligible = [
         item
         for item in history
-        if _is_checkpoint_fresh(item.observation.observed_at, checkpoint_at)
+        if _is_checkpoint_fresh(
+            item.observation.observed_at,
+            item.evidence.retrieved_at,
+            checkpoint_at,
+        )
     ]
     return max(
         eligible,
@@ -724,7 +754,11 @@ def _latest_update(
     eligible = [
         item
         for item in history
-        if _is_checkpoint_fresh(item.observation.observed_at, checkpoint_at)
+        if _is_checkpoint_fresh(
+            item.observation.observed_at,
+            item.evidence.retrieved_at,
+            checkpoint_at,
+        )
     ]
     return max(
         eligible,
@@ -737,20 +771,36 @@ def _latest_update(
     )
 
 
-def _is_checkpoint_fresh(observed_at: datetime, checkpoint_at: datetime) -> bool:
-    delta = checkpoint_at.astimezone(UTC) - observed_at.astimezone(UTC)
-    seconds = delta.total_seconds()
-    return 0.0 <= seconds <= _MAX_CHECKPOINT_AGE_SECONDS
-
-
-def _validate_checkpoint_age(
+def _is_checkpoint_fresh(
     observed_at: datetime,
+    retrieved_at: datetime | None,
+    checkpoint_at: datetime,
+) -> bool:
+    if retrieved_at is None:
+        return False
+    checkpoint_utc = checkpoint_at.astimezone(UTC)
+    observed_utc = observed_at.astimezone(UTC)
+    retrieved_utc = retrieved_at.astimezone(UTC)
+    if retrieved_utc > checkpoint_utc:
+        return False
+    age_seconds = (checkpoint_utc - observed_utc).total_seconds()
+    return 0.0 <= age_seconds <= _MAX_CHECKPOINT_AGE_SECONDS
+
+
+def _validate_checkpoint_interval(
+    started_at: datetime,
+    completed_at: datetime,
     checkpoint_at: datetime,
     label: str,
 ) -> None:
-    if not _is_checkpoint_fresh(observed_at, checkpoint_at):
+    checkpoint_utc = checkpoint_at.astimezone(UTC)
+    if completed_at.astimezone(UTC) > checkpoint_utc:
         raise CollectionCadenceEvidenceError(
-            f"{label} is not within two hours before its cadence checkpoint"
+            f"{label} completed after its cadence checkpoint"
+        )
+    if not _is_checkpoint_fresh(started_at, started_at, checkpoint_at):
+        raise CollectionCadenceEvidenceError(
+            f"{label} did not start within two hours before its cadence checkpoint"
         )
 
 
@@ -898,3 +948,17 @@ def _optional_timestamp(value: datetime | None) -> str | None:
     if value is None:
         return None
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def _circular_clock_span_seconds(values: Sequence[int]) -> int:
+    if not values:
+        return 0
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return 0
+    gaps = [
+        current - previous
+        for previous, current in zip(ordered, ordered[1:], strict=False)
+    ]
+    gaps.append(_DAY_SECONDS - ordered[-1] + ordered[0])
+    return _DAY_SECONDS - max(gaps)

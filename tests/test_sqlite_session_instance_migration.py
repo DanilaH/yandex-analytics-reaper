@@ -80,7 +80,7 @@ def test_v5_probe_contexts_migrate_to_nullable_session_instance_id(tmp_path: Pat
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 9
+        assert version[0] == 10
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(probe_contexts)").fetchall()
@@ -108,4 +108,5 @@ def test_v5_probe_contexts_migrate_to_nullable_session_instance_id(tmp_path: Pat
             "query_family_members",
             "comparable_set_versions",
             "listing_history_evidence",
+            "collection_cadence_plans",
         } <= tables

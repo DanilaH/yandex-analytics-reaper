@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -575,12 +576,10 @@ def _make_event(
     )
 
 
-def _sorted_events(events: object) -> tuple[DriftEvent, ...]:
-    if not isinstance(events, (list, tuple, dict_values_type())):
-        events = tuple(events)  # type: ignore[arg-type]
+def _sorted_events(events: Iterable[DriftEvent]) -> tuple[DriftEvent, ...]:
     return tuple(
         sorted(
-            events,  # type: ignore[arg-type]
+            events,
             key=lambda item: (
                 -_severity_rank(item.severity),
                 item.kind.value,
@@ -589,10 +588,6 @@ def _sorted_events(events: object) -> tuple[DriftEvent, ...]:
             ),
         )
     )
-
-
-def dict_values_type() -> type[object]:
-    return type({}.values())
 
 
 def _field_from_row(row: sqlite3.Row) -> FieldProfile:

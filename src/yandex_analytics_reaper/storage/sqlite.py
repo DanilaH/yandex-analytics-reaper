@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -167,6 +167,56 @@ CREATE TABLE IF NOT EXISTS schema_drift_events (
 
 CREATE INDEX IF NOT EXISTS idx_schema_drift_events_snapshot
 ON schema_drift_events (raw_snapshot_id, severity, kind);
+""",
+    5: """
+CREATE TABLE IF NOT EXISTS probe_contexts (
+    id TEXT PRIMARY KEY,
+    language TEXT NOT NULL,
+    device_type TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    country_observed TEXT,
+    collector_region TEXT,
+    session_profile TEXT NOT NULL,
+    cookie_state_hash TEXT,
+    profile_age_days INTEGER,
+    CHECK (profile_age_days IS NULL OR profile_age_days >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS probe_runs (
+    id TEXT PRIMARY KEY,
+    source_id TEXT NOT NULL,
+    request_key TEXT NOT NULL,
+    probe_kind TEXT NOT NULL,
+    context_id TEXT NOT NULL REFERENCES probe_contexts(id),
+    query_text TEXT,
+    requested_page_limit INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL,
+    error TEXT,
+    CHECK (requested_page_limit >= 1)
+);
+
+CREATE INDEX IF NOT EXISTS idx_probe_runs_context_time
+ON probe_runs (source_id, request_key, context_id, started_at, id);
+
+CREATE TABLE IF NOT EXISTS probe_pages (
+    run_id TEXT NOT NULL REFERENCES probe_runs(id) ON DELETE CASCADE,
+    page_index INTEGER NOT NULL,
+    raw_snapshot_id TEXT NOT NULL UNIQUE,
+    retrieved_at TEXT NOT NULL,
+    request_page_id TEXT,
+    request_rtx_reqid TEXT,
+    response_next_page_id TEXT,
+    response_rtx_reqid TEXT,
+    has_next_page INTEGER NOT NULL,
+    PRIMARY KEY (run_id, page_index),
+    CHECK (page_index >= 0),
+    CHECK (has_next_page IN (0, 1))
+);
+
+CREATE INDEX IF NOT EXISTS idx_probe_pages_snapshot
+ON probe_pages (raw_snapshot_id, run_id, page_index);
 """,
 }
 

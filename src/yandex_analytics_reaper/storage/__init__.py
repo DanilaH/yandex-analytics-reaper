@@ -1,3 +1,8 @@
+from .cadence_plans import (
+    CollectionCadencePlanStore,
+    SQLiteCollectionCadencePlanStore,
+    StoredCollectionCadencePlan,
+)
 from .comparable_sets import ComparableSetStore, SQLiteComparableSetStore
 from .identity import IdentityStore, SQLiteIdentityStore
 from .lineage import LineageRecord, LineageStore, SQLiteLineageStore
@@ -16,6 +21,7 @@ from .query_families import QueryFamilyStore, SQLiteQueryFamilyStore
 from .raw import FilesystemRawSnapshotStore, RawSnapshotMetadata
 
 __all__ = [
+    "CollectionCadencePlanStore",
     "ComparableSetStore",
     "FilesystemRawSnapshotStore",
     "IdentityStore",
@@ -34,6 +40,7 @@ __all__ = [
     "ProbeRunStore",
     "QueryFamilyStore",
     "RawSnapshotMetadata",
+    "SQLiteCollectionCadencePlanStore",
     "SQLiteComparableSetStore",
     "SQLiteIdentityStore",
     "SQLiteLineageStore",
@@ -41,4 +48,5 @@ __all__ = [
     "SQLiteMetricStore",
     "SQLiteProbeRunStore",
     "SQLiteQueryFamilyStore",
+    "StoredCollectionCadencePlan",
 ]

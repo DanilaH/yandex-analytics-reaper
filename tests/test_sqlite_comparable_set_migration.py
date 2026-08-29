@@ -31,6 +31,9 @@ def test_v7_query_family_database_migrates_to_comparable_set_schema_without_loss
     SQLiteQueryFamilyStore(path).persist(family)
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE collection_cadence_plan_checkpoints")
+        connection.execute("DROP TABLE collection_cadence_plan_listings")
+        connection.execute("DROP TABLE collection_cadence_plans")
         connection.execute("DROP TABLE listing_media_observations")
         connection.execute("DROP TABLE listing_status_observations")
         connection.execute("DROP TABLE listing_update_observations")
@@ -47,7 +50,7 @@ def test_v7_query_family_database_migrates_to_comparable_set_schema_without_loss
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 9
+        assert version[0] == 10
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -60,6 +63,7 @@ def test_v7_query_family_database_migrates_to_comparable_set_schema_without_loss
             "comparable_set_members",
             "comparable_set_member_evidence",
             "listing_history_evidence",
+            "collection_cadence_plans",
         } <= tables
         evidence_columns = {
             str(row[1])

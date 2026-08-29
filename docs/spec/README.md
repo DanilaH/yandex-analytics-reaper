@@ -13,6 +13,7 @@ production-assessment.md
 market-observation.md
 feed-depth-experiment.md
 session-profile-stability-experiment.md
+collection-cadence-experiment.md
 search-query-family.md
 comparable-set.md
 listing-histories.md

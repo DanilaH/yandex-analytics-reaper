@@ -45,12 +45,12 @@ src/yandex_analytics_reaper/
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
   experiments/    versioned replay/calibration evaluators over stored evidence
-  ingestion/      application-owned collection/run/session orchestration
+  ingestion/      application-owned collection/run/session + normalization orchestration
   normalizers/    source DTO → stable domain observation boundary
   schema_drift/   versioned raw-shape profiling/contracts/drift events
   sources/        source capability contracts
     yandex/        Yandex client + source DTO parsers/contracts
-  storage/        raw snapshot + normalized operational persistence
+  storage/        raw snapshot + normalized operational + frozen-plan persistence
   taxonomy/       draft taxonomy schema foundations
   cli.py          explicit local probes/debug/calibration interface
 ```
@@ -142,6 +142,8 @@ prepare session + effective context
 
 The CLI delegates session preparation and run lifecycle to ingestion services; it must not duplicate cookie/pagination/terminal-state business logic. A failed/partial run keeps the raw snapshot ID that caused the terminal condition when a response was actually received. If failure occurs before any response exists, terminal raw provenance remains absent rather than being invented.
 
+For the manual `get_games` / game-page paths, raw persistence and schema/parser validation still happen first. After a successful parse, `YandexNormalizationPersistence` composes the existing identity, metric, and listing-history stores to persist normalized observations and field lineage from that exact raw snapshot. It is an application service, not a source client or scheduler, and storage remains unaware of source DTOs/normalizer DTO bundles.
+
 If a probe fails and persistent-session state also cannot be saved, the probe/source error remains the primary exception and the state-save failure is secondary diagnostic context. A corrupt or incomplete persistent session fails closed rather than being silently reset into a different cohort.
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
@@ -150,7 +152,17 @@ The filesystem raw store supports deterministic metadata and exact-body replay b
 
 ## Experiment/replay boundary
 
-Calibration experiments consume already persisted evidence; they do not own collection. Current implementations are `experiments/feed_depth.py` and `experiments/session_profile_stability.py`.
+Calibration experiments consume already persisted evidence; they do not own collection. Current implementations include:
+
+```text
+experiments/feed_depth.py
+experiments/session_profile_stability.py
+experiments/collection_cadence.py
+experiments/collection_cadence_evidence.py
+experiments/collection_cadence_protocol.py
+```
+
+Feed-depth/session-profile replay follows the common probe-run path:
 
 ```text
 explicit ProbeRun IDs / matched blocks
@@ -165,13 +177,62 @@ explicit ProbeRun IDs / matched blocks
 → emit report
 ```
 
-The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial/block membership is explicit in the analysis invocation/report.
+The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial/block/checkpoint membership is explicit in the analysis invocation/report.
 
-`feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. A legitimate source exhaustion before the configured ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
+`feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. Legitimate source exhaustion before the ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
 
-`session-profile-stability-v1` uses explicit four-run matched blocks (`C-P-P-C` or `P-C-C-P`) and one stable persistent `session_instance_id` across the report. It compares cross-profile similarity with conservative same-profile repeatability at every candidate depth, without consuming the still-pending feed-depth recommendation.
+`session-profile-stability-v1` uses explicit four-run matched blocks (`C-P-P-C` or `P-C-C-P`) and one stable persistent `session_instance_id` across the report. It compares cross-profile similarity with conservative same-profile repeatability at every candidate depth, without consuming the pending feed-depth recommendation.
 
-Synthetic fixture tests validate analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth and session-profile items remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
+### Collection-cadence predeclaration boundary
+
+`collection-cadence-v1` needs a separate **pre-collection plan** because actual ProbeRun IDs cannot exist before collection. A caller-editable timestamp inside a final analysis manifest is not sufficient evidence of predeclaration.
+
+The application boundary is:
+
+```text
+CollectionCadencePlanDeclaration
+(listing cohort + query-family version + planned checkpoint schedule)
+→ CollectionCadencePlanFreezer
+→ validate cohort/query family already exist
+→ require freeze >= 2h before first checkpoint
+→ SQLiteCollectionCadencePlanStore
+→ assign frozen_at from SQLite UTC clock
+→ persist immutable content hash + ordered cohort/checkpoints
+```
+
+The storage layer owns immutability and hash round-trip validation. It does not choose a cohort or interpret source evidence. `CollectionCadencePlanFreezer` owns semantic preconditions such as listing/query-family existence and the freeze deadline.
+
+After collection, the evidence manifest contains only:
+
+```text
+plan_id
++ exact planned checkpoint timestamps
++ actual feed/search ProbeRun IDs
+```
+
+The analyzer loads cohort/query family/freeze time from the stored immutable plan. A late evidence file cannot replace those values.
+
+### Collection-cadence replay boundary
+
+```text
+immutable stored cadence plan
++ post-collection evidence bindings
++ normalized metric/history observations
++ feed/search ProbeRun evidence
+→ require evidence checkpoint schedule == frozen plan schedule
+→ verify plan hash + actual database frozen_at deadline
+→ select only point-in-time observations within each checkpoint window
+→ verify normalizer provenance + field lineage + raw snapshot replay
+→ replay feed/search runs and exact ProbePage linkage
+→ build complete daily reference series
+→ retrospectively downsample at 1 / 2 / 3 / 7 days
+→ compare carried state/ranking with observed daily reference
+→ emit capability/depth recommendations only when coverage gates pass
+```
+
+The cadence report records `plan_id`, immutable `plan_hash`, DB-generated `frozen_at`, deterministic evidence `manifest_id`, exact run bindings, and exact normalized observation/raw snapshot IDs for eligible state points. A later backfill therefore cannot silently rewrite the evidence behind a saved report.
+
+Synthetic fixtures validate analyzer mechanics but are not empirical calibration evidence. Feed-depth, session-profile, and collection-cadence roadmap parents remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
 
 ## Comparable-set construction boundary
 
@@ -194,7 +255,7 @@ The builder does not infer convenient runs, fuzzy query membership, taxonomy lab
 
 The v1 set is deliberately provisional because Phase 3 taxonomy is still draft. It is a reproducible search-derived candidate peer set, not a claim that every member is a validated gameplay comparable. Taxonomy-based refinement must be a later explicit construction method/version and must never rewrite historical v1 sets.
 
-The SQLite comparable-set store validates the exact persisted query-family membership, referenced search runs/context, observation interval, and probe-page raw identities before writing. Reads revalidate operational references and fail closed on provenance drift. The store does not reparse raw source bodies; source-semantic replay belongs to the builder boundary.
+The SQLite comparable-set store validates exact persisted query-family membership, referenced search runs/context, observation interval, and probe-page raw identities before writing. Reads revalidate operational references and fail closed on provenance drift. The store does not reparse raw source bodies; source-semantic replay belongs to the builder boundary.
 
 ## Listing-history normalization boundary
 
@@ -306,7 +367,7 @@ Collectors return raw responses. Yandex schema contracts/scopes own source-speci
 
 Raw responses remain immutable filesystem snapshots.
 
-Phase 2 uses SQLite as the initial **operational normalized store** because the tool is private/single-user, collection is batch-oriented, and the current workload does not justify a database service. The storage contracts remain domain-oriented so this is not a commitment to SQLite as a permanent analytical backend.
+Phase 2 uses SQLite as the initial **operational normalized store** because the tool is private/single-user, collection is batch-oriented, and the current workload does not justify a database service. Storage contracts remain domain-oriented so this is not a commitment to SQLite as a permanent analytical backend.
 
 A single versioned SQLite migration registry owns the operational schema. Independent stores must not maintain competing `PRAGMA user_version` schemes.
 
@@ -327,12 +388,13 @@ ordered probe pages + cursor-chain/raw-snapshot linkage
 immutable query-family versions + ordered exact members
 immutable comparable-set versions + run/member/raw membership evidence
 append-only listing update/status/media observations + evidence
+immutable collection-cadence plans + ordered cohort/checkpoint schedule + content hash
 ```
 
 Probe contexts store safe session provenance, including the stable non-secret persistent-profile instance ID, but never secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
 
 Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 
-Metric/history writes are idempotent for the same semantic observation and reject conflicting rewrites. Query-family/comparable-set version writes are idempotent only for identical content and reject conflicting reuse of an existing version identity.
+Metric/history writes are idempotent for the same semantic observation and reject conflicting rewrites. Query-family/comparable-set/cadence-plan versioned writes are idempotent only for identical content and reject conflicting reuse of an existing identity.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

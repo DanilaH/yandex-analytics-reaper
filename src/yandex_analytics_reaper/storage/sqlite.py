@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -395,6 +395,39 @@ CREATE TABLE IF NOT EXISTS listing_media_observations (
 
 CREATE INDEX IF NOT EXISTS idx_listing_media_history
 ON listing_media_observations (platform_listing_id, observation_id);
+""",
+    10: """
+CREATE TABLE IF NOT EXISTS collection_cadence_plans (
+    plan_id TEXT PRIMARY KEY,
+    spec_version TEXT NOT NULL,
+    frozen_at TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    query_family_id TEXT NOT NULL,
+    query_family_version INTEGER NOT NULL,
+    FOREIGN KEY (query_family_id, query_family_version)
+        REFERENCES query_family_versions(family_id, version),
+    CHECK (query_family_version >= 1),
+    CHECK (length(content_hash) = 64),
+    CHECK (content_hash NOT GLOB '*[^0-9a-f]*')
+);
+
+CREATE TABLE IF NOT EXISTS collection_cadence_plan_listings (
+    plan_id TEXT NOT NULL REFERENCES collection_cadence_plans(plan_id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL,
+    listing_id TEXT NOT NULL REFERENCES platform_listings(id),
+    PRIMARY KEY (plan_id, ordinal),
+    UNIQUE (plan_id, listing_id),
+    CHECK (ordinal >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS collection_cadence_plan_checkpoints (
+    plan_id TEXT NOT NULL REFERENCES collection_cadence_plans(plan_id) ON DELETE CASCADE,
+    ordinal INTEGER NOT NULL,
+    checkpoint_at TEXT NOT NULL,
+    PRIMARY KEY (plan_id, ordinal),
+    UNIQUE (plan_id, checkpoint_at),
+    CHECK (ordinal >= 0)
+);
 """,
 }
 

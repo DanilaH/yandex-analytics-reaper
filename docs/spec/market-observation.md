@@ -187,15 +187,34 @@ Session-profile stability, device/language variance, and collection cadence are 
 
 ## Collection cadence
 
-Start with daily calibration observations, measure volatility, then choose cadence based on evidence:
+The first cadence decision is governed by the frozen `collection-cadence-v1` protocol in `collection-cadence-experiment.md`.
+
+Daily observations are a finite-resolution **reference series**, not ground truth and not an event log. V1 therefore does not infer an exact source event rate. It retrospectively downsamples the same daily reference window at fixed candidates:
 
 ```text
-gqRating/ratingCount change rate
-feed/search churn
-version/update frequency
+1 / 2 / 3 / 7 days
 ```
 
-Possible cadence: daily, several times/week, weekly, or event-driven.
+Predeclaration and evidence binding are deliberately separate. Before day 1, an immutable SQLite cadence plan freezes the listing cohort, exact persisted query-family version, and 28+ planned checkpoint timestamps. Its `frozen_at` comes from the SQLite UTC clock and must be at least two hours before the first checkpoint. Future ProbeRun IDs are **not** part of that plan because they do not exist yet.
+
+After collection, a separate evidence manifest binds actual daily feed/search run IDs to the stored `plan_id`. The submitted checkpoint timestamps must exactly match the frozen plan schedule; the late manifest cannot override the cohort, query family, freeze time, or reference window.
+
+A valid window uses consecutive UTC dates, neighboring checkpoints 22–26 elapsed hours apart, one two-hour UTC clock-time band, and observation/run timing inside each checkpoint's two-hour eligibility window.
+
+Cadence is chosen separately for:
+
+```text
+catalogue_metadata
+game_page
+recommendation_feed at depths 1 / 3 / 5 / 10
+search at depths 1 / 3 / 5 / 10 across the frozen query family
+```
+
+Normalized state points retain exact observation IDs, field lineage, and raw snapshot IDs. Feed/search rankings are rebuilt by replaying immutable raw bodies and verifying persisted `ProbePage` linkage. Sponsored cards do not participate in ranking cadence metrics.
+
+`event-driven` is not a v1 candidate because no proven Yandex push/subscription capability currently replaces polling. It must not be selected from snapshot volatility alone.
+
+The empirical cadence result is still pending. Until the required real daily window is complete, no production cadence/default may be inferred from synthetic tests or the protocol thresholds.
 
 ## Search discovery and competitor sets
 

@@ -1,3 +1,7 @@
+from .yandex_normalization import (
+    PersistedYandexNormalization,
+    YandexNormalizationPersistence,
+)
 from .yandex_probes import (
     PaginatedProbeResult,
     ProbeCollectionError,
@@ -12,10 +16,12 @@ from .yandex_sessions import (
 
 __all__ = [
     "PaginatedProbeResult",
+    "PersistedYandexNormalization",
     "PreparedYandexSession",
     "ProbeCollectionError",
     "SessionConfigurationError",
     "SessionStateError",
+    "YandexNormalizationPersistence",
     "YandexPaginatedProbeRunner",
     "YandexSessionManager",
 ]

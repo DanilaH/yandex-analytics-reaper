@@ -42,6 +42,7 @@ Implemented:
 - explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with stable non-secret persistent-profile instance IDs plus safe cookie-state fingerprint/profile-age provenance;
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
+- frozen `collection-cadence-v1` daily-reference/downsampling protocol with immutable pre-collection plan persistence and raw-first evidence replay; the real 28+ day cadence calibration is still pending;
 - immutable versioned search query-family declarations with exact ordered query membership and SQLite persistence;
 - provisional `yandex_search_union_v1` comparable-set construction from explicit clean search runs, with raw replay, organic union/dedupe, exact member evidence, and immutable SQLite persistence;
 - append-only update/status/media histories with direct-presence status semantics, field-level raw lineage, point-in-time readers, and immutable SQLite persistence;
@@ -59,9 +60,10 @@ Not implemented yet:
 
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - empirical session-profile classifications from the required real matched-block sample;
+- empirical collection-cadence decisions from the required 28+ consecutive daily reference checkpoints;
 - automated query-family execution/scheduling and taxonomy-refined comparable sets;
 - authenticated test-session credential provider;
-- production scheduled collection and empirically selected collection cadence;
+- production scheduled collection using empirically selected cadence;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
 - external trend connectors;
@@ -111,7 +113,7 @@ mypy src
 pytest
 ```
 
-All three remain required quality checks. GitHub-hosted CI is currently treated as infrastructure-only when it fails before allocating a runner; development/review continues with local/focused checks where available.
+All three remain required quality checks. GitHub-hosted CI is currently treated as infrastructure-only when it fails before allocating a runner; development/review continues with focused/static review where execution is unavailable.
 
 ## Manual Yandex probes
 
@@ -165,6 +167,8 @@ For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical 
 
 Feed/search probes persist each raw response before interpretation and group pages into one logical run. Each later page must consume the exact continuation tokens emitted by the preceding page. A run is persisted as `completed`, `partial`, or `failed`; when a received raw response caused a terminal error, the run retains that raw snapshot ID for inspection.
 
+`probe-games` and `probe-page` also remain raw-first: raw persistence and schema/parser validation happen before normalized writes. After a successful parse they persist listing identity, available metric observations, and update/status/media history evidence into the operational SQLite database next to the selected raw root. This supports point-in-time/cadence analysis; it does not turn the manual CLI into a scheduler.
+
 JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
 
 ## Feed-depth calibration tooling
@@ -184,9 +188,9 @@ yandex-reaper probe-feed \
   --output data/raw
 ```
 
-A legitimate source exhaustion before page 10 is still eligible. Partial/failed runs, wrong context/page size, broken raw data, and inconsistent replay linkage are rejected by the analyzer rather than silently coerced.
+A legitimate source exhaustion before page 10 is still eligible. Partial/failed runs, wrong context/page size, broken raw data, and inconsistent replay linkage are rejected rather than silently coerced.
 
-Do not make a depth decision until there are at least 8 eligible trials spanning at least 4 hours and 3 distinct UTC hour buckets. Then analyze the **explicit** run IDs:
+Do not make a depth decision until there are at least 8 eligible trials spanning at least 4 hours and 3 distinct UTC hour buckets. Then analyze the explicit run IDs:
 
 ```bash
 yandex-reaper analyze-feed-depth \
@@ -196,20 +200,20 @@ yandex-reaper analyze-feed-depth \
   --output data/raw
 ```
 
-The command replays raw bodies, verifies content hashes and stored page linkage, excludes sponsored cards from depth selection, reports rejected trials, and applies the predeclared thresholds. Until the minimum sample is satisfied it returns `recommended_depth = null`; do not treat synthetic fixture tests as the empirical calibration result.
+The command replays raw bodies, verifies content hashes and stored page linkage, excludes sponsored cards, reports rejected trials, and applies the predeclared thresholds. Until the minimum sample is satisfied it returns `recommended_depth = null`; synthetic fixtures are not an empirical result.
 
 ## Session-profile stability tooling
 
-`session-profile-stability-v1` is frozen in `docs/spec/session-profile-stability-experiment.md`. It compares `clean_anonymous` with one controlled `persistent_anonymous` profile without consuming the pending feed-depth recommendation: every run is requested up to 10 pages and the analyzer reports profile stability independently for depths `1 / 3 / 5 / 10`.
+`session-profile-stability-v1` is frozen in `docs/spec/session-profile-stability-experiment.md`. It compares `clean_anonymous` with one controlled `persistent_anonymous` profile without consuming the pending feed-depth recommendation. Every run is requested up to 10 pages and the analyzer reports depths `1 / 3 / 5 / 10` independently.
 
-One matched block contains four runs whose starts fall within 10 minutes. Alternate the two frozen orders across blocks:
+One matched block contains four runs whose starts fall within 10 minutes. Alternate the two frozen orders:
 
 ```text
 C-P-P-C
 P-C-C-P
 ```
 
-where `C` is `clean_anonymous` and `P` is `persistent_anonymous`. Use the same local persistent profile for every `P` run in the entire experiment; do not reset the local persistent profile between blocks.
+where `C` is `clean_anonymous` and `P` is `persistent_anonymous`. Use the same local persistent profile for every `P` run in the entire experiment; do not reset it between blocks.
 
 Each run uses the same frozen feed shape:
 
@@ -224,9 +228,9 @@ yandex-reaper probe-feed \
   --output data/raw
 ```
 
-For a `P` position, use the same command with `--session-profile persistent_anonymous`. Record every returned run ID. The analyzer derives chronological order from persisted timestamps, so the caller does not need to fake or encode chronology in the ID order.
+For a `P` position, use the same command with `--session-profile persistent_anonymous`. Record every returned run ID.
 
-Do not classify any depth until there are at least 6 eligible blocks spanning at least 4 hours and 3 distinct UTC hour buckets, including at least 2 `C-P-P-C` and 2 `P-C-C-P` blocks. Analyze explicit block membership with repeated `--block` arguments:
+Do not classify any depth until there are at least 6 eligible blocks spanning at least 4 hours and 3 UTC hour buckets, including at least 2 `C-P-P-C` and 2 `P-C-C-P` blocks. Analyze explicit membership with repeated `--block` arguments:
 
 ```bash
 yandex-reaper analyze-session-profile-stability \
@@ -235,7 +239,105 @@ yandex-reaper analyze-session-profile-stability \
   --output data/raw
 ```
 
-The report replays immutable raw bodies, verifies stored page linkage and frozen request context, rejects corrupt/ineligible blocks, requires one persistent `session_instance_id` across all eligible blocks, and classifies every depth as `stable`, `material_difference`, or `inconclusive` only after the minimum sample is sufficient. Synthetic fixtures are never empirical evidence.
+The report replays immutable raw bodies, verifies page linkage/request context, requires one persistent `session_instance_id` across eligible blocks, and classifies every depth as `stable`, `material_difference`, or `inconclusive` only after the sample gate passes. Synthetic fixtures are never empirical evidence.
+
+## Collection-cadence calibration tooling
+
+`collection-cadence-v1` is frozen in `docs/spec/collection-cadence-experiment.md`. It does **not** infer an exact event rate from snapshots. It collects a daily reference series and retrospectively evaluates candidate intervals `1 / 2 / 3 / 7` days.
+
+The result is capability-specific:
+
+```text
+catalogue_metadata
+game_page
+recommendation_feed depth 1 / 3 / 5 / 10
+search depth 1 / 3 / 5 / 10 across one frozen query family
+```
+
+The empirical workflow is deliberately two-stage so future run IDs are never pretended to be known before day 1.
+
+### 1. Prepare the cohort
+
+Persist the intended 20+ listing identities and the exact query-family version in the same operational database. The normal manual `probe-games` path can establish listing identities/raw-first state evidence; query-family persistence remains the versioned source of truth for search membership.
+
+### 2. Freeze the plan before day 1
+
+Create `cadence-plan.json` with only predeclared facts — **no caller-supplied `frozen_at` and no future run IDs**:
+
+```json
+{
+  "spec_version": "collection-cadence-v1",
+  "plan_id": "cadence:example:v1",
+  "listing_ids": [
+    "yandex_games:1",
+    "yandex_games:2"
+  ],
+  "query_family_id": "example-intent",
+  "query_family_version": 1,
+  "checkpoint_at": [
+    "2026-09-01T12:00:00Z",
+    "2026-09-02T12:00:00Z"
+  ]
+}
+```
+
+The example is abbreviated. A real plan requires at least 20 distinct listing IDs and at least 28 consecutive UTC checkpoints. Neighboring checkpoints must be 22–26 elapsed hours apart and remain inside one two-hour UTC clock-time band.
+
+Freeze it at least two hours before the first checkpoint:
+
+```bash
+yandex-reaper freeze-collection-cadence-plan \
+  cadence-plan.json \
+  --output data/raw
+```
+
+The command assigns `frozen_at` from the SQLite UTC clock and persists an immutable plan/content hash. Repeating identical content is idempotent; conflicting content under the same `plan_id` is rejected. The query family and every listing identity must already exist at freeze time.
+
+### 3. Collect every planned checkpoint
+
+Within the two hours before each frozen `checkpoint_at` collect:
+
+1. `probe-games` for the same frozen listing cohort;
+2. `probe-page` for each frozen listing whose game-page update series is being calibrated;
+3. one clean-anonymous `probe-feed --count 20 --pages 10 ...` run;
+4. one clean-anonymous `probe-search <exact-query> --pages 10 ...` run for every exact member of the frozen query family.
+
+Keep all commands on the same `--output data/raw` root so raw snapshots, normalized observations, plan/query-family data, and probe runs resolve to one operational database. Record the returned feed/search run IDs; they are evidence, not part of the pre-collection plan.
+
+### 4. Bind collected run IDs after the window
+
+After at least 28 complete planned checkpoints, create `cadence-evidence.json`:
+
+```json
+{
+  "spec_version": "collection-cadence-v1",
+  "plan_id": "cadence:example:v1",
+  "checkpoints": [
+    {
+      "checkpoint_at": "2026-09-01T12:00:00Z",
+      "feed_run_id": "probe:<feed-day-1>",
+      "search_run_ids": [
+        "probe:<query-a-day-1>",
+        "probe:<query-b-day-1>"
+      ]
+    }
+  ]
+}
+```
+
+The real evidence file must bind every frozen checkpoint. Its timestamps must match the immutable plan schedule exactly; it cannot replace the cohort, query family, freeze time, or planned window.
+
+Analyze it with:
+
+```bash
+yandex-reaper analyze-collection-cadence \
+  cadence-evidence.json \
+  --output data/raw
+```
+
+The analyzer verifies the immutable plan/hash/freeze deadline, exact schedule reconciliation, normalized observation provenance/lineage, raw snapshot replay, feed/search timing, request context, parser/page linkage, and organic ranking reconstruction. The report records `plan_id`, `plan_hash`, DB-generated `frozen_at`, deterministic evidence `manifest_id`, exact run bindings, and exact normalized observation/raw snapshot IDs used for eligible state points.
+
+A capability with incomplete reference coverage returns no cadence recommendation. The tooling does not borrow another capability's cadence and does not consume the pending feed-depth/session-profile empirical conclusions. Synthetic tests validate mechanics only; the Phase 2 cadence parent remains incomplete until the real daily-reference calibration is executed.
 
 ## Search query-family model
 
@@ -243,17 +345,17 @@ The report replays immutable raw bodies, verifies stored page linkage and frozen
 
 SQLite persistence is immutable by `(family_id, version)`: repeating the exact same declaration is idempotent, while changing label/source/language/member text/kind/order under an existing version is rejected. Create a new version instead.
 
-Existing manual search probes continue to persist the exact `query_text` actually sent. Query-family membership is never reconstructed by fuzzy matching after collection.
+Existing manual search probes persist the exact `query_text` actually sent. Query-family membership is never reconstructed by fuzzy matching after collection.
 
 ## Comparable-set construction
 
 `docs/spec/comparable-set.md` owns the first construction semantics. `yandex_search_union_v1` consumes one exact persisted query-family version plus exactly one explicit completed `clean_anonymous` search run per family member. Runs must share one exact `ProbeContext` and requested page limit.
 
-`YandexSearchComparableSetBuilder` replays immutable raw search pages, verifies the raw query/context/pagination request metadata, content integrity, parser version, and stored `ProbePage` linkage, then unions parsed organic Yandex listings in deterministic family/page/card order. Sponsored cards do not contribute membership. Repeated organic listings add evidence without duplicating set members.
+`YandexSearchComparableSetBuilder` replays immutable raw search pages, verifies raw query/context/pagination metadata, content integrity, parser version, and stored `ProbePage` linkage, then unions parsed organic Yandex listings in deterministic family/page/card order. Sponsored cards do not contribute membership. Repeated organic listings add evidence without duplicating members.
 
 `SQLiteComparableSetStore` persists the exact family version, run mapping, first-occurrence member order, observation interval, parser identity, and ordered raw membership evidence. Identical `(set_id, version)` writes are idempotent; conflicting content is rejected, and reads fail closed if referenced family/run/page provenance drifts.
 
-This is deliberately a **provisional search-derived candidate peer set**. The Phase 3 taxonomy is still draft, so `yandex_search_union_v1` does not claim every member is a validated gameplay comparable and does not silently filter with an unvalidated classifier. A later construction version may add frozen taxonomy/classifier refinement without rewriting historical search-union sets.
+This is deliberately a **provisional search-derived candidate peer set**. Phase 3 taxonomy is still draft, so `yandex_search_union_v1` does not claim every member is a validated gameplay comparable and does not silently filter with an unvalidated classifier. Later taxonomy-refined construction must create a new version/method rather than rewrite historical v1 sets.
 
 ## Listing histories
 

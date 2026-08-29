@@ -198,6 +198,13 @@ def test_mid_run_http_failure_marks_run_partial_and_preserves_prior_pages(tmp_pa
     assert record.run.status is ProbeRunStatus.PARTIAL
     assert len(record.pages) == 1
     assert record.run.error is not None and "HTTP 503" in record.run.error
+    assert record.run.error_raw_snapshot_id is not None
+    assert record.run.error_raw_snapshot_id != record.pages[0].raw_snapshot_id
+    error_snapshot = FilesystemRawSnapshotStore(tmp_path / "raw").get_metadata(
+        client.source_id,
+        record.run.error_raw_snapshot_id,
+    )
+    assert error_snapshot.http_status == 503
 
 
 def test_first_page_breaking_schema_marks_run_failed(tmp_path: Path) -> None:
@@ -213,6 +220,12 @@ def test_first_page_breaking_schema_marks_run_failed(tmp_path: Path) -> None:
     assert record is not None
     assert record.run.status is ProbeRunStatus.FAILED
     assert record.pages == ()
+    assert record.run.error_raw_snapshot_id is not None
+    error_snapshot = FilesystemRawSnapshotStore(tmp_path / "raw").get_metadata(
+        client.source_id,
+        record.run.error_raw_snapshot_id,
+    )
+    assert error_snapshot.http_status == 200
 
 
 def test_missing_continuation_token_keeps_valid_page_and_marks_partial(tmp_path: Path) -> None:
@@ -228,6 +241,26 @@ def test_missing_continuation_token_keeps_valid_page_and_marks_partial(tmp_path:
     assert record is not None
     assert record.run.status is ProbeRunStatus.PARTIAL
     assert len(record.pages) == 1
+    assert record.run.error_raw_snapshot_id == record.pages[-1].raw_snapshot_id
+
+
+def test_terminal_persistence_failure_does_not_mask_source_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeYandexClient(feed_responses=[(503, {"error": "temporarily unavailable"})])
+    runner, probe_store = _runner(tmp_path, client)
+
+    def fail_finish(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("terminal write failed")
+
+    monkeypatch.setattr(probe_store, "finish_run", fail_finish)
+
+    with pytest.raises(ProbeCollectionError, match="HTTP 503") as exc_info:
+        runner.run_feed(ProbeContext(), page_limit=1)
+
+    notes = getattr(exc_info.value, "__notes__", [])
+    assert any("terminal write failed" in note for note in notes)
 
 
 def test_search_runner_preserves_query_and_follows_same_cursor_chain(tmp_path: Path) -> None:

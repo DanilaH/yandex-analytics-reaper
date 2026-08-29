@@ -5,6 +5,8 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from yandex_analytics_reaper.domain import (
+    Platform,
+    PlatformListing,
     QueryFamilyMember,
     QueryFamilyVersion,
     QueryVariantKind,
@@ -19,6 +21,7 @@ from yandex_analytics_reaper.sources.capabilities import CollectedResponse
 from yandex_analytics_reaper.sources.yandex.parsers import YandexGetGamesParser
 from yandex_analytics_reaper.storage import (
     FilesystemRawSnapshotStore,
+    SQLiteIdentityStore,
     SQLiteQueryFamilyStore,
 )
 
@@ -28,6 +31,18 @@ def test_cadence_report_records_exact_state_observation_and_raw_snapshot_ids(
 ) -> None:
     raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
     database_path = tmp_path / "market.sqlite3"
+    frozen_cohort_at = datetime(2026, 8, 31, 8, 0, tzinfo=UTC)
+    identity_store = SQLiteIdentityStore(database_path)
+    for app_id in range(1, 21):
+        identity_store.persist_listing_identity(
+            PlatformListing(
+                id=f"yandex_games:{app_id}",
+                platform=Platform.YANDEX_GAMES,
+                external_app_id=str(app_id),
+            ),
+            None,
+            frozen_cohort_at,
+        )
     SQLiteQueryFamilyStore(database_path).persist(
         QueryFamilyVersion(
             family_id="merge-intent",
@@ -35,7 +50,7 @@ def test_cadence_report_records_exact_state_observation_and_raw_snapshot_ids(
             label="Merge intent",
             source_id="yandex_public",
             language="ru",
-            created_at=datetime(2026, 8, 31, 8, 0, tzinfo=UTC),
+            created_at=frozen_cohort_at,
             members=(
                 QueryFamilyMember(
                     query_text="merge",
@@ -105,10 +120,7 @@ def test_cadence_report_records_exact_state_observation_and_raw_snapshot_ids(
     assert len(series.points) == 28
     assert tuple(point.raw_snapshot_ids[0] for point in series.points) == tuple(raw_ids)
     assert len({point.observation_id for point in series.points}) == 28
-    assert all(
-        raw_store.get_body("yandex_public", raw_id)
-        for raw_id in raw_ids
-    )
+    assert all(raw_store.get_body("yandex_public", raw_id) for raw_id in raw_ids)
     assert any(
         item.series_id == "ranking:feed:depth1"
         for item in report.rejected_series

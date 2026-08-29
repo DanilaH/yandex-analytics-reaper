@@ -2,7 +2,7 @@
 
 This document is the operator-facing path for building reproducible current-market inputs from already implemented Yandex evidence primitives.
 
-It is **not** a claim that `START ANALYSIS` has been reached yet. The current commands cover query-family persistence, provisional search-derived comparable-set construction, immutable analyst-snapshot binding, and snapshot-scoped analyst-readable market export. Transparent derived features and the real pilot still remain in `ROADMAP.md`.
+It is **not** a claim that `START ANALYSIS` has been reached yet. The current commands cover query-family persistence, provisional search-derived comparable-set construction, immutable analyst-snapshot binding, snapshot-scoped analyst-readable market export, and transparent comparable-market features. The real analyst pilot still remains in `ROADMAP.md`.
 
 ## CLI split
 
@@ -11,13 +11,13 @@ yandex-reaper
 → network collection / raw-first probes
 
 yandex-reaper-analyst
-→ offline operator workflow over persisted evidence
+→ offline operator workflow over persisted/frozen evidence
 
 yandex-reaper-taxonomy
 → offline taxonomy validation artifacts
 ```
 
-Keep all commands for one local evidence workspace on the same raw root, for example `data/raw`. The operational database then lives at `data/market.sqlite3`.
+Keep all network-backed commands for one local evidence workspace on the same raw root, for example `data/raw`. The operational database then lives at `data/market.sqlite3`.
 
 ## 1. Declare a query family
 
@@ -234,6 +234,39 @@ feed_exposures.csv
 
 Use the JSON artifact when exact evidence references matter. The CSV files are convenience tables for manual inspection and spreadsheet-style exploration.
 
+## 7. Build transparent comparable-market features
+
+Compute the deterministic derived report from the two frozen JSON artifacts:
+
+```bash
+yandex-reaper-analyst build-market-features \
+  data/analysis/pilot-merge-vs-obby-v1.json \
+  data/analysis/pilot-merge-vs-obby-market-v1.json \
+  --report data/analysis/pilot-merge-vs-obby-features-v1.json
+```
+
+This command is intentionally file-to-file. It does not reopen SQLite or the raw store. The feature report binds both input content hashes and uses the frozen `snapshot.created_at` as its release-age reference time.
+
+For each comparable set it reports:
+
+```text
+organic comparable member count
+page-ordered per-query totalGamesCount observations without cross-query summing
+gqRating distribution + coverage
+player-rating distribution + coverage
+ratingCount distribution + coverage
+firstPublished age distribution + 30/90/180/365-day descriptive windows + coverage
+organic search exposure count / unique-member coverage
+organic feed exposure count / unique-member coverage when feed evidence exists
+developer-ID coverage / observed developer composition / largest-developer share
+```
+
+Numeric distributions use minimum / p25 / median / p75 / maximum / mean. Missing values remain outside the numeric summaries and stay visible through `observed_count`, `missing_count`, and `coverage_ratio`.
+
+A feed that was never collected is **not** represented as zero feed exposure: it carries `evidence_available = false` and a null member coverage ratio. Sponsored search/feed exposure remains available in the market export but does not enter the organic feature summaries.
+
+The feature report does not rank or score niches. It is the transparent input for the real M1.4 analyst pilot.
+
 ## Interpretation boundary
 
 `yandex_search_union_v1` is a **provisional search-derived candidate peer set**. It is suitable as an explicit current-market analysis input, but it does not prove that every member is a gameplay comparable and it is not an exhaustive competitor census.
@@ -246,8 +279,9 @@ count sponsored cards as organic peer evidence
 call the current search depth/session choice empirically optimal
 call draft taxonomy output validated
 infer unavailable competitor DAU, retention, playtime, CTR, revenue, or ARPDAU
+turn M1.3 descriptive features into an undocumented opportunity score
 ```
 
 `totalGamesCount` in `analyst-market-export-v1` remains a query-supply observation. If Yandex omits it, the export records `source_missing`; it does not convert missing supply to zero.
 
-The next M1 work computes only transparent comparable-market features from this frozen evidence boundary, then runs the real analyst pilot required by `START ANALYSIS`.
+The next M1 work is the real analyst pilot required by `START ANALYSIS`. Do not announce the gate until that real workflow is executed and independently trace-checked.

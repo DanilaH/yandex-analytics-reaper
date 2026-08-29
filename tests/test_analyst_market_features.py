@@ -12,6 +12,7 @@ from yandex_analytics_reaper.analyst import (
     AnalystComparableSetBinding,
     AnalystEvidenceReference,
     AnalystFeedExposure,
+    AnalystFeedRunBinding,
     AnalystListingRow,
     AnalystMarketExportPayload,
     AnalystMarketExportReport,
@@ -28,9 +29,9 @@ from yandex_analytics_reaper.analyst.features import (
     validate_analyst_market_features,
 )
 from yandex_analytics_reaper.domain import ProbeContext
-from yandex_analytics_reaper.analyst.snapshot import AnalystFeedRunBinding
 
 _BASE = datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
+_CONTEXT_ID = "ctx:test"
 _MEMBER_IDS = tuple(f"yandex_games:{value}" for value in range(1, 5))
 
 
@@ -52,7 +53,7 @@ def _snapshot(*, with_feed: bool = True, created_at: datetime = _BASE) -> Analys
         query_family_id="merge-family",
         query_family_version=1,
         construction_method="yandex_search_union_v1",
-        context_id=context.identity_key(),
+        context_id=_CONTEXT_ID,
         requested_page_limit=2,
         observed_from=created_at - timedelta(minutes=10),
         observed_to=created_at - timedelta(minutes=5),
@@ -63,7 +64,7 @@ def _snapshot(*, with_feed: bool = True, created_at: datetime = _BASE) -> Analys
         (
             AnalystFeedRunBinding(
                 run_id="probe:feed",
-                context_id=context.identity_key(),
+                context_id=_CONTEXT_ID,
                 requested_page_limit=1,
                 started_at=created_at - timedelta(minutes=4),
                 completed_at=created_at - timedelta(minutes=3),
@@ -104,10 +105,11 @@ def _snapshot(*, with_feed: bool = True, created_at: datetime = _BASE) -> Analys
 
 def _evidence(field: str, listing_id: str) -> AnalystEvidenceReference:
     suffix = listing_id.rsplit(":", 1)[-1]
+    observed_at = (_BASE - timedelta(minutes=2)).isoformat().replace("+00:00", "Z")
     return AnalystEvidenceReference(
         observation_id=f"state:{suffix}",
-        observed_at=(_BASE - timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
-        retrieved_at=(_BASE - timedelta(minutes=2)).isoformat().replace("+00:00", "Z"),
+        observed_at=observed_at,
+        retrieved_at=observed_at,
         raw_snapshot_ids=("raw:rich",),
         source_field_paths=(f"$.games[{suffix}].{field}",),
         normalizer_name="YandexGameNormalizer",
@@ -134,6 +136,17 @@ def _listing(
     developer_name: str | None,
 ) -> AnalystListingRow:
     external = listing_id.rsplit(":", 1)[-1]
+    first_published = (
+        _missing()
+        if published_days_ago is None
+        else _observed(
+            (_BASE - timedelta(days=published_days_ago))
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "firstPublished",
+            listing_id,
+        )
+    )
     return AnalystListingRow(
         platform_listing_id=listing_id,
         platform="yandex_games",
@@ -151,17 +164,7 @@ def _listing(
             if developer_name is None
             else _observed(developer_name, "developer.name", listing_id)
         ),
-        first_published_at=(
-            _missing()
-            if published_days_ago is None
-            else _observed(
-                (_BASE - timedelta(days=published_days_ago))
-                .isoformat()
-                .replace("+00:00", "Z"),
-                "firstPublished",
-                listing_id,
-            )
-        ),
+        first_published_at=first_published,
         app_version=_missing(),
         published_at=_missing(),
         languages=_missing(),
@@ -188,7 +191,11 @@ def _listing(
     )
 
 
-def _market_export(snapshot: AnalystSnapshotReport, *, with_feed: bool = True) -> AnalystMarketExportReport:
+def _market_export(
+    snapshot: AnalystSnapshotReport,
+    *,
+    with_feed: bool = True,
+) -> AnalystMarketExportReport:
     listings = (
         _listing(
             _MEMBER_IDS[0],

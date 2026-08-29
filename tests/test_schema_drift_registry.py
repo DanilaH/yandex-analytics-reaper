@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
 import json
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from yandex_analytics_reaper.schema_drift import (
+    DriftEvent,
     DriftKind,
     DriftSeverity,
     JsonValueType,
@@ -15,7 +18,7 @@ from yandex_analytics_reaper.sources.yandex.schema_contracts import YANDEX_GET_G
 from yandex_analytics_reaper.storage import RawSnapshotMetadata
 
 
-def _metadata(*, suffix: str, retrieved_at: datetime) -> RawSnapshotMetadata:
+def _metadata(*, body: bytes, suffix: str, retrieved_at: datetime) -> RawSnapshotMetadata:
     snapshot_id = f"{retrieved_at:%Y%m%dT%H%M%S%fZ}-{suffix:0<10}"[:38]
     return RawSnapshotMetadata(
         id=snapshot_id,
@@ -27,10 +30,10 @@ def _metadata(*, suffix: str, retrieved_at: datetime) -> RawSnapshotMetadata:
         request_context={},
         content_path=f"body/{snapshot_id}.json",
         metadata_path=f"meta/{snapshot_id}.json",
-        content_hash="a" * 64,
+        content_hash=hashlib.sha256(body).hexdigest(),
         http_status=200,
         content_type="application/json",
-        schema_hash="b" * 64,
+        schema_hash=None,
     )
 
 
@@ -38,22 +41,23 @@ def _body(games: list[dict[str, object]]) -> bytes:
     return json.dumps({"games": games}).encode()
 
 
-def _event_kinds(analysis_events: object) -> set[DriftKind]:
-    return {event.kind for event in analysis_events}  # type: ignore[attr-defined]
+def _event_kinds(analysis_events: Sequence[DriftEvent]) -> set[DriftKind]:
+    return {event.kind for event in analysis_events}
 
 
 def test_profiler_tracks_field_types_and_missingness() -> None:
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    body = _body(
+        [
+            {"appID": 1, "gqRating": 80},
+            {"appID": 2},
+            {"appID": 3, "gqRating": 70},
+            {"appID": 4},
+        ]
+    )
     profile = profile_json_snapshot(
-        _metadata(suffix="profile", retrieved_at=observed_at),
-        _body(
-            [
-                {"appID": 1, "gqRating": 80},
-                {"appID": 2},
-                {"appID": 3, "gqRating": 70},
-                {"appID": 4},
-            ]
-        ),
+        _metadata(body=body, suffix="profile", retrieved_at=observed_at),
+        body,
     )
     fields = {field.path: field for field in profile.fields}
 
@@ -68,10 +72,11 @@ def test_profiler_tracks_field_types_and_missingness() -> None:
 def test_first_valid_snapshot_has_no_baseline_noise(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    body = _body([{"appID": 1, "gqRating": 80}])
 
     analysis = registry.observe_json(
-        _metadata(suffix="first", retrieved_at=observed_at),
-        _body([{"appID": 1, "gqRating": 80}]),
+        _metadata(body=body, suffix="first", retrieved_at=observed_at),
+        body,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
@@ -81,15 +86,17 @@ def test_first_valid_snapshot_has_no_baseline_noise(tmp_path: Path) -> None:
 def test_new_optional_field_is_informational(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     first = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    before = _body([{"appID": 1}])
     registry.observe_json(
-        _metadata(suffix="before", retrieved_at=first),
-        _body([{"appID": 1}]),
+        _metadata(body=before, suffix="before", retrieved_at=first),
+        before,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
+    after = _body([{"appID": 1, "newOptional": "x"}])
     analysis = registry.observe_json(
-        _metadata(suffix="after", retrieved_at=first + timedelta(hours=1)),
-        _body([{"appID": 1, "newOptional": "x"}]),
+        _metadata(body=after, suffix="after", retrieved_at=first + timedelta(hours=1)),
+        after,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
@@ -101,10 +108,11 @@ def test_new_optional_field_is_informational(tmp_path: Path) -> None:
 def test_contract_type_change_is_breaking_even_if_parser_could_coerce_it(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    body = _body([{"appID": 1, "gqRating": "86"}])
 
     analysis = registry.observe_json(
-        _metadata(suffix="string", retrieved_at=observed_at),
-        _body([{"appID": 1, "gqRating": "86"}]),
+        _metadata(body=body, suffix="string", retrieved_at=observed_at),
+        body,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
@@ -121,10 +129,11 @@ def test_contract_type_change_is_breaking_even_if_parser_could_coerce_it(tmp_pat
 def test_missing_required_field_is_breaking(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    body = json.dumps({"unexpected": []}).encode()
 
     analysis = registry.observe_json(
-        _metadata(suffix="missing", retrieved_at=observed_at),
-        json.dumps({"unexpected": []}).encode(),
+        _metadata(body=body, suffix="missing", retrieved_at=observed_at),
+        body,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
@@ -140,22 +149,24 @@ def test_missing_required_field_is_breaking(tmp_path: Path) -> None:
 def test_material_missingness_change_is_warning(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     first = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    dense = _body([{"appID": item, "gqRating": 80} for item in range(4)])
     registry.observe_json(
-        _metadata(suffix="dense", retrieved_at=first),
-        _body([{"appID": item, "gqRating": 80} for item in range(4)]),
+        _metadata(body=dense, suffix="dense", retrieved_at=first),
+        dense,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
+    sparse = _body(
+        [
+            {"appID": 1, "gqRating": 80},
+            {"appID": 2},
+            {"appID": 3},
+            {"appID": 4},
+        ]
+    )
     analysis = registry.observe_json(
-        _metadata(suffix="sparse", retrieved_at=first + timedelta(hours=1)),
-        _body(
-            [
-                {"appID": 1, "gqRating": 80},
-                {"appID": 2},
-                {"appID": 3},
-                {"appID": 4},
-            ]
-        ),
+        _metadata(body=sparse, suffix="sparse", retrieved_at=first + timedelta(hours=1)),
+        sparse,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
@@ -173,11 +184,12 @@ def test_material_missingness_change_is_warning(tmp_path: Path) -> None:
 def test_invalid_json_and_parser_failure_are_separate_breaking_events(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
-    metadata = _metadata(suffix="broken", retrieved_at=observed_at)
+    body = b"{not-json"
+    metadata = _metadata(body=body, suffix="broken", retrieved_at=observed_at)
 
     raw_analysis = registry.observe_json(
         metadata,
-        b"{not-json",
+        body,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
     parser_analysis = registry.record_parser_failure(
@@ -198,23 +210,26 @@ def test_out_of_order_backfill_never_compares_against_future_snapshot(tmp_path: 
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     base = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
 
+    future = _body([{"appID": 1, "futureOnly": True}])
     registry.observe_json(
-        _metadata(suffix="future", retrieved_at=base + timedelta(hours=2)),
-        _body([{"appID": 1, "futureOnly": True}]),
+        _metadata(body=future, suffix="future", retrieved_at=base + timedelta(hours=2)),
+        future,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
+    past = _body([{"appID": 1}])
     historical = registry.observe_json(
-        _metadata(suffix="past", retrieved_at=base),
-        _body([{"appID": 1}]),
+        _metadata(body=past, suffix="past", retrieved_at=base),
+        past,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
 
     assert DriftKind.REMOVED_FIELD not in _event_kinds(historical.events)
     assert DriftKind.NEW_FIELD not in _event_kinds(historical.events)
 
+    middle_body = _body([{"appID": 1, "middleOnly": True}])
     middle = registry.observe_json(
-        _metadata(suffix="middle", retrieved_at=base + timedelta(hours=1)),
-        _body([{"appID": 1, "middleOnly": True}]),
+        _metadata(body=middle_body, suffix="middle", retrieved_at=base + timedelta(hours=1)),
+        middle_body,
         contract=YANDEX_GET_GAMES_SCHEMA_V1,
     )
     paths = {event.field_path for event in middle.events}
@@ -225,8 +240,8 @@ def test_out_of_order_backfill_never_compares_against_future_snapshot(tmp_path: 
 def test_same_raw_snapshot_can_have_multiple_versioned_contract_analyses(tmp_path: Path) -> None:
     registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
     observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
-    metadata = _metadata(suffix="multi", retrieved_at=observed_at)
     body = _body([{"appID": 1}])
+    metadata = _metadata(body=body, suffix="multi", retrieved_at=observed_at)
 
     contracted = registry.observe_json(
         metadata,
@@ -237,3 +252,21 @@ def test_same_raw_snapshot_can_have_multiple_versioned_contract_analyses(tmp_pat
 
     assert contracted.analysis_id != uncontracted.analysis_id
     assert len(registry.analyses_for_snapshot(metadata.id)) == 2
+
+
+def test_registry_rejects_body_that_does_not_match_raw_snapshot_hash(tmp_path: Path) -> None:
+    registry = SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3")
+    observed_at = datetime(2026, 8, 29, 5, 0, tzinfo=UTC)
+    original = _body([{"appID": 1}])
+    metadata = _metadata(body=original, suffix="integrity", retrieved_at=observed_at)
+
+    try:
+        registry.observe_json(
+            metadata,
+            _body([{"appID": 2}]),
+            contract=YANDEX_GET_GAMES_SCHEMA_V1,
+        )
+    except ValueError as exc:
+        assert "content hash" in str(exc)
+    else:
+        raise AssertionError("registry accepted a body that did not match raw snapshot metadata")

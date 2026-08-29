@@ -11,12 +11,19 @@ Sources
 → Source DTOs
 → Versioned normalizers
 → Domain observations
+→ Operational normalized persistence
 → Lineage
 → Market state / taxonomy / derived features
 → Discovery / candidate dossiers
 → Backtests
 → Own-game calibration
 ```
+
+## Operational storage choice
+
+Phase 2 starts with SQLite as the operational normalized store for the private single-user collector. This is a deployment/maintenance choice, not part of the analytical semantics.
+
+The logical model below must remain portable. Parquet/DuckDB may later serve analytical scans/backtests; PostgreSQL is only justified if measured operational requirements outgrow SQLite.
 
 ## Identity
 
@@ -29,10 +36,13 @@ id
 platform
 external_app_id
 listing_url
+developer_external_id
 first_seen_at
 last_seen_at
 first_published_at
 ```
+
+Identity fields (`id`, `platform`, `external_app_id`) are immutable once observed. Mutable latest-state metadata such as `listing_url` and current `developer_external_id` may only advance from an equal/newer observation timestamp; historical backfill must not regress current state.
 
 ### `games`
 
@@ -65,6 +75,8 @@ listing_developer_observations
   developer_id
   observed_at
 ```
+
+Developer identity fields are immutable. The latest display name may only advance from an equal/newer observation timestamp. Listing/developer assignment observations are append-only by `(listing_id, observed_at)`; a conflicting developer for the same listing and observation timestamp is a data error rather than an overwrite.
 
 Do not assume developer names/ownership are eternally static.
 

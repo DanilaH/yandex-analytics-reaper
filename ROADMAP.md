@@ -28,7 +28,7 @@ Phase 1 is complete when this foundation lands on `main`.
 ## Phase 2 — Yandex market state
 
 - [x] introduce explicit source DTO → normalizer boundary
-- [ ] normalized listing/developer persistence
+- [x] normalized listing/developer persistence
 - [ ] normalized metric persistence
 - [ ] observation + field-level lineage persistence
 - [ ] schema-drift registry with field/type/missingness checks

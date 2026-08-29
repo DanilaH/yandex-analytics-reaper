@@ -34,6 +34,7 @@ Implemented:
 - immutable filesystem raw-snapshot store;
 - platform-neutral domain primitives;
 - explicit source DTO → domain normalizer boundary;
+- SQLite operational persistence for normalized listing/developer identities and developer-assignment history;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
@@ -45,7 +46,7 @@ Implemented:
 
 Not implemented yet:
 
-- normalized/database persistence and lineage persistence;
+- normalized metric persistence and field-level lineage persistence;
 - scheduled collection;
 - validated taxonomy classifier;
 - historical backfill/backtesting;

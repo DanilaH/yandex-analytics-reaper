@@ -45,7 +45,7 @@ class TaxonomySampleManifest(BaseModel):
     spec_version: Literal["taxonomy-diversity-sample-v1"] = "taxonomy-diversity-sample-v1"
     sample_id: str
     target_size: int = Field(default=DEFAULT_TARGET_SIZE, ge=100, le=200)
-    max_per_developer: int = Field(default=DEFAULT_MAX_PER_DEVELOPER, ge=1, le=10)
+    max_per_developer: Literal[2] = DEFAULT_MAX_PER_DEVELOPER
     run_ids: tuple[str, ...] = Field(min_length=1)
 
     @field_validator("sample_id")
@@ -505,7 +505,7 @@ def _validate_search_request(
 
 
 def _validate_pagination(
-    params: Mapping[object, object],
+    params: Mapping[str, object],
     page: ProbePage,
     *,
     prefix: str,

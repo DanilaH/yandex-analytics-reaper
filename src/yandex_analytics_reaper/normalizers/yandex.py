@@ -19,7 +19,7 @@ from .models import (
     NormalizedMetricObservation,
 )
 
-_NORMALIZER_VERSION = "3"
+_NORMALIZER_VERSION = "4"
 _TARGET_METRIC_VALUE = "game_metric_observations.value_numeric"
 _TARGET_STATE_PREFIX = "listing_state_observations"
 
@@ -41,6 +41,7 @@ class YandexGameNormalizer:
             observed_at=context.observed_at,
             title=card.title,
             developer_id=developer.id if developer is not None else None,
+            developer_name=developer.display_name if developer is not None else None,
         )
         return NormalizedListingObservation(
             listing=listing,
@@ -76,6 +77,7 @@ class YandexGameNormalizer:
             observed_at=context.observed_at,
             title=details.title,
             developer_id=developer.id if developer is not None else None,
+            developer_name=developer.display_name if developer is not None else None,
             languages=details.languages,
             supported_platforms=details.platforms,
             orientation=details.orientation,
@@ -232,6 +234,8 @@ def _card_state_lineage(
         fields.append((f"{base}.title", "title"))
     if state.developer_id is not None:
         fields.append((f"{base}.developer.id", "developer_id"))
+    if state.developer_name is not None:
+        fields.append((f"{base}.developer.name", "developer_name"))
     return _state_lineage(context, fields)
 
 

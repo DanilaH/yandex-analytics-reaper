@@ -1,8 +1,16 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .registries import (
+    DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+    ControlledLabelDimension,
+    get_taxonomy_label_registry,
+    normalize_taxonomy_label,
+)
 
 
 class PrimaryGameplayArchetype(StrEnum):
@@ -65,14 +73,18 @@ class PresentationDimensions(BaseModel):
     def validate_optional_label(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        return _normalized_label(value)
+        return normalize_taxonomy_label(value)
 
 
 class ControlledTaxonomyDimensions(BaseModel):
-    """Stable taxonomy axes whose concrete label registries are versioned separately."""
+    """Stable axes validated against one explicit controlled-label registry version."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    label_registry_version: int = Field(
+        default=DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+        ge=1,
+    )
     mechanics: tuple[str, ...] = ()
     objectives: tuple[str, ...] = ()
     meta_systems: tuple[str, ...] = ()
@@ -91,14 +103,26 @@ class ControlledTaxonomyDimensions(BaseModel):
     )
     @classmethod
     def validate_labels(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        normalized = tuple(_normalized_label(value) for value in values)
+        normalized = tuple(normalize_taxonomy_label(value) for value in values)
         if len(normalized) != len(set(normalized)):
             raise ValueError("controlled taxonomy dimension labels must be unique")
         return normalized
 
+    @model_validator(mode="after")
+    def validate_registry_membership(self) -> Self:
+        registry = get_taxonomy_label_registry(self.label_registry_version)
+        registry.validate_membership(ControlledLabelDimension.MECHANICS, self.mechanics)
+        registry.validate_membership(ControlledLabelDimension.OBJECTIVES, self.objectives)
+        registry.validate_membership(
+            ControlledLabelDimension.META_SYSTEMS,
+            self.meta_systems,
+        )
+        registry.validate_membership(ControlledLabelDimension.TONES, self.tones)
+        return self
+
 
 class GameTaxonomyDraft(BaseModel):
-    """Draft market taxonomy; label registries and gold-set validation are still pending."""
+    """Draft market taxonomy; gold-set validation is still pending."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -113,19 +137,7 @@ class GameTaxonomyDraft(BaseModel):
     @field_validator("themes", "trend_layers")
     @classmethod
     def validate_open_entities(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        normalized = tuple(_normalized_label(value) for value in values)
+        normalized = tuple(normalize_taxonomy_label(value) for value in values)
         if len(normalized) != len(set(normalized)):
             raise ValueError("taxonomy entity labels must be unique")
         return normalized
-
-
-def _normalized_label(value: str) -> str:
-    if not value:
-        raise ValueError("taxonomy labels cannot be blank")
-    if value != value.strip():
-        raise ValueError("taxonomy labels must already be trimmed")
-    if value != value.lower():
-        raise ValueError("taxonomy labels must be lowercase")
-    if any(character.isspace() for character in value):
-        raise ValueError("taxonomy labels cannot contain whitespace")
-    return value

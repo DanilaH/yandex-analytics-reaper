@@ -66,7 +66,7 @@ class GameDetails(GameCard):
     leaderboards: bool | None = None
     purchases_enabled: bool | None = None
     has_products: bool | None = None
-    media: dict[str, object] = Field(default_factory=dict)
+    media: dict[str, object] | None = None
 
 
 class GetGamesResult(BaseModel):
@@ -206,7 +206,7 @@ def _details(card: GameCard, value: Mapping[str, object]) -> GameDetails:
         for key, raw_count in score_raw.items()
         if isinstance(raw_count, int) and not isinstance(raw_count, bool)
     }
-    media = _string_mapping(value.get("media")) or {}
+    media = _string_mapping(value.get("media"))
     return GameDetails(
         app_id=card.app_id,
         source_object_path=card.source_object_path,
@@ -300,7 +300,7 @@ class YandexFeedParser:
 
 
 class YandexGetGamesParser:
-    version = "3"
+    version = "4"
 
     def parse(self, body: bytes) -> GetGamesResult:
         data = _string_mapping(_load_json(body))

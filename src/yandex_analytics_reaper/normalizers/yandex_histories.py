@@ -32,7 +32,7 @@ _PLAY_PAGE_ROOT = "$.__playPageData__.gameData"
 
 
 class YandexListingHistoryNormalizer:
-    """Normalize Yandex listing lifecycle/media facts without inventing source semantics."""
+    """Normalize directly observed Yandex listing history facts with raw lineage."""
 
     version = _NORMALIZER_VERSION
 
@@ -139,33 +139,12 @@ class YandexListingHistoryNormalizer:
 
         return NormalizedListingHistories(update=update, status=status)
 
-    def normalize_missing_catalogue_app(
-        self,
-        app_id: int,
-        context: NormalizationContext,
-    ) -> NormalizedListingHistories:
-        status = NormalizedListingStatus(
-            observation=ListingStatusObservation(
-                platform_listing_id=_listing_id(app_id),
-                observed_at=context.observed_at,
-                status=ListingStatus.UNKNOWN,
-                reason=ListingStatusReason.REQUESTED_BUT_NOT_RETURNED,
-            ),
-            lineage=(
-                _lineage(
-                    context,
-                    source_field_path="$.games",
-                    target_field_path=_STATUS_TARGET,
-                    transformation_name="requested_id_absence",
-                ),
-            ),
-        )
-        return NormalizedListingHistories(status=status)
-
 
 def _source_path(details: GameDetails) -> str:
     if details.source_object_path is None:
-        raise ValueError("get-games DTO is missing source_object_path required for history lineage")
+        raise ValueError(
+            "get-games DTO is missing source_object_path required for history lineage"
+        )
     return details.source_object_path
 
 

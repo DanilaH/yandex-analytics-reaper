@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from yandex_analytics_reaper.domain import (
     ProbeContext,
@@ -96,6 +97,18 @@ def test_selector_enforces_known_developer_cap() -> None:
             candidates[:3],
             target_size=3,
             max_per_developer=2,
+        )
+
+
+def test_manifest_freezes_developer_cap_to_two() -> None:
+    with pytest.raises(ValidationError):
+        TaxonomySampleManifest.model_validate(
+            {
+                "sample_id": "bad-cap",
+                "target_size": 100,
+                "max_per_developer": 3,
+                "run_ids": ["probe:one"],
+            }
         )
 
 

@@ -4,7 +4,7 @@
 
 Finish, independently review, and merge each task/phase before expanding scope unless the roadmap is explicitly amended.
 
-For a time-gated empirical task whose completion requires observations across a real time window, protocol/tooling and empirical execution may be tracked separately. Once the protocol/tooling is merged and frozen, preparation of the next isolated roadmap task may proceed while empirical collection is pending. This exception does **not** permit consuming an unfinished experiment as evidence: no downstream default, threshold, policy, or analytical conclusion may depend on that experiment until its empirical completion item is checked off.
+For an empirical or runtime-evidence-gated task whose completion requires observations/data that cannot be produced inside the current implementation/review environment, protocol/tooling/preparation and real-data execution may be tracked separately. Once the supporting tooling is merged and frozen, preparation of the next isolated roadmap task may proceed while real-data execution is pending. This exception does **not** permit consuming an unfinished task as evidence: no downstream default, threshold, policy, validation result, analytical conclusion, or completed-data claim may depend on that task until its real-data execution item is checked off. Synthetic fixtures prove tooling mechanics only and never satisfy a real-data execution item.
 
 ## Phase 1 — Foundation
 
@@ -57,6 +57,8 @@ Phase 1 is complete when this foundation lands on `main`.
 - [x] add `unknown` distinct from `other`
 - [x] define/version controlled label registries for mechanics/objectives/meta/tone
 - [ ] sample 100–200 diverse Yandex games
+  - [x] freeze `taxonomy-diversity-sample-v1` and merge deterministic raw-replay sampling tooling
+  - [ ] execute the sampler against real persisted Yandex evidence and record the 100–200-listing sample identity/hash
 - [ ] create manual gold set
 - [ ] validate primary gameplay-archetype labels
 - [ ] confusion analysis / agreement analysis

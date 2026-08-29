@@ -308,12 +308,14 @@ CREATE TABLE IF NOT EXISTS comparable_set_members (
 CREATE TABLE IF NOT EXISTS comparable_set_member_evidence (
     set_id TEXT NOT NULL,
     version INTEGER NOT NULL,
+    evidence_ordinal INTEGER NOT NULL,
     platform_listing_id TEXT NOT NULL,
     probe_run_id TEXT NOT NULL REFERENCES probe_runs(id),
     raw_snapshot_id TEXT NOT NULL,
     page_index INTEGER NOT NULL,
     source_object_path TEXT NOT NULL,
-    PRIMARY KEY (
+    PRIMARY KEY (set_id, version, evidence_ordinal),
+    UNIQUE (
         set_id,
         version,
         platform_listing_id,
@@ -325,6 +327,7 @@ CREATE TABLE IF NOT EXISTS comparable_set_member_evidence (
     FOREIGN KEY (set_id, version, platform_listing_id)
         REFERENCES comparable_set_members(set_id, version, platform_listing_id)
         ON DELETE CASCADE,
+    CHECK (evidence_ordinal >= 0),
     CHECK (page_index >= 0)
 );
 

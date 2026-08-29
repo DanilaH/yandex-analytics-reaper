@@ -5,7 +5,6 @@ import json
 import math
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -97,7 +96,6 @@ class AnalystPilotSetVerification(BaseModel):
 class AnalystRawEvidenceVerification(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    raw_root: str
     referenced_raw_snapshot_count: int = Field(ge=1)
     verified_raw_snapshot_count: int = Field(ge=1)
     raw_snapshot_ids: tuple[str, ...] = Field(min_length=1)
@@ -217,10 +215,10 @@ class AnalystPilotVerifier:
                 )
             )
 
-        raw_ids = _referenced_raw_snapshot_ids(snapshot, market_export)
-        _verify_raw_evidence(self.raw_store, snapshot, raw_ids)
+        expected_request_keys = _expected_raw_request_keys(snapshot, market_export)
+        raw_ids = tuple(sorted(expected_request_keys))
+        _verify_raw_evidence(self.raw_store, snapshot, expected_request_keys)
         raw_evidence = AnalystRawEvidenceVerification(
-            raw_root=str(Path(self.raw_store.root)),
             referenced_raw_snapshot_count=len(raw_ids),
             verified_raw_snapshot_count=len(raw_ids),
             raw_snapshot_ids=raw_ids,
@@ -456,30 +454,63 @@ def _required_evidence(
     return resolved.evidence
 
 
-def _referenced_raw_snapshot_ids(
+def _expected_raw_request_keys(
     snapshot: AnalystSnapshotReport,
     market_export: AnalystMarketExportReport,
-) -> tuple[str, ...]:
-    raw_ids: set[str] = {item.raw_snapshot_id for item in snapshot.rich_metadata}
+) -> dict[str, str]:
+    expected: dict[str, str] = {}
+    rich_ids = {item.raw_snapshot_id for item in snapshot.rich_metadata}
+
+    for rich in snapshot.rich_metadata:
+        _bind_raw_request_key(expected, rich.raw_snapshot_id, rich.request_key)
     for feed_run in snapshot.feed_runs:
-        raw_ids.update(feed_run.raw_snapshot_ids)
+        for raw_id in feed_run.raw_snapshot_ids:
+            _bind_raw_request_key(expected, raw_id, "catalogue.feed")
     for membership in market_export.comparable_memberships:
-        raw_ids.update(membership.raw_snapshot_ids)
-    for update in market_export.update_observations:
-        raw_ids.update(update.raw_snapshot_ids)
+        for raw_id in membership.raw_snapshot_ids:
+            _bind_raw_request_key(expected, raw_id, "catalogue.search")
     for supply in market_export.search_supply:
-        raw_ids.add(supply.raw_snapshot_id)
+        _bind_raw_request_key(expected, supply.raw_snapshot_id, "catalogue.search")
     for exposure in market_export.search_exposures:
-        raw_ids.add(exposure.raw_snapshot_id)
+        _bind_raw_request_key(expected, exposure.raw_snapshot_id, "catalogue.search")
     for exposure in market_export.feed_exposures:
-        raw_ids.add(exposure.raw_snapshot_id)
+        _bind_raw_request_key(expected, exposure.raw_snapshot_id, "catalogue.feed")
+
+    for update in market_export.update_observations:
+        _require_rich_raw_refs(update.raw_snapshot_ids, rich_ids, "update observation")
     for listing in market_export.listings:
         for resolved in _listing_resolved_values(listing):
             if resolved.evidence is not None:
-                raw_ids.update(resolved.evidence.raw_snapshot_ids)
-    if not raw_ids:
+                _require_rich_raw_refs(
+                    resolved.evidence.raw_snapshot_ids,
+                    rich_ids,
+                    f"listing evidence for {listing.platform_listing_id}",
+                )
+    if not expected:
         raise AnalystPilotError("pilot artifacts contain no raw evidence references")
-    return tuple(sorted(raw_ids))
+    return expected
+
+
+def _bind_raw_request_key(expected: dict[str, str], raw_id: str, request_key: str) -> None:
+    previous = expected.get(raw_id)
+    if previous is not None and previous != request_key:
+        raise AnalystPilotError(
+            f"raw snapshot {raw_id} is claimed by incompatible request keys: "
+            f"{previous} vs {request_key}"
+        )
+    expected[raw_id] = request_key
+
+
+def _require_rich_raw_refs(
+    raw_ids: Sequence[str],
+    rich_ids: set[str],
+    label: str,
+) -> None:
+    escaped = sorted(set(raw_ids) - rich_ids)
+    if escaped:
+        raise AnalystPilotError(
+            f"{label} references raw snapshots outside frozen rich metadata: {escaped}"
+        )
 
 
 def _listing_resolved_values(listing: AnalystListingRow) -> tuple[AnalystResolvedValue, ...]:
@@ -509,20 +540,23 @@ def _listing_resolved_values(listing: AnalystListingRow) -> tuple[AnalystResolve
 def _verify_raw_evidence(
     raw_store: FilesystemRawSnapshotStore,
     snapshot: AnalystSnapshotReport,
-    raw_ids: Sequence[str],
+    expected_request_keys: dict[str, str],
 ) -> None:
     rich_by_id = {item.raw_snapshot_id: item for item in snapshot.rich_metadata}
-    for raw_id in raw_ids:
+    for raw_id, expected_request_key in sorted(expected_request_keys.items()):
         try:
             metadata = raw_store.get_metadata(_YANDEX_SOURCE_ID, raw_id)
             raw_store.get_body(_YANDEX_SOURCE_ID, raw_id)
         except (OSError, ValueError) as exc:
             raise AnalystPilotError(f"raw evidence replay failed for {raw_id}: {exc}") from exc
+        if metadata.request_key != expected_request_key:
+            raise AnalystPilotError(
+                f"raw request_key changed for {raw_id}: "
+                f"expected {expected_request_key}, got {metadata.request_key}"
+            )
         rich = rich_by_id.get(raw_id)
         if rich is None:
             continue
-        if metadata.request_key != rich.request_key:
-            raise AnalystPilotError(f"rich raw request_key changed for {raw_id}")
         if metadata.content_hash != rich.content_hash:
             raise AnalystPilotError(f"rich raw content_hash changed for {raw_id}")
         if metadata.retrieved_at != rich.retrieved_at:

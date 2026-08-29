@@ -18,7 +18,7 @@ def test_analyst_cli_parses_snapshot_export_command() -> None:
     )
 
     assert args.command == "export-snapshot"
-    assert args.snapshot == "snapshot-report.json"
+    assert args.snapshot_report == "snapshot-report.json"
     assert args.report == "market-export.json"
     assert args.csv_dir == "market-export-csv"
     assert args.output == "data/raw"

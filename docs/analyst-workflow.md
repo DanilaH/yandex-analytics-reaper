@@ -88,6 +88,7 @@ Create `merge-comparable.json`:
 
 ```json
 {
+  "construction_method": "yandex_search_union_v1",
   "set_id": "merge-games-search",
   "version": 1,
   "query_family_id": "merge-games",
@@ -100,7 +101,7 @@ Create `merge-comparable.json`:
 }
 ```
 
-`created_at` is explicit so the declaration itself is reproducible. Caller run order does not define traversal order; persisted query-family member order does.
+The construction method is explicit and fail-closed so an archived declaration cannot silently acquire a different future construction policy. `created_at` is explicit so the declaration itself is reproducible. Caller run order does not define traversal order; persisted query-family member order does.
 
 Build, raw-replay, validate, and persist the set:
 

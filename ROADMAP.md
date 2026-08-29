@@ -4,6 +4,8 @@
 
 Finish, independently review, and merge each task/phase before expanding scope unless the roadmap is explicitly amended.
 
+For a time-gated empirical task whose completion requires observations across a real time window, protocol/tooling and empirical execution may be tracked separately. Once the protocol/tooling is merged and frozen, preparation of the next isolated roadmap task may proceed while empirical collection is pending. This exception does **not** permit consuming an unfinished experiment as evidence: no downstream default, threshold, policy, or analytical conclusion may depend on that experiment until its empirical completion item is checked off.
+
 ## Phase 1 — Foundation
 
 - [x] repository bootstrap
@@ -35,6 +37,8 @@ Phase 1 is complete when this foundation lands on `main`.
 - [x] probe-run/page grouping
 - [x] define `clean_anonymous` / persistent session semantics
 - [ ] feed-depth stability experiment (1/3/5/10 pages) with predeclared decision rule
+  - [x] freeze `feed-depth-v1` protocol and merge replay/analyzer tooling
+  - [ ] execute the empirical calibration with the frozen minimum sample/time-span guards and record the resulting depth decision
 - [ ] session-profile stability experiment
 - [ ] search query-family model
 - [ ] comparable-set construction

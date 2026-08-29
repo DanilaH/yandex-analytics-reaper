@@ -25,6 +25,7 @@ analyst-snapshot.md
 listing-state-observations.md
 analyst-market-export.md
 analyst-market-features.md
+analyst-pilot-verification.md
 listing-histories.md
 historical-backtesting.md
 data-model.md

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import UTC
 from itertools import combinations
 from math import floor
@@ -9,7 +9,7 @@ from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
-from yandex_analytics_reaper.domain import ProbeKind, ProbeRunStatus, SessionProfile
+from yandex_analytics_reaper.domain import ProbeContext, ProbeKind, ProbeRun, ProbeRunStatus, SessionProfile
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
 from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
 from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLiteProbeRunStore
@@ -17,6 +17,8 @@ from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLitePr
 SPEC_VERSION = "feed-depth-v1"
 ANALYZER_VERSION = "1"
 PARSER_VERSION = "2"
+SOURCE_ID = "yandex_public"
+REQUEST_KEY = "catalogue.feed"
 CANDIDATE_DEPTHS = (1, 3, 5, 10)
 PAGE_SIZE = 20
 MIN_ELIGIBLE_TRIALS = 8
@@ -27,6 +29,14 @@ P25_COVERAGE_MIN = 0.85
 MEDIAN_MARGINAL_GAIN_MAX = 0.10
 RANK_STABILITY_TOLERANCE = 0.03
 RANK_PERSISTENCE = 0.90
+_STABLE_FEED_PARAMS: dict[str, object] = {
+    "games_count": PAGE_SIZE,
+    "with_promos": "false",
+    "lang": "ru",
+    "device-type": "desktop",
+    "platform": "desktop_other",
+}
+_PAGINATION_PARAM_KEYS = {"page_id", "rtx-reqid"}
 
 
 class FeedDepthTrialObservation(BaseModel):
@@ -131,35 +141,7 @@ class FeedDepthExperiment:
 
         run = record.run
         context = record.context
-        if run.kind is not ProbeKind.RECOMMENDATION_FEED:
-            raise FeedDepthEligibilityError("feed-depth trial must be a recommendation-feed run")
-        if run.status is not ProbeRunStatus.COMPLETED:
-            raise FeedDepthEligibilityError("feed-depth trial must have completed status")
-        if run.requested_page_limit != 10:
-            raise FeedDepthEligibilityError("feed-depth trial must request exactly 10 pages")
-
-        page_count = len(record.pages)
-        expected_indexes = tuple(range(page_count))
-        actual_indexes = tuple(page.page_index for page in record.pages)
-        if not 1 <= page_count <= 10 or actual_indexes != expected_indexes:
-            raise FeedDepthEligibilityError(
-                "feed-depth trial must contain a contiguous page prefix from 0 with at most 10 pages"
-            )
-        if page_count < 10 and record.pages[-1].has_next_page:
-            raise FeedDepthEligibilityError(
-                "feed-depth trial stopped before page 10 without source exhaustion"
-            )
-
-        if context.session_profile is not SessionProfile.CLEAN_ANONYMOUS:
-            raise FeedDepthEligibilityError("feed-depth-v1 requires clean_anonymous session profile")
-        if context.cookie_state_hash is not None or context.profile_age_days != 0:
-            raise FeedDepthEligibilityError("feed-depth-v1 requires fresh clean-anonymous provenance")
-        if context.language != "ru":
-            raise FeedDepthEligibilityError("feed-depth-v1 requires language=ru")
-        if context.device_type != "desktop":
-            raise FeedDepthEligibilityError("feed-depth-v1 requires device_type=desktop")
-        if context.platform != "desktop_other":
-            raise FeedDepthEligibilityError("feed-depth-v1 requires platform=desktop_other")
+        _validate_trial_identity(run, context, record.pages)
 
         parser = YandexFeedParser()
         if parser.version != PARSER_VERSION:
@@ -181,16 +163,15 @@ class FeedDepthExperiment:
                     f"raw replay failed for probe page {page.page_index}: {exc}"
                 ) from exc
 
-            if metadata.request_key != "catalogue.feed":
-                raise FeedDepthEligibilityError("feed-depth raw page is not a catalogue.feed response")
+            if metadata.request_key != REQUEST_KEY:
+                raise FeedDepthEligibilityError(
+                    f"feed-depth raw page must use request_key={REQUEST_KEY}"
+                )
             if not 200 <= metadata.http_status < 300:
                 raise FeedDepthEligibilityError(
                     "feed-depth raw page does not have a successful HTTP status"
                 )
-            if _feed_page_size(metadata.request_context) != PAGE_SIZE:
-                raise FeedDepthEligibilityError(
-                    f"feed-depth-v1 requires games_count={PAGE_SIZE} on every raw page"
-                )
+            _validate_feed_request(metadata.request_context, page.page_index)
 
             try:
                 parsed = parser.parse(body)
@@ -313,6 +294,73 @@ def evaluate_feed_depth_trials(
         recommended_depth=recommendation,
         decision_reasons=decision_reasons,
     )
+
+
+def _validate_trial_identity(
+    run: ProbeRun,
+    context: ProbeContext,
+    pages: Sequence[object],
+) -> None:
+    if run.source_id != SOURCE_ID:
+        raise FeedDepthEligibilityError(f"feed-depth-v1 requires source_id={SOURCE_ID}")
+    if run.request_key != REQUEST_KEY:
+        raise FeedDepthEligibilityError(f"feed-depth-v1 requires request_key={REQUEST_KEY}")
+    if run.kind is not ProbeKind.RECOMMENDATION_FEED:
+        raise FeedDepthEligibilityError("feed-depth trial must be a recommendation-feed run")
+    if run.status is not ProbeRunStatus.COMPLETED:
+        raise FeedDepthEligibilityError("feed-depth trial must have completed status")
+    if run.requested_page_limit != 10:
+        raise FeedDepthEligibilityError("feed-depth trial must request exactly 10 pages")
+
+    page_count = len(pages)
+    page_indexes = tuple(getattr(page, "page_index", None) for page in pages)
+    if not 1 <= page_count <= 10 or page_indexes != tuple(range(page_count)):
+        raise FeedDepthEligibilityError(
+            "feed-depth trial must contain a contiguous page prefix from 0 with at most 10 pages"
+        )
+    last_page = pages[-1]
+    if page_count < 10 and getattr(last_page, "has_next_page", True):
+        raise FeedDepthEligibilityError(
+            "feed-depth trial stopped before page 10 without source exhaustion"
+        )
+
+    if context.session_profile is not SessionProfile.CLEAN_ANONYMOUS:
+        raise FeedDepthEligibilityError("feed-depth-v1 requires clean_anonymous session profile")
+    if context.cookie_state_hash is not None or context.profile_age_days != 0:
+        raise FeedDepthEligibilityError("feed-depth-v1 requires fresh clean-anonymous provenance")
+    if context.language != "ru":
+        raise FeedDepthEligibilityError("feed-depth-v1 requires language=ru")
+    if context.device_type != "desktop":
+        raise FeedDepthEligibilityError("feed-depth-v1 requires device_type=desktop")
+    if context.platform != "desktop_other":
+        raise FeedDepthEligibilityError("feed-depth-v1 requires platform=desktop_other")
+    if context.country_observed is not None:
+        raise FeedDepthEligibilityError("feed-depth-v1 requires country_observed=null")
+    if context.collector_region is not None:
+        raise FeedDepthEligibilityError("feed-depth-v1 requires collector_region=null")
+
+
+def _validate_feed_request(request_context: Mapping[str, object], page_index: int) -> None:
+    if set(request_context) != {"probe_context", "params"}:
+        raise FeedDepthEligibilityError(
+            "feed-depth-v1 raw request context contains undeclared top-level fields"
+        )
+    params = request_context.get("params")
+    if not isinstance(params, Mapping):
+        raise FeedDepthEligibilityError("feed-depth-v1 raw request is missing params metadata")
+
+    expected_keys = set(_STABLE_FEED_PARAMS)
+    if page_index > 0:
+        expected_keys |= _PAGINATION_PARAM_KEYS
+    if set(params) != expected_keys:
+        raise FeedDepthEligibilityError(
+            "feed-depth-v1 raw feed params do not match the frozen request shape"
+        )
+    for key, expected_value in _STABLE_FEED_PARAMS.items():
+        if params.get(key) != expected_value:
+            raise FeedDepthEligibilityError(
+                f"feed-depth-v1 raw feed param {key} does not match frozen value"
+            )
 
 
 def _metrics_for_depth(
@@ -461,20 +509,7 @@ def _hour_buckets_utc(trials: Sequence[FeedDepthTrialObservation]) -> tuple[str,
         trial.started_at.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
         for trial in trials
     }
-    return tuple(
-        value.isoformat().replace("+00:00", "Z")
-        for value in sorted(buckets)
-    )
-
-
-def _feed_page_size(request_context: dict[str, object]) -> int | None:
-    params = request_context.get("params")
-    if not isinstance(params, dict):
-        return None
-    value = params.get("games_count")
-    if isinstance(value, bool) or not isinstance(value, int):
-        return None
-    return value
+    return tuple(value.isoformat().replace("+00:00", "Z") for value in sorted(buckets))
 
 
 def _next_depth(depth: int) -> int | None:

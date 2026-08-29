@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
 
@@ -106,16 +107,16 @@ class AnalystComparableSetBinding(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     set_id: str
-    version: int
+    version: int = Field(ge=1)
     query_family_id: str
-    query_family_version: int
+    query_family_version: int = Field(ge=1)
     construction_method: str
     context_id: str
-    requested_page_limit: int
+    requested_page_limit: int = Field(ge=1)
     observed_from: AwareDatetime
     observed_to: AwareDatetime
-    search_run_ids: tuple[str, ...]
-    member_listing_ids: tuple[str, ...]
+    search_run_ids: tuple[str, ...] = Field(min_length=1)
+    member_listing_ids: tuple[str, ...] = Field(min_length=1)
 
 
 class AnalystFeedRunBinding(BaseModel):
@@ -123,10 +124,10 @@ class AnalystFeedRunBinding(BaseModel):
 
     run_id: str
     context_id: str
-    requested_page_limit: int
+    requested_page_limit: int = Field(ge=1)
     started_at: AwareDatetime
     completed_at: AwareDatetime
-    raw_snapshot_ids: tuple[str, ...]
+    raw_snapshot_ids: tuple[str, ...] = Field(min_length=1)
     parser_name: str
     parser_version: str
 
@@ -134,15 +135,15 @@ class AnalystFeedRunBinding(BaseModel):
 class AnalystRichMetadataBinding(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    source_id: str
-    request_key: str
+    source_id: Literal["yandex_public"]
+    request_key: Literal["catalogue.get_games", "game.page"]
     raw_snapshot_id: str
     retrieved_at: AwareDatetime
     content_hash: str
     parser_name: str
     parser_version: str
-    parsed_listing_ids: tuple[str, ...]
-    relevant_listing_ids: tuple[str, ...]
+    parsed_listing_ids: tuple[str, ...] = Field(min_length=1)
+    relevant_listing_ids: tuple[str, ...] = Field(min_length=1)
 
 
 class AnalystSnapshotPayload(BaseModel):
@@ -154,9 +155,46 @@ class AnalystSnapshotPayload(BaseModel):
     collection_parameters_status: Literal["provisional_uncalibrated"]
     effective_context: ProbeContext
     search_page_limit: int = Field(ge=1)
-    comparable_sets: tuple[AnalystComparableSetBinding, ...]
+    comparable_sets: tuple[AnalystComparableSetBinding, ...] = Field(min_length=1)
     feed_runs: tuple[AnalystFeedRunBinding, ...]
-    rich_metadata: tuple[AnalystRichMetadataBinding, ...]
+    rich_metadata: tuple[AnalystRichMetadataBinding, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_snapshot_semantics(self) -> Self:
+        context_ids = {item.context_id for item in self.comparable_sets}
+        if len(context_ids) != 1:
+            raise ValueError("snapshot comparable sets must share one context_id")
+        expected_context_id = next(iter(context_ids))
+        if any(
+            item.requested_page_limit != self.search_page_limit
+            for item in self.comparable_sets
+        ):
+            raise ValueError("snapshot comparable sets must share search_page_limit")
+        if any(item.context_id != expected_context_id for item in self.feed_runs):
+            raise ValueError("snapshot feed runs must share the comparable-set context_id")
+
+        member_ids = {
+            listing_id
+            for comparable in self.comparable_sets
+            for listing_id in comparable.member_listing_ids
+        }
+        if any(
+            not set(item.relevant_listing_ids).issubset(member_ids)
+            for item in self.rich_metadata
+        ):
+            raise ValueError("rich metadata relevant listings must belong to comparable sets")
+        if any(
+            not set(item.relevant_listing_ids).issubset(set(item.parsed_listing_ids))
+            for item in self.rich_metadata
+        ):
+            raise ValueError("rich metadata relevant listings must be parsed from that snapshot")
+
+        evidence_times = [item.observed_to for item in self.comparable_sets]
+        evidence_times.extend(item.completed_at for item in self.feed_runs)
+        evidence_times.extend(item.retrieved_at for item in self.rich_metadata)
+        if self.created_at < max(evidence_times):
+            raise ValueError("snapshot created_at cannot precede bound evidence")
+        return self
 
 
 class AnalystSnapshotReport(AnalystSnapshotPayload):
@@ -175,7 +213,6 @@ class AnalystSnapshotBuilder:
 
     def __init__(self, *, raw_store: FilesystemRawSnapshotStore, database_path: Path) -> None:
         self.raw_store = raw_store
-        self.database_path = database_path
         self.probe_store = SQLiteProbeRunStore(database_path)
         self.query_family_store = SQLiteQueryFamilyStore(database_path)
         self.comparable_store = SQLiteComparableSetStore(database_path)
@@ -187,7 +224,7 @@ class AnalystSnapshotBuilder:
         effective_context: ProbeContext | None = None
         context_id: str | None = None
         search_page_limit: int | None = None
-        latest_evidence_at = None
+        latest_evidence_at: datetime | None = None
 
         for reference in declaration.comparable_sets:
             comparable = self.comparable_store.get(reference.set_id, reference.version)
@@ -261,6 +298,8 @@ class AnalystSnapshotBuilder:
 
         if effective_context is None or context_id is None or search_page_limit is None:
             raise AnalystSnapshotError("analyst snapshot requires comparable-set evidence")
+        if not member_order:
+            raise AnalystSnapshotError("declared comparable sets contain no organic members")
 
         feed_bindings: list[AnalystFeedRunBinding] = []
         feed_parser = YandexFeedParser()
@@ -316,7 +355,6 @@ class AnalystSnapshotBuilder:
                 )
             )
 
-        relevant_members = set(member_order)
         rich_bindings: list[AnalystRichMetadataBinding] = []
         for reference in declaration.rich_metadata_snapshots:
             metadata = self.raw_store.get_metadata(
@@ -359,8 +397,6 @@ class AnalystSnapshotBuilder:
                 )
             )
 
-        if not relevant_members:
-            raise AnalystSnapshotError("declared comparable sets contain no organic members")
         if latest_evidence_at is None or declaration.created_at < latest_evidence_at:
             raise AnalystSnapshotError(
                 "snapshot created_at cannot precede evidence bound into the snapshot"
@@ -377,9 +413,11 @@ class AnalystSnapshotBuilder:
             feed_runs=tuple(feed_bindings),
             rich_metadata=tuple(rich_bindings),
         )
-        return AnalystSnapshotReport(
-            **payload.model_dump(),
-            content_hash=_payload_hash(payload),
+        return AnalystSnapshotReport.model_validate(
+            {
+                **payload.model_dump(),
+                "content_hash": _payload_hash(payload),
+            }
         )
 
 
@@ -417,5 +455,5 @@ def _payload_hash(payload: AnalystSnapshotPayload) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _max_datetime(current: AwareDatetime | None, candidate: AwareDatetime) -> AwareDatetime:
+def _max_datetime(current: datetime | None, candidate: datetime) -> datetime:
     return candidate if current is None or candidate > current else current

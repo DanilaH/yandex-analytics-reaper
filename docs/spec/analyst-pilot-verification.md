@@ -6,16 +6,19 @@
 
 It does **not** make a synthetic fixture count as a real pilot. It exists so that, once real Yandex evidence has been collected on an operator machine, the final `START ANALYSIS` review does not depend on ad-hoc SQLite inspection or unverifiable manual arithmetic.
 
-## Inputs
+## Operator inputs
 
-The verifier consumes exactly three frozen analyst artifacts plus the local immutable raw store:
+The supported `verify-pilot` command consumes three frozen analyst artifacts plus the local evidence workspace:
 
 ```text
 AnalystSnapshotReport
 AnalystMarketExportReport
 AnalystMarketFeaturesReport
 FilesystemRawSnapshotStore
+market.sqlite3
 ```
+
+The database is required intentionally: the final pilot audit must verify the supplied market export against the persisted normalized observations and lineage rather than trusting a standalone JSON file.
 
 The three JSON artifacts must form one exact content-hash chain:
 
@@ -47,14 +50,31 @@ Two versions of the same query family do not satisfy the two-niche pilot require
 
 The verifier does not decide whether a query family is a commercially attractive niche. It only prevents the technical pilot from being satisfied by duplicate market questions.
 
-## Fresh feature derivation
+## Fresh normalized/raw export replay
 
-The supplied `AnalystMarketFeaturesReport` is not trusted merely because its hash is internally valid.
+The supplied `AnalystMarketExportReport` is not trusted merely because its content hash is internally valid.
 
-The verifier runs the public feature builder again:
+The supported CLI runs the existing M1.2 exporter again:
 
 ```text
-snapshot + market export
+snapshot
++ market.sqlite3 normalized observations/lineage
++ immutable raw store
+→ AnalystMarketExporter
+→ freshly rebuilt market export
+→ exact equality with supplied market export
+```
+
+This deliberately reuses the established M1.2 boundary instead of reimplementing normalization, comparable-set replay, feed/search replay, or lineage rules inside the pilot verifier.
+
+A manually edited market export therefore cannot pass merely by recomputing its own content hash.
+
+## Fresh feature derivation
+
+The supplied `AnalystMarketFeaturesReport` is likewise rebuilt from the verified frozen inputs:
+
+```text
+snapshot + verified market export
 → AnalystMarketFeatureBuilder
 → freshly derived feature report
 → exact equality with supplied feature report
@@ -102,36 +122,34 @@ This narrow trace is intentional. The feature layer remains the owner of full mi
 
 ## Raw-evidence replay
 
-The verifier resolves every raw snapshot referenced by the pilot through `FilesystemRawSnapshotStore` and calls `get_body`, which rechecks the persisted content hash.
+After the fresh M1.2 export replay, the pilot audit also resolves the raw snapshot references carried by the frozen artifacts through `FilesystemRawSnapshotStore` and calls `get_body`, which rechecks persisted content hashes.
 
 The audit covers:
 
 ```text
-all rich-metadata raw snapshots frozen by the snapshot
-all feed pages frozen by snapshot feed-run bindings
-all search raw snapshots referenced by comparable membership
-all search-supply raw snapshots
-all search/feed exposure raw snapshots
-all normalized listing/update evidence raw references
+rich-metadata raw snapshots frozen by the snapshot
+feed pages frozen by snapshot feed-run bindings
+search raw snapshots referenced by comparable membership
+search-supply raw snapshots
+search/feed exposure raw snapshots
+normalized listing/update evidence raw references
 ```
 
-Request-key ownership also fails closed:
+Request-key ownership fails closed:
 
 ```text
 search evidence → catalogue.search
 feed evidence   → catalogue.feed
-rich evidence   → the exact request_key frozen by AnalystSnapshotReport
+rich evidence   → exact request_key frozen by AnalystSnapshotReport
 ```
 
-A single raw snapshot cannot be claimed simultaneously by incompatible request keys.
+A single raw snapshot cannot be claimed simultaneously by incompatible request keys. Normalized listing/update evidence may reference only the rich-metadata raw snapshots frozen by the analyst snapshot.
 
-Normalized listing/update evidence may reference only the rich-metadata raw snapshots frozen by the analyst snapshot. It cannot silently reach into a newer raw response that was collected after the snapshot.
-
-The verification report stores raw snapshot IDs, not the local filesystem path. Moving the same immutable raw workspace to another machine therefore does not change the report content hash.
+The verification report stores raw snapshot IDs, not the local filesystem path. Moving the same immutable evidence workspace to another machine therefore does not change the report content hash.
 
 ## Machine-detected limitations
 
-The verifier records mechanical limitations that are already visible in the frozen artifacts, including:
+The verifier records mechanical limitations already visible in the frozen artifacts, including:
 
 ```text
 provisional/un-calibrated collection parameters
@@ -145,7 +163,7 @@ This list does not replace the human M1.4 review. Real source behavior may revea
 
 ## Interpretation boundary
 
-Passing `analyst-pilot-verification-v1` proves only that the real pilot artifact chain is internally reproducible and that representative aggregates can be traced back to immutable evidence.
+Passing `analyst-pilot-verification-v1` proves only that the real pilot artifact chain can be reproduced from the persisted normalized/raw evidence and that representative aggregates can be traced through that verified chain.
 
 It does **not** prove:
 

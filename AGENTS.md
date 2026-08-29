@@ -88,6 +88,7 @@ Rules:
 - Review the actual GitHub diff before merge, not only a local working copy.
 - Do not ask the user to perform routine implementation review; escalate only genuinely external/product decisions or unavailable access.
 - Do not incidentally reorder the roadmap inside an implementation task. Change sequencing explicitly in `ROADMAP.md` with rationale.
+- When a named product gate becomes fully satisfied, explicitly notify the project owner/user in the same turn that the version is ready for that declared use. In particular, when `START ANALYSIS` is verified, clearly state that Analyst Workbench v0 is ready and analytical activity can begin. Do not claim readiness before every gate condition has been verified, and do not silently move to the next milestone after the gate is reached.
 - If parser behavior or interpretation changes, bump the parser version and add fixture-driven regression tests. A source adding an irrelevant field does not by itself require a parser-version bump.
 - If schema profiling or drift-evaluation semantics change, bump the schema analyzer version so immutable raw snapshots can be re-analyzed without reusing stale cached analyses.
 - If an explicit source schema contract changes semantically, create a new versioned `contract_id`; never mutate the meaning of an existing contract ID in place.

@@ -93,8 +93,8 @@ Already available:
 
 Still required for analyst use:
 
-- [ ] expose query-family declaration/persistence through a supported operator-facing CLI/file workflow
-- [ ] expose `yandex_search_union_v1` comparable-set construction through a supported operator-facing CLI/file workflow
+- [x] expose query-family declaration/persistence through a supported operator-facing CLI/file workflow
+- [x] expose `yandex_search_union_v1` comparable-set construction through a supported operator-facing CLI/file workflow
 - [ ] add a small reproducible **analyst snapshot manifest/workflow** that binds the exact feed/search/query-family/rich-metadata evidence used for one analysis session
 - [ ] require the snapshot to record explicit collection context/depth/session choices and label still-uncalibrated choices as provisional rather than hiding them behind an “optimal” default
 - [ ] fail closed when an analyst snapshot mixes incompatible contexts or incomplete/failed evidence
@@ -150,6 +150,8 @@ collect real Yandex evidence
 ```
 
 At this point **analytical activity should begin**. Do not postpone real use merely because calibration, taxonomy validation, historical backtesting, external trends, or automation are unfinished.
+
+**Release notification requirement:** do not silently cross this gate. Only after every `START ANALYSIS` condition has been verified against the real analyst workflow/pilot, explicitly tell the project owner/user that **Analyst Workbench v0 is ready for analytical use and analytical activity can begin**. Do not make that readiness claim early, and do not move on to M2 without giving the explicit notification once the gate is genuinely satisfied.
 
 ---
 

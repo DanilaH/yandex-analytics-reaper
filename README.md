@@ -38,6 +38,7 @@ Implemented:
 - normalized numeric metric persistence with observation/evidence envelopes and versioned normalizer metadata;
 - field-level metric lineage from exact parser source path back to raw snapshot identity;
 - versioned schema-drift monitoring for Yandex JSON surfaces with field/type/missingness contracts, scoped temporal comparisons, parser-failure records, and raw-content identity checks;
+- logical paginated feed/search probe runs with deterministic context identity, ordered page/cursor linkage, terminal status, and raw error provenance;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -50,7 +51,8 @@ Implemented:
 
 Not implemented yet:
 
-- production scheduled collection/probe-run grouping;
+- technical session-profile isolation/reuse semantics for clean vs persistent collection;
+- production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
 - external trend connectors;
@@ -106,16 +108,28 @@ All three remain required quality checks. GitHub-hosted CI is currently treated 
 
 The current CLI is a **manual probe/debug interface**, not the production scheduled collector.
 
-Feed:
+Feed, one page by default:
 
 ```bash
 yandex-reaper probe-feed --count 20 --output data/raw
 ```
 
-Search:
+Explicit multi-page feed run:
+
+```bash
+yandex-reaper probe-feed --count 20 --pages 3 --output data/raw
+```
+
+Search, one page by default:
 
 ```bash
 yandex-reaper probe-search "merge" --output data/raw
+```
+
+Explicit multi-page search run:
+
+```bash
+yandex-reaper probe-search "merge" --pages 3 --output data/raw
 ```
 
 Rich game metadata:
@@ -130,7 +144,9 @@ Game page / `__playPageData__`:
 yandex-reaper probe-page 438560 --output data/raw
 ```
 
-Each probe persists the raw response before parsing. JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
+Feed/search probes persist each raw response before interpretation and group pages into one logical run. Each later page must consume the exact continuation tokens emitted by the preceding page. A run is persisted as `completed`, `partial`, or `failed`; when a received raw response caused a terminal error, the run retains that raw snapshot ID for inspection.
+
+JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
 
 ## Read before changing the project
 

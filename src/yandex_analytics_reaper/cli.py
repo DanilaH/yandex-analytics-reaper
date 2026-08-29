@@ -7,10 +7,10 @@ from pathlib import Path
 
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain.models import ProbeContext
+from yandex_analytics_reaper.ingestion import ProbeCollectionError, YandexPaginatedProbeRunner
 from yandex_analytics_reaper.schema_drift import DriftSeverity, SQLiteSchemaDriftRegistry
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
 from yandex_analytics_reaper.sources.yandex import (
-    YandexFeedParser,
     YandexGetGamesParser,
     YandexPlayPageParser,
     YandexPublicClient,
@@ -22,6 +22,7 @@ from yandex_analytics_reaper.sources.yandex.schema_contracts import (
 from yandex_analytics_reaper.storage import (
     FilesystemRawSnapshotStore,
     RawSnapshotMetadata,
+    SQLiteProbeRunStore,
 )
 
 
@@ -39,8 +40,12 @@ def _store(output: str | None) -> FilesystemRawSnapshotStore:
     return FilesystemRawSnapshotStore(root)
 
 
+def _database_path(store: FilesystemRawSnapshotStore) -> Path:
+    return store.root.parent / "market.sqlite3"
+
+
 def _schema_registry(store: FilesystemRawSnapshotStore) -> SQLiteSchemaDriftRegistry:
-    return SQLiteSchemaDriftRegistry(store.root.parent / "market.sqlite3")
+    return SQLiteSchemaDriftRegistry(_database_path(store))
 
 
 def _client() -> YandexPublicClient:
@@ -134,34 +139,45 @@ def _record_parser_failure(
     )
 
 
+def _paginated_runner(
+    store: FilesystemRawSnapshotStore,
+    client: YandexPublicClient,
+) -> YandexPaginatedProbeRunner:
+    database_path = _database_path(store)
+    return YandexPaginatedProbeRunner(
+        client=client,
+        raw_store=store,
+        probe_store=SQLiteProbeRunStore(database_path),
+        schema_registry=SQLiteSchemaDriftRegistry(database_path),
+    )
+
+
 def _probe_feed(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
-        response = client.collect_feed(_context(args), count=args.count)
-    metadata = _persist_or_fail(store, response)
-    _observe_json_schema(store, metadata, response)
-    parser = YandexFeedParser()
-    try:
-        parsed = parser.parse(response.body)
-    except ValueError as exc:
-        _record_parser_failure(
-            store,
-            metadata,
-            parser_name=type(parser).__name__,
-            parser_version=parser.version,
-            error=exc,
-        )
-        raise
-    organic = sum(not game.sponsored for game in parsed.games)
-    sponsored = sum(game.sponsored for game in parsed.games)
+        try:
+            result = _paginated_runner(store, client).run_feed(
+                _context(args),
+                page_limit=args.pages,
+                count=args.count,
+            )
+        except ProbeCollectionError as exc:
+            raise SystemExit(str(exc)) from exc
+
+    cards = [game for page in result.parsed_pages for game in page.games]
+    unique_app_ids = list(dict.fromkeys(game.app_id for game in cards))
     print(
         json.dumps(
             {
-                "games": len(parsed.games),
-                "organic": organic,
-                "sponsored": sponsored,
-                "totalGamesCount": parsed.total_games_count,
-                "pageInfo": parsed.page_info.model_dump(),
+                "run_id": result.record.run.id,
+                "status": result.record.run.status.value,
+                "pages": len(result.record.pages),
+                "cards": len(cards),
+                "unique_games": len(unique_app_ids),
+                "organic": sum(not game.sponsored for game in cards),
+                "sponsored": sum(game.sponsored for game in cards),
+                "appIDs": unique_app_ids,
+                "lastPageInfo": result.parsed_pages[-1].page_info.model_dump(),
             },
             ensure_ascii=False,
             indent=2,
@@ -172,29 +188,37 @@ def _probe_feed(args: argparse.Namespace) -> None:
 def _probe_search(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
-        response = client.collect_search(args.query, _context(args))
-    metadata = _persist_or_fail(store, response)
-    _observe_json_schema(store, metadata, response)
-    parser = YandexFeedParser()
-    try:
-        parsed = parser.parse(response.body)
-    except ValueError as exc:
-        _record_parser_failure(
-            store,
-            metadata,
-            parser_name=type(parser).__name__,
-            parser_version=parser.version,
-            error=exc,
-        )
-        raise
+        try:
+            result = _paginated_runner(store, client).run_search(
+                args.query,
+                _context(args),
+                page_limit=args.pages,
+            )
+        except ProbeCollectionError as exc:
+            raise SystemExit(str(exc)) from exc
+
+    cards = [game for page in result.parsed_pages for game in page.games]
+    unique_app_ids = list(dict.fromkeys(game.app_id for game in cards))
+    total_games_count = next(
+        (
+            page.total_games_count
+            for page in result.parsed_pages
+            if page.total_games_count is not None
+        ),
+        None,
+    )
     print(
         json.dumps(
             {
-                "query": args.query,
-                "results_in_page": len(parsed.games),
-                "totalGamesCount": parsed.total_games_count,
-                "pageInfo": parsed.page_info.model_dump(),
-                "appIDs": [game.app_id for game in parsed.games],
+                "run_id": result.record.run.id,
+                "status": result.record.run.status.value,
+                "query": result.record.run.query_text,
+                "pages": len(result.record.pages),
+                "results": len(cards),
+                "unique_results": len(unique_app_ids),
+                "totalGamesCount": total_games_count,
+                "appIDs": unique_app_ids,
+                "lastPageInfo": result.parsed_pages[-1].page_info.model_dump(),
             },
             ensure_ascii=False,
             indent=2,
@@ -271,14 +295,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="yandex-reaper")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    feed = sub.add_parser("probe-feed", help="Fetch and persist one Yandex feed page.")
+    feed = sub.add_parser("probe-feed", help="Fetch and persist Yandex feed pages.")
     _add_context_args(feed)
     feed.add_argument("--count", type=int, default=20)
+    feed.add_argument("--pages", type=int, default=1, help="Maximum feed pages in this probe run.")
     feed.set_defaults(handler=_probe_feed)
 
-    search = sub.add_parser("probe-search", help="Fetch and persist one Yandex search page.")
+    search = sub.add_parser("probe-search", help="Fetch and persist Yandex search pages.")
     _add_context_args(search)
     search.add_argument("query")
+    search.add_argument(
+        "--pages",
+        type=int,
+        default=1,
+        help="Maximum search pages in this probe run.",
+    )
     search.set_defaults(handler=_probe_search)
 
     games = sub.add_parser("probe-games", help="Fetch and persist rich metadata for app IDs.")

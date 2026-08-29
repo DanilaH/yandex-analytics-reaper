@@ -39,28 +39,63 @@ authenticated_test
 
 Never persist raw auth cookies/tokens in snapshot metadata.
 
+The exact implementation mechanics for creating/reusing these profiles are a separate Phase 2 task. Persisting the declared `session_profile` on a context does not by itself prove that the collector has implemented those semantics correctly.
+
 ## Probe run grouping
 
-A paginated observation is one logical run, not unrelated page snapshots.
+A paginated feed/search observation is one logical run, not unrelated page snapshots.
 
 ```text
-probe_run
-  id
-  surface
-  context
-  started_at
-  completed_at
-  coverage_status
-
-probe_page
-  probe_run_id
-  page_number
-  raw_snapshot_id
-  next_page_id
-  response_request_id
+ProbeContext
+↓
+ProbeRun
+├── ProbePage 0 → raw snapshot
+│      ↓ response continuation tokens
+├── ProbePage 1 → raw snapshot
+│      ↓ response continuation tokens
+└── ProbePage N → raw snapshot
 ```
 
-This allows a five-page feed crawl to be reconstructed as one sampled observation.
+A run records the source/request surface, deterministic context identity, optional search query, requested page limit, start/completion times, status, and terminal error provenance.
+
+Run status semantics:
+
+```text
+RUNNING
+→ collection has started and no terminal state has been persisted
+
+COMPLETED
+→ at least one page exists and the run reached the requested page limit
+   OR the source reported no next page
+
+PARTIAL
+→ at least one valid page was persisted, but the requested observation could not complete
+
+FAILED
+→ the run failed before any valid page was persisted
+```
+
+`COMPLETED` is relative to requested observation depth. For example, a one-page probe may be complete even when page 0 reports that deeper pages exist.
+
+Each page stores:
+
+```text
+run_id
+page_index
+raw_snapshot_id
+retrieved_at
+request_page_id
+request_rtx_reqid
+response_next_page_id
+response_rtx_reqid
+has_next_page
+```
+
+Pages are contiguous (`0,1,2,...`) and retrieval time cannot move backwards. Page 0 cannot carry request continuation tokens. Every later page must consume exactly the continuation tokens emitted by the preceding page. If the source says `has_next_page=true` but omits a required continuation token, the current valid page remains persisted and the run becomes `PARTIAL`; no fabricated next page is appended.
+
+A raw snapshot may belong to at most one probe page within the same source. Raw identity is `(source_id, raw_snapshot_id)`, not a globally unique snapshot ID detached from source identity.
+
+If an HTTP/schema/parser/continuation failure occurs after a response was persisted, `error_raw_snapshot_id` points to the raw response that caused the terminal condition. If failure happens before any response exists, it remains null.
 
 ## Game metrics vs contextual exposure
 

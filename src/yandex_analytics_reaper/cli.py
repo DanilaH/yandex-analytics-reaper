@@ -330,27 +330,22 @@ def _probe_games(args: argparse.Namespace) -> None:
         raise
 
     persistence = YandexNormalizationPersistence(_database_path(store))
-    persisted = tuple(
+    for game in parsed.games:
         persistence.persist_details(game, metadata)
-        for game in parsed.games
-    )
     print(
         json.dumps(
-            {
-                "games": [
-                    {
-                        "appID": game.app_id,
-                        "title": game.title,
-                        "gqRating": game.yandex_rating,
-                        "rating": game.player_rating,
-                        "ratingCount": game.rating_count,
-                        "firstPublished": game.first_published,
-                        "minLoadTime": game.min_load_time,
-                    }
-                    for game in parsed.games
-                ],
-                "normalized": [item.model_dump(mode="json") for item in persisted],
-            },
+            [
+                {
+                    "appID": game.app_id,
+                    "title": game.title,
+                    "gqRating": game.yandex_rating,
+                    "rating": game.player_rating,
+                    "ratingCount": game.rating_count,
+                    "firstPublished": game.first_published,
+                    "minLoadTime": game.min_load_time,
+                }
+                for game in parsed.games
+            ],
             ensure_ascii=False,
             indent=2,
         )
@@ -378,20 +373,11 @@ def _probe_page(args: argparse.Namespace) -> None:
         raise SystemExit(
             f"game page returned appID={parsed.app_id}; expected requested appID={args.app_id}"
         )
-    persisted = YandexNormalizationPersistence(_database_path(store)).persist_play_page(
+    YandexNormalizationPersistence(_database_path(store)).persist_play_page(
         parsed,
         metadata,
     )
-    print(
-        json.dumps(
-            {
-                "page": parsed.model_dump(mode="json", exclude={"raw_game_data"}),
-                "normalized": persisted.model_dump(mode="json"),
-            },
-            ensure_ascii=False,
-            indent=2,
-        )
-    )
+    print(parsed.model_dump_json(indent=2, exclude={"raw_game_data"}))
 
 
 def _add_context_args(parser: argparse.ArgumentParser) -> None:

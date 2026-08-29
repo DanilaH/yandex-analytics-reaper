@@ -23,6 +23,7 @@ dev = [
 
 [project.scripts]
 yandex-reaper = "yandex_analytics_reaper.cli:main"
+yandex-reaper-analyst = "yandex_analytics_reaper.analyst_cli:main"
 yandex-reaper-taxonomy = "yandex_analytics_reaper.taxonomy_execution_cli:main"
 
 [tool.setuptools]

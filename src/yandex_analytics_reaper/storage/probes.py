@@ -52,6 +52,7 @@ class ProbeRunStore(Protocol):
         status: ProbeRunStatus,
         completed_at: AwareDatetime,
         error: str | None = None,
+        error_raw_snapshot_id: str | None = None,
     ) -> ProbeRun: ...
 
     def get_run(self, run_id: str) -> ProbeRunRecord | None: ...
@@ -105,8 +106,9 @@ class SQLiteProbeRunStore:
                     started_at,
                     completed_at,
                     status,
-                    error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL)
+                    error,
+                    error_raw_snapshot_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL)
                 """,
                 (
                     run.id,
@@ -213,6 +215,7 @@ class SQLiteProbeRunStore:
         status: ProbeRunStatus,
         completed_at: AwareDatetime,
         error: str | None = None,
+        error_raw_snapshot_id: str | None = None,
     ) -> ProbeRun:
         _require_aware(completed_at, "completed_at")
         if status is ProbeRunStatus.RUNNING:
@@ -229,6 +232,7 @@ class SQLiteProbeRunStore:
                         "status": status,
                         "completed_at": completed_at,
                         "error": error,
+                        "error_raw_snapshot_id": error_raw_snapshot_id,
                     }
                 )
                 candidate = ProbeRun.model_validate(candidate.model_dump())
@@ -269,17 +273,19 @@ class SQLiteProbeRunStore:
                 completed_at=completed_at,
                 status=status,
                 error=error,
+                error_raw_snapshot_id=error_raw_snapshot_id,
             )
             connection.execute(
                 """
                 UPDATE probe_runs
-                SET completed_at = ?, status = ?, error = ?
+                SET completed_at = ?, status = ?, error = ?, error_raw_snapshot_id = ?
                 WHERE id = ? AND status = ?
                 """,
                 (
                     _timestamp(completed_at),
                     status.value,
                     updated.error,
+                    updated.error_raw_snapshot_id,
                     run.id,
                     ProbeRunStatus.RUNNING.value,
                 ),
@@ -381,6 +387,7 @@ class SQLiteProbeRunStore:
             ),
             status=ProbeRunStatus(str(row["status"])),
             error=_optional_str(row["error"]),
+            error_raw_snapshot_id=_optional_str(row["error_raw_snapshot_id"]),
         )
 
     @staticmethod

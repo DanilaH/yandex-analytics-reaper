@@ -8,6 +8,19 @@ from .feed_depth import (
     RejectedFeedDepthTrial,
     evaluate_feed_depth_trials,
 )
+from .session_profile_stability import (
+    RejectedSessionProfileBlock,
+    SessionProfileBlockObservation,
+    SessionProfileBlockOrder,
+    SessionProfileCohortError,
+    SessionProfileDepthClassification,
+    SessionProfileDepthMetrics,
+    SessionProfileEligibilityError,
+    SessionProfileRunObservation,
+    SessionProfileStabilityExperiment,
+    SessionProfileStabilityReport,
+    evaluate_session_profile_blocks,
+)
 
 __all__ = [
     "FeedDepthDecisionPolicy",
@@ -17,5 +30,16 @@ __all__ = [
     "FeedDepthReport",
     "FeedDepthTrialObservation",
     "RejectedFeedDepthTrial",
+    "RejectedSessionProfileBlock",
+    "SessionProfileBlockObservation",
+    "SessionProfileBlockOrder",
+    "SessionProfileCohortError",
+    "SessionProfileDepthClassification",
+    "SessionProfileDepthMetrics",
+    "SessionProfileEligibilityError",
+    "SessionProfileRunObservation",
+    "SessionProfileStabilityExperiment",
+    "SessionProfileStabilityReport",
     "evaluate_feed_depth_trials",
+    "evaluate_session_profile_blocks",
 ]

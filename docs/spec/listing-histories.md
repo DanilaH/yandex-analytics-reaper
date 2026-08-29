@@ -20,13 +20,13 @@ The first implementation uses only Yandex public surfaces already proven by date
 catalogue.get_games
 → appID
 → media
-→ public catalogue presence
+→ direct public catalogue presence
 
 __playPageData__.gameData
 → appID
 → appVersion
 → publishedTime
-→ public game-page presence
+→ direct public game-page presence
 ```
 
 No new endpoint or scheduler is introduced by this task.
@@ -54,33 +54,36 @@ Source-derived text is not silently normalized. In particular, `appVersion` is p
 
 ## Status-history semantics
 
-The first source-neutral status values are intentionally conservative:
+The v1 persisted status vocabulary is deliberately narrower than the future lifecycle vocabulary:
 
 ```text
 published
-unknown
 ```
 
 `published` means a current public Yandex source directly returned the listing/game object or public game-page payload.
-
-`unknown` means the current observation did not establish a more specific status. It is not an alias for unpublished/deleted.
 
 Controlled reasons in v1:
 
 ```text
 observed_in_catalogue_metadata
 observed_on_game_page
-requested_but_not_returned
 ```
 
-For `catalogue.get_games`:
+A missing result is **not persisted as a negative status in v1**. In particular, a requested ID omitted from one successful `get_games` response cannot yet become `unknown`, `unpublished`, or `deleted`, because the current normalization context does not itself prove that the listing ID belonged to that exact raw request.
 
-- every returned requested `appID` may produce `published / observed_in_catalogue_metadata`;
-- a previously known requested `appID` that is absent from the successful response may produce `unknown / requested_but_not_returned`.
+A future negative-status path must bind, in one verifiable operation:
 
-A successful request that omitted one ID is evidence of non-return for that request, **not** proof of `temporarily_unavailable`, `unpublished`, or `deleted`. Those statuses remain future values only when a source can distinguish them reliably.
+```text
+exact requested app IDs
+→ successful immutable raw response
+→ exact returned app IDs
+→ known listing identity
+→ explicit absence observation
+```
 
-HTTP/source failures are not converted into listing status. The raw failure remains collection evidence; transport failure is not market state.
+Until that request↔response binding exists, omission remains absence of evidence rather than a stored status fact.
+
+HTTP/source failures are likewise not converted into listing status. The raw failure remains collection evidence; transport failure is not market state.
 
 ## Media-history semantics
 
@@ -140,8 +143,6 @@ media
 → canonical SHA-256
 → listing_media_observations.manifest_hash
 ```
-
-For `requested_but_not_returned`, lineage points to the observed `$.games` collection boundary because the evidence is the requested ID's absence from that successful collection.
 
 Every normalized update/status/media item requires at least one `FieldLineage` record. A source-derived history item without raw lineage is invalid rather than merely lower confidence.
 
@@ -203,7 +204,7 @@ One normalized history bundle is persisted transactionally. The typed row, norma
 
 The persistence boundary revalidates the supplied write instead of trusting an already-created Pydantic object. `normalizer_name` / `normalizer_version` must agree with each lineage `transformation_name` / `transformation_version`; inconsistent provenance is rejected.
 
-A platform listing must already exist before a history row can be persisted. This is especially important for `requested_but_not_returned`: only a previously known listing can acquire that conservative unknown-status observation.
+A platform listing must already exist before a history row can be persisted.
 
 ## Observation identity and immutability
 
@@ -243,6 +244,7 @@ This task does not:
 
 - schedule repeated collection;
 - infer update events solely from timestamps;
+- persist negative lifecycle status from result omission without exact request↔response binding;
 - infer deletion/unpublication from one missing result;
 - treat HTTP failure as listing status;
 - invent a cross-source media asset taxonomy before the source shape is profiled;

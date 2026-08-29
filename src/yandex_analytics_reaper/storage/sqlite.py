@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS schema_observations (
     raw_snapshot_id TEXT NOT NULL,
     analyzer_version TEXT NOT NULL,
     contract_id TEXT NOT NULL,
+    comparison_scope_id TEXT NOT NULL,
     source_id TEXT NOT NULL,
     request_key TEXT NOT NULL,
     retrieved_at TEXT NOT NULL,
@@ -116,7 +117,7 @@ CREATE TABLE IF NOT EXISTS schema_observations (
     profile_status TEXT NOT NULL,
     root_type TEXT,
     error TEXT,
-    UNIQUE (raw_snapshot_id, analyzer_version, contract_id)
+    UNIQUE (raw_snapshot_id, analyzer_version, contract_id, comparison_scope_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_schema_observations_source_request_time
@@ -125,6 +126,7 @@ ON schema_observations (
     request_key,
     analyzer_version,
     contract_id,
+    comparison_scope_id,
     retrieved_at,
     raw_snapshot_id
 );

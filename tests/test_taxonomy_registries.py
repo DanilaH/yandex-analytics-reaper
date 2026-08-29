@@ -5,10 +5,12 @@ from pydantic import ValidationError
 
 from yandex_analytics_reaper.taxonomy import (
     DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+    TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
     ControlledLabelDimension,
     ControlledTaxonomyDimensions,
     TaxonomyLabelRegistry,
     get_taxonomy_label_registry,
+    taxonomy_label_registry_content_hash,
 )
 
 
@@ -22,6 +24,14 @@ def test_v1_registry_bundle_defines_each_controlled_dimension_once() -> None:
     assert bundle.registry_for(ControlledLabelDimension.MECHANICS).version == 1
     assert "collect" in bundle.registry_for(ControlledLabelDimension.MECHANICS).labels
     assert "horror" in bundle.registry_for(ControlledLabelDimension.TONES).labels
+
+
+def test_v1_registry_content_identity_is_frozen() -> None:
+    bundle = get_taxonomy_label_registry(1)
+
+    assert taxonomy_label_registry_content_hash(bundle) == (
+        TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH
+    )
 
 
 def test_dimensions_record_registry_version_and_accept_declared_labels() -> None:

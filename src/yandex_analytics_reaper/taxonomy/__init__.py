@@ -11,6 +11,7 @@ from .gold_set import (
     build_taxonomy_gold_set,
     taxonomy_annotation_contract_content_hash,
     validate_taxonomy_annotation_batch,
+    validate_taxonomy_gold_set_report,
 )
 from .models import (
     ControlledTaxonomyDimensions,
@@ -74,4 +75,5 @@ __all__ = [
     "taxonomy_annotation_contract_content_hash",
     "taxonomy_label_registry_content_hash",
     "validate_taxonomy_annotation_batch",
+    "validate_taxonomy_gold_set_report",
 ]

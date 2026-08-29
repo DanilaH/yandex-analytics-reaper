@@ -6,6 +6,7 @@ from .observations import (
     PlatformDeveloper,
 )
 from .probes import ProbeKind, ProbePage, ProbeRun, ProbeRunStatus
+from .search import QueryFamilyMember, QueryFamilyVersion, QueryVariantKind
 
 __all__ = [
     "Game",
@@ -20,5 +21,8 @@ __all__ = [
     "ProbePage",
     "ProbeRun",
     "ProbeRunStatus",
+    "QueryFamilyMember",
+    "QueryFamilyVersion",
+    "QueryVariantKind",
     "SessionProfile",
 ]

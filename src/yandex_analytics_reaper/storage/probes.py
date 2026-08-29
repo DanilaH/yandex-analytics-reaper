@@ -425,8 +425,11 @@ class SQLiteProbeRunStore:
 
 
 def _context_id(context: ProbeContext) -> str:
+    identity = context.model_dump(mode="json")
+    if identity.get("session_instance_id") is None:
+        identity.pop("session_instance_id", None)
     encoded = json.dumps(
-        context.model_dump(mode="json"),
+        identity,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,

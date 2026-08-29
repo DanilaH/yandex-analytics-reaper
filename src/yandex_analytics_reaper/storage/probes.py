@@ -176,6 +176,7 @@ class SQLiteProbeRunStore:
                     INSERT INTO probe_pages (
                         run_id,
                         page_index,
+                        source_id,
                         raw_snapshot_id,
                         retrieved_at,
                         request_page_id,
@@ -183,11 +184,12 @@ class SQLiteProbeRunStore:
                         response_next_page_id,
                         response_rtx_reqid,
                         has_next_page
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         page.run_id,
                         page.page_index,
+                        run.source_id,
                         page.raw_snapshot_id,
                         _timestamp(page.retrieved_at),
                         page.request_page_id,
@@ -199,7 +201,8 @@ class SQLiteProbeRunStore:
                 )
             except sqlite3.IntegrityError as exc:
                 raise ValueError(
-                    f"raw snapshot {page.raw_snapshot_id} is already assigned to a probe page"
+                    f"raw snapshot {run.source_id}/{page.raw_snapshot_id} "
+                    "is already assigned to a probe page"
                 ) from exc
         return page
 

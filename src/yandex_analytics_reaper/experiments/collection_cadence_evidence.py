@@ -40,15 +40,15 @@ from yandex_analytics_reaper.storage import (
 
 from .collection_cadence import (
     ANALYZER_VERSION,
-    MIN_LISTING_SERIES,
-    MIN_REFERENCE_DAYS,
-    RANKING_DEPTHS,
-    SPEC_VERSION,
     CadenceCapability,
     CadenceStateSignal,
     CollectionCadenceReport,
+    MIN_LISTING_SERIES,
+    MIN_REFERENCE_DAYS,
+    RANKING_DEPTHS,
     RankingReferencePoint,
     RankingSeriesObservation,
+    SPEC_VERSION,
     StateReferencePoint,
     StateSeriesObservation,
     evaluate_collection_cadence,
@@ -206,7 +206,7 @@ class CollectionCadenceExperiment:
         for checkpoint in manifest.checkpoints:
             if len(checkpoint.search_run_ids) != len(family.members):
                 raise CollectionCadenceEvidenceError(
-                    "every cadence checkpoint requires exactly one search run per query-family member"
+                    "every checkpoint requires one search run per query-family member"
                 )
 
         state_series, state_rejections = self._load_state_series(manifest)
@@ -229,10 +229,10 @@ class CollectionCadenceExperiment:
         except CollectionCadenceEvidenceError as exc:
             ranking_rejections.extend(
                 RejectedCadenceSeries(
-                    series_id=f"ranking:search:{member.query_text}:depth{depth}",
+                    series_id=f"ranking:search:{query_ordinal}:depth{depth}",
                     reason=str(exc),
                 )
-                for member in family.members
+                for query_ordinal, _member in enumerate(family.members)
                 for depth in RANKING_DEPTHS
             )
 
@@ -281,7 +281,9 @@ class CollectionCadenceExperiment:
                         )
                     )
                 except CollectionCadenceEvidenceError as exc:
-                    rejected.append(RejectedCadenceSeries(series_id=series_id, reason=str(exc)))
+                    rejected.append(
+                        RejectedCadenceSeries(series_id=series_id, reason=str(exc))
+                    )
 
             media_series_id = f"state:{listing_id}:{CadenceStateSignal.MEDIA_MANIFEST.value}"
             try:
@@ -488,7 +490,9 @@ class CollectionCadenceExperiment:
         for run_id in checkpoint.search_run_ids:
             record = self.probe_store.get_run(run_id)
             if record is None:
-                raise CollectionCadenceEvidenceError(f"search probe run does not exist: {run_id}")
+                raise CollectionCadenceEvidenceError(
+                    f"search probe run does not exist: {run_id}"
+                )
             run = record.run
             context = record.context
             if (
@@ -531,7 +535,7 @@ class CollectionCadenceExperiment:
                 expected_context = context
             elif context != expected_context:
                 raise CollectionCadenceEvidenceError(
-                    "all search runs in one cadence checkpoint must share one exact ProbeContext"
+                    "all search runs in one checkpoint must share one exact ProbeContext"
                 )
             _validate_completed_pages(record)
             records[query_text] = record
@@ -915,10 +919,9 @@ def _optional_token(value: object) -> str | None:
 
 
 def _canonical_numeric(value: int | float) -> str:
-    numeric = float(value)
-    if not isfinite(numeric):
+    if isinstance(value, float) and not isfinite(value):
         raise CollectionCadenceEvidenceError("cadence metric value must be finite")
-    return json.dumps(numeric, allow_nan=False, separators=(",", ":"))
+    return json.dumps(value, allow_nan=False, separators=(",", ":"))
 
 
 def _listing_id(value: str) -> str:

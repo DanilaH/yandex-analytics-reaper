@@ -113,6 +113,7 @@ CREATE TABLE IF NOT EXISTS schema_observations (
     source_id TEXT NOT NULL,
     request_key TEXT NOT NULL,
     retrieved_at TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
     schema_hash TEXT,
     profile_status TEXT NOT NULL,
     root_type TEXT,

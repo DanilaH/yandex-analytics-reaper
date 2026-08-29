@@ -49,7 +49,7 @@ def test_v5_probe_contexts_migrate_to_nullable_session_instance_id(tmp_path: Pat
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 6
+        assert version[0] == 7
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(probe_contexts)").fetchall()
@@ -66,3 +66,10 @@ def test_v5_probe_contexts_migrate_to_nullable_session_instance_id(tmp_path: Pat
             2,
             None,
         )
+        tables = {
+            str(item[0])
+            for item in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert {"query_family_versions", "query_family_members"} <= tables

@@ -150,12 +150,15 @@ class YandexPaginatedProbeRunner:
         page_id: str | None = None
         rtx_reqid: str | None = None
         last_retrieved_at: datetime | None = None
+        error_raw_snapshot_id: str | None = None
 
         try:
             for page_index in range(page_limit):
+                error_raw_snapshot_id = None
                 response = collect(page_id, rtx_reqid)
                 metadata = self.raw_store.persist(response)
                 last_retrieved_at = metadata.retrieved_at
+                error_raw_snapshot_id = metadata.id
 
                 if not 200 <= response.status_code < 300:
                     raise ProbeCollectionError(
@@ -208,7 +211,9 @@ class YandexPaginatedProbeRunner:
                     parsed.page_info.rtx_reqid,
                     "hasNextPage=true without rtxReqId",
                 )
+                error_raw_snapshot_id = None
 
+            error_raw_snapshot_id = None
             self.probe_store.finish_run(
                 run.id,
                 status=ProbeRunStatus.COMPLETED,
@@ -225,6 +230,7 @@ class YandexPaginatedProbeRunner:
                     status=status,
                     completed_at=_completion_time(self.clock(), run, last_retrieved_at),
                     error=_error_text(exc),
+                    error_raw_snapshot_id=error_raw_snapshot_id,
                 )
             raise
 

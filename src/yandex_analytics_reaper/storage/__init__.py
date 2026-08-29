@@ -2,6 +2,7 @@ from .comparable_sets import ComparableSetStore, SQLiteComparableSetStore
 from .identity import IdentityStore, SQLiteIdentityStore
 from .lineage import LineageRecord, LineageStore, SQLiteLineageStore
 from .listing_histories import (
+    ListingHistoryObservationWrite,
     ListingHistoryStore,
     ListingHistoryWrite,
     PersistedListingMedia,
@@ -20,6 +21,7 @@ __all__ = [
     "IdentityStore",
     "LineageRecord",
     "LineageStore",
+    "ListingHistoryObservationWrite",
     "ListingHistoryStore",
     "ListingHistoryWrite",
     "MetricStore",

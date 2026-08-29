@@ -24,6 +24,7 @@ from yandex_analytics_reaper.evidence import (
 )
 from yandex_analytics_reaper.normalizers import (
     NormalizationContext,
+    NormalizedListingHistories,
     YandexListingHistoryNormalizer,
 )
 from yandex_analytics_reaper.sources.yandex.parsers import (
@@ -31,6 +32,7 @@ from yandex_analytics_reaper.sources.yandex.parsers import (
     YandexGetGamesParser,
 )
 from yandex_analytics_reaper.storage import (
+    ListingHistoryObservationWrite,
     ListingHistoryWrite,
     SQLiteIdentityStore,
     SQLiteLineageStore,
@@ -78,16 +80,23 @@ def _persist_listing(path: Path, observed_at: datetime) -> None:
 
 
 def _write(
-    histories: object,
+    histories: NormalizedListingHistories,
     context: NormalizationContext,
 ) -> ListingHistoryWrite:
-    return ListingHistoryWrite.model_validate(
-        {
-            "histories": histories,
-            "evidence": _evidence(context),
-            "normalizer_name": YandexListingHistoryNormalizer.__name__,
-            "normalizer_version": YandexListingHistoryNormalizer.version,
-        }
+    observations: list[ListingHistoryObservationWrite] = []
+    for item in (histories.update, histories.status, histories.media):
+        if item is not None:
+            observations.append(
+                ListingHistoryObservationWrite(
+                    observation=item.observation,
+                    lineage=item.lineage,
+                )
+            )
+    return ListingHistoryWrite(
+        observations=tuple(observations),
+        evidence=_evidence(context),
+        normalizer_name=YandexListingHistoryNormalizer.__name__,
+        normalizer_version=YandexListingHistoryNormalizer.version,
     )
 
 
@@ -261,7 +270,7 @@ def test_conflicting_value_or_evidence_under_same_history_identity_is_rejected(
     )
     conflicting_histories = histories.model_copy(update={"update": conflicting_update})
     with pytest.raises(ValueError, match="conflicting listing update observation"):
-        store.persist(write.model_copy(update={"histories": conflicting_histories}))
+        store.persist(_write(conflicting_histories, context))
 
     conflicting_evidence = write.evidence.model_copy(
         update={"semantic_confidence": SemanticConfidence.LOW}

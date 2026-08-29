@@ -172,6 +172,8 @@ median clean unique-organic count
 median persistent unique-organic count
 ```
 
+For the two count diagnostics, pool the two clean-run counts from every eligible block and take their median; independently pool the two persistent-run counts and take their median. The count diagnostics do not affect classification.
+
 The 75th percentile uses deterministic linear interpolation: sort values, calculate `position = (n - 1) * 0.75`, and linearly interpolate between floor/ceiling positions.
 
 ## Predeclared per-depth classification

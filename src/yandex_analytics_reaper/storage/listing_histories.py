@@ -5,7 +5,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, Self, TypeAlias
+from typing import Protocol, Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
@@ -21,7 +21,7 @@ from yandex_analytics_reaper.evidence import EvidenceEnvelope, FieldLineage
 from .lineage import persist_lineage_in_connection
 from .sqlite import SQLiteDatabase
 
-HistoryObservation: TypeAlias = (
+type HistoryObservation = (
     ListingUpdateObservation | ListingStatusObservation | ListingMediaObservation
 )
 

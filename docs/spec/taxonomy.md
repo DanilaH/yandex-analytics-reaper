@@ -14,9 +14,45 @@ one primary gameplay archetype
 controlled multi-label dimensions
 +
 open normalized theme entities
++
+separate fast-changing trend/cultural entities
 ```
 
 Production burden is not part of market taxonomy.
+
+The primary archetype answers **what broad gameplay pattern should this listing aggregate with?**
+Controlled dimensions answer **which mechanics, objectives, meta/session/social and presentation traits does it have?**
+Themes/trends answer **what is the game about or culturally attached to?**
+
+These layers must not be collapsed into one free-form genre/tag bag.
+
+## Draft implementation shape
+
+The Phase 3 draft model is intentionally split into a coarse primary bucket and explicit axes:
+
+```text
+GameTaxonomyDraft
+  primary_archetype
+  dimensions
+    mechanics[]
+    objectives[]
+    meta_systems[]
+    session_model
+    replayability_sources[]
+    tones[]
+    social_mode
+    presentation
+      dimension
+      camera
+      art_style
+  themes[]
+  trend_layers[]
+  observed_monetization
+```
+
+`ControlledTaxonomyDimensions` controls the **shape of the axes** now. Concrete versioned label registries for mechanics/objectives/meta/tone and related controlled values are a separate roadmap task and must not be silently invented in this structural refactor.
+
+Open theme/trend entities intentionally remain outside `ControlledTaxonomyDimensions` because their vocabulary must evolve independently of durable aggregation axes.
 
 ## Primary gameplay archetype
 
@@ -49,9 +85,22 @@ other
 unknown
 ```
 
+This registry deliberately uses market-level buckets rather than low-level actions. For example:
+
+```text
+primary archetype = shooter
+mechanic = shoot / aim
+
+primary archetype = story_adventure
+mechanic = move_avatar / search_hidden
+objective = escape / complete_story
+```
+
+Do not create primary buckets such as `shoot`, `collect`, `build_place`, or `explore` merely because those actions are present in gameplay.
+
 `other` means the game is genuinely outside the current registry. `unknown` means available evidence is insufficient to classify it reliably.
 
-A classifier must be allowed to return `unknown`; it must not guess merely to satisfy the schema.
+A classifier must be allowed to return `unknown`; it must not guess merely to satisfy the schema. The explicit implementation split between `unknown` and `other` is the next roadmap item; until that lands, the draft model must not be treated as ready for automated production classification.
 
 ## Controlled dimensions
 
@@ -63,12 +112,12 @@ objectives[]
 meta_systems[]
 session_model
 replayability_sources[]
-tone[]
+tones[]
 social_mode
 presentation dimensions
 ```
 
-Do not use arbitrary free strings for these dimensions in production classification. New labels require a taxonomy-version change/review.
+The structural model already forbids undeclared axes and arbitrary presentation keys. The concrete label registries are not frozen yet. Their definition/versioning belongs to the dedicated Phase 3 registry task.
 
 ### Mechanics examples
 
@@ -182,13 +231,23 @@ unknown
 
 ## Presentation
 
-Track independent presentation dimensions such as:
+Presentation is an explicit structured dimension rather than a free-form dictionary:
+
+```text
+dimension
+camera
+art_style
+```
+
+Target controlled values include:
 
 ```text
 dimension: 2d / 2_5d / 3d / unknown
 camera: top_down / side / first_person / third_person / isometric / fixed_board / ui_primary / unknown
 art_style: versioned controlled registry
 ```
+
+The concrete registries are not frozen in this structural task.
 
 ## Monetization taxonomy
 

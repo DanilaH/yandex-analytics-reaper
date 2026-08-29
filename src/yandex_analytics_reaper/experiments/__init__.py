@@ -23,6 +23,8 @@ from .collection_cadence_protocol import (
     CollectionCadenceExperiment,
     CollectionCadenceExperimentReport,
     CollectionCadenceManifest,
+    CollectionCadencePlanDeclaration,
+    CollectionCadencePlanFreezer,
 )
 from .feed_depth import (
     FeedDepthDecisionPolicy,
@@ -60,6 +62,8 @@ __all__ = [
     "CollectionCadenceExperiment",
     "CollectionCadenceExperimentReport",
     "CollectionCadenceManifest",
+    "CollectionCadencePlanDeclaration",
+    "CollectionCadencePlanFreezer",
     "CollectionCadenceReport",
     "FeedDepthDecisionPolicy",
     "FeedDepthEligibilityError",

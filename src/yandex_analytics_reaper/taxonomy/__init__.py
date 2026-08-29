@@ -7,9 +7,9 @@ from .models import (
     SocialMode,
 )
 from .registries import (
+    ControlledLabelDimension,
     DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
     TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
-    ControlledLabelDimension,
     TaxonomyLabelRegistry,
     TaxonomyLabelRegistryBundle,
     get_taxonomy_label_registry,

@@ -53,7 +53,7 @@ Phase 1 is complete when this foundation lands on `main`.
 
 ## Phase 3 — Taxonomy validation
 
-- [ ] revise draft taxonomy into a pragmatic primary gameplay-archetype + controlled dimensions model
+- [x] revise draft taxonomy into a pragmatic primary gameplay-archetype + controlled dimensions model
 - [ ] add `unknown` distinct from `other`
 - [ ] define/version controlled label registries for mechanics/objectives/meta/tone
 - [ ] sample 100–200 diverse Yandex games

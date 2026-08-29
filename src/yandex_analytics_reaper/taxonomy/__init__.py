@@ -1,3 +1,17 @@
-from .models import CoreLoop, GameTaxonomyDraft, SessionModel, SocialMode
+from .models import (
+    ControlledTaxonomyDimensions,
+    GameTaxonomyDraft,
+    PresentationDimensions,
+    PrimaryGameplayArchetype,
+    SessionModel,
+    SocialMode,
+)
 
-__all__ = ["CoreLoop", "GameTaxonomyDraft", "SessionModel", "SocialMode"]
+__all__ = [
+    "ControlledTaxonomyDimensions",
+    "GameTaxonomyDraft",
+    "PresentationDimensions",
+    "PrimaryGameplayArchetype",
+    "SessionModel",
+    "SocialMode",
+]

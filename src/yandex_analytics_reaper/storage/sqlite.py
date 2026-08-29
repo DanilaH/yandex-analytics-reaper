@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -252,6 +252,90 @@ CREATE TABLE IF NOT EXISTS query_family_members (
 
 CREATE INDEX IF NOT EXISTS idx_query_family_versions_latest
 ON query_family_versions (family_id, version DESC);
+""",
+    8: """
+CREATE TABLE IF NOT EXISTS comparable_set_versions (
+    set_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    construction_method TEXT NOT NULL,
+    query_family_id TEXT NOT NULL,
+    query_family_version INTEGER NOT NULL,
+    source_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    context_id TEXT NOT NULL REFERENCES probe_contexts(id),
+    requested_page_limit INTEGER NOT NULL,
+    parser_name TEXT NOT NULL,
+    parser_version TEXT NOT NULL,
+    observed_from TEXT NOT NULL,
+    observed_to TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (set_id, version),
+    FOREIGN KEY (query_family_id, query_family_version)
+        REFERENCES query_family_versions(family_id, version),
+    CHECK (version >= 1),
+    CHECK (query_family_version >= 1),
+    CHECK (requested_page_limit >= 1)
+);
+
+CREATE TABLE IF NOT EXISTS comparable_set_runs (
+    set_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    query_ordinal INTEGER NOT NULL,
+    query_text TEXT NOT NULL,
+    probe_run_id TEXT NOT NULL REFERENCES probe_runs(id),
+    PRIMARY KEY (set_id, version, query_ordinal),
+    UNIQUE (set_id, version, query_text),
+    UNIQUE (set_id, version, probe_run_id),
+    FOREIGN KEY (set_id, version)
+        REFERENCES comparable_set_versions(set_id, version)
+        ON DELETE CASCADE,
+    CHECK (query_ordinal >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS comparable_set_members (
+    set_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    ordinal INTEGER NOT NULL,
+    platform_listing_id TEXT NOT NULL,
+    PRIMARY KEY (set_id, version, ordinal),
+    UNIQUE (set_id, version, platform_listing_id),
+    FOREIGN KEY (set_id, version)
+        REFERENCES comparable_set_versions(set_id, version)
+        ON DELETE CASCADE,
+    CHECK (ordinal >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS comparable_set_member_evidence (
+    set_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    evidence_ordinal INTEGER NOT NULL,
+    platform_listing_id TEXT NOT NULL,
+    probe_run_id TEXT NOT NULL REFERENCES probe_runs(id),
+    raw_snapshot_id TEXT NOT NULL,
+    page_index INTEGER NOT NULL,
+    source_object_path TEXT NOT NULL,
+    PRIMARY KEY (set_id, version, evidence_ordinal),
+    UNIQUE (
+        set_id,
+        version,
+        platform_listing_id,
+        probe_run_id,
+        raw_snapshot_id,
+        page_index,
+        source_object_path
+    ),
+    FOREIGN KEY (set_id, version, platform_listing_id)
+        REFERENCES comparable_set_members(set_id, version, platform_listing_id)
+        ON DELETE CASCADE,
+    CHECK (evidence_ordinal >= 0),
+    CHECK (page_index >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_comparable_set_versions_latest
+ON comparable_set_versions (set_id, version DESC);
+
+CREATE INDEX IF NOT EXISTS idx_comparable_set_evidence_run
+ON comparable_set_member_evidence (probe_run_id, page_index, raw_snapshot_id);
 """,
 }
 

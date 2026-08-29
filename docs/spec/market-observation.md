@@ -201,21 +201,24 @@ Possible cadence: daily, several times/week, weekly, or event-driven.
 
 `totalGamesCount` remains a per-search supply signal. Do not sum it across variants and call the result a competitor count.
 
-Search intent definitions use the immutable/versioned query-family semantics in `search-query-family.md`:
+Search intent definitions use the immutable/versioned query-family semantics in `search-query-family.md`. The first comparable-set construction is frozen separately in `comparable-set.md`:
 
 ```text
-exact QueryFamilyVersion
-→ exact ordered member strings
-→ search ProbeRuns whose persisted query_text matches declared members
-→ result union
-→ dedupe listing IDs
-→ taxonomy filtering/similarity
-→ versioned comparable set
+exact persisted QueryFamilyVersion
+→ exactly one explicit completed clean search ProbeRun per member
+→ raw request/body replay with exact query/context/page linkage
+→ parsed organic result union
+→ dedupe by yandex_games:<appID>
+→ immutable yandex_search_union_v1 comparable-set version + evidence
 ```
 
-Query-family membership is explicit and versioned; it is never inferred from fuzzy similarity after collection. Downstream result unions/comparable sets must record the exact family/version they consumed rather than resolving `latest` retrospectively.
+Query/run association is derived from exact persisted `query_text`, not caller order or fuzzy matching. All runs in `yandex_search_union_v1` share one exact `ProbeContext` and requested page limit. The current construction uses `clean_anonymous`; it does not consume the still-pending empirical session-profile result.
 
-Result-union and comparable-set construction remain separate roadmap work. The query-family model itself does not generate synonyms or claim completeness of its variants.
+The union order is deterministic provenance order, not a relevance score: query-family ordinal → page index → parsed card order. Repeated organic listings add evidence but do not duplicate members. Sponsored cards do not contribute membership.
+
+The current set is explicitly a **provisional search-derived candidate peer set**. Phase 3 taxonomy is still draft, so this construction does not auto-filter with the unvalidated classifier and does not claim every member is a confirmed gameplay comparable. Later taxonomy-refined construction must create a new version/method rather than rewrite historical search-union sets.
+
+The parser owns the card representation available to this construction. `yandex_search_union_v1` uses `YandexFeedParser@2`; raw snapshots remain immutable so a later parser/construction version can revisit source details without rewriting v1 evidence.
 
 ## Listing availability
 

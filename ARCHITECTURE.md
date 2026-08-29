@@ -41,6 +41,7 @@ The parser answers **what the source said**. The normalizer answers **what that 
 ```text
 src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
+  comparables/    versioned peer-set construction over persisted search evidence
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
   experiments/    versioned replay/calibration evaluators over stored evidence
@@ -172,6 +173,29 @@ The experiment layer must reject or report ineligible evidence rather than repai
 
 Synthetic fixture tests validate analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth and session-profile items remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
 
+## Comparable-set construction boundary
+
+Comparable-set construction consumes persisted search evidence; it does not own query generation or collection. The first implementation is `comparables/yandex_search.py` with construction method `yandex_search_union_v1`.
+
+```text
+exact persisted QueryFamilyVersion
++ explicit completed search ProbeRun IDs
+→ bind one exact run to each family member by persisted query_text
+→ require one exact clean ProbeContext + requested page limit
+→ replay immutable raw request/body/page evidence
+→ verify raw query/context/pagination + content hash + ProbePage linkage
+→ parse with YandexFeedParser@2
+→ organic union / dedupe by yandex_games:<appID>
+→ deterministic first-occurrence member order + all parsed organic evidence
+→ immutable ComparableSetVersion persistence
+```
+
+The builder does not infer convenient runs, fuzzy query membership, taxonomy labels, or relevance scores. Caller run order is irrelevant; family member ordinal controls traversal. Sponsored cards are preserved in raw evidence but do not create comparable-set membership.
+
+The v1 set is deliberately provisional because Phase 3 taxonomy is still draft. It is a reproducible search-derived candidate peer set, not a claim that every member is a validated gameplay comparable. Taxonomy-based refinement must be a later explicit construction method/version and must never rewrite historical v1 sets.
+
+The SQLite comparable-set store validates the exact persisted query-family membership, referenced search runs/context, observation interval, and probe-page raw identities before writing. Reads revalidate operational references and fail closed on provenance drift. The store does not reparse raw source bodies; source-semantic replay belongs to the builder boundary.
+
 ## Schema drift
 
 Schema monitoring observes source shape; it does **not** repair source changes or teach parsers to accept them automatically.
@@ -274,12 +298,14 @@ versioned schema observations / field profiles / drift events
 probe contexts
 logical paginated probe runs
 ordered probe pages + cursor-chain/raw-snapshot linkage
+immutable query-family versions + ordered exact members
+immutable comparable-set versions + run/member/raw membership evidence
 ```
 
 Probe contexts store safe session provenance, including the stable non-secret persistent-profile instance ID, but never secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
 
 Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 
-Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
+Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. Query-family/comparable-set version writes are idempotent only for identical content and reject conflicting reuse of an existing version identity.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

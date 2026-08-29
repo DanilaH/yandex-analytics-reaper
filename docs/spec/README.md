@@ -14,6 +14,7 @@ market-observation.md
 feed-depth-experiment.md
 session-profile-stability-experiment.md
 search-query-family.md
+comparable-set.md
 historical-backtesting.md
 data-model.md
 decision-policy.md

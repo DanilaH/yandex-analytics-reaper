@@ -348,17 +348,60 @@ query_family_members
 
 `(family_id, version)` identifies one frozen declaration. Member `ordinal` preserves exact order; exact query text is unique within the version. One seed must exist at ordinal 0. An identical rewrite is idempotent, while different content under an existing family/version is a persistence conflict rather than an overwrite.
 
-Existing search `probe_runs.query_text` remains the exact request text actually sent. A later query-family execution/result-union layer must bind runs to an exact declared family/version and exact member text; it must not infer membership fuzzily.
+Existing search `probe_runs.query_text` remains the exact request text actually sent. Query-family execution provenance must bind runs to an exact declared family/version and exact member text; it must not infer membership fuzzily.
 
-Future search-result/comparable-set persistence remains staged after the query-family model:
+The first persisted comparable-set construction is `yandex_search_union_v1`:
 
 ```text
-search_results
-comparable_sets
+comparable_set_versions
+  set_id
+  version
+  construction_method
+  query_family_id
+  query_family_version
+  source_id
+  language
+  context_id
+  requested_page_limit
+  parser_name
+  parser_version
+  observed_from
+  observed_to
+  created_at
+
+comparable_set_runs
+  set_id
+  version
+  query_ordinal
+  query_text
+  probe_run_id
+
 comparable_set_members
+  set_id
+  version
+  ordinal
+  platform_listing_id
+
+comparable_set_member_evidence
+  set_id
+  version
+  evidence_ordinal
+  platform_listing_id
+  probe_run_id
+  raw_snapshot_id
+  page_index
+  source_object_path
 ```
 
-`totalGamesCount` is stored as a per-search supply observation, not competitor count, and must not be summed across query variants as if the result sets were disjoint.
+`yandex_search_union_v1` references exactly one persisted query-family version and exactly one explicit completed `clean_anonymous` search run per family member. All runs share one exact context and requested page limit. The builder replays immutable raw search bodies with `YandexFeedParser@2`, verifies raw request/query/context/pagination metadata plus stored `ProbePage` linkage, excludes sponsored cards, and deduplicates organic results by `yandex_games:<appID>`.
+
+Member `ordinal` is first organic occurrence in deterministic query-family/page/parser-card traversal order. It is provenance/convenience, not a relevance score. `evidence_ordinal` preserves the exact stored evidence tuple order; each evidence row links a member back to its run, raw snapshot, page, and parser-owned source object path.
+
+`observed_from`/`observed_to` declare the actual multi-run observation interval. Identical `(set_id, version)` writes are idempotent; different content is a conflict. Persistence validates the referenced query-family/run/page identities, and reads fail closed if those operational references drift.
+
+The v1 set is a provisional search-derived candidate peer set. It does not auto-filter with the draft taxonomy and does not claim every member is a validated gameplay comparable. Taxonomy-refined construction requires a new explicit method/version later.
+
+General normalized `search_results` persistence remains separate future work; the current v1 comparable construction replays the immutable raw search probe pages directly. `totalGamesCount` remains a per-search supply observation, not competitor count, and must not be summed across query variants as if the result sets were disjoint.
 
 ## Taxonomy
 

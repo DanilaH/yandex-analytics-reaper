@@ -11,6 +11,8 @@ Current Yandex `get_games` and game-page normalization can produce descriptive f
 ```text
 title
 developer_id
+developer_name
+first_published_at
 app_version
 published_at
 languages
@@ -77,6 +79,25 @@ Metric periods are not accepted on listing-state evidence.
 
 Every Yandex listing state must include lineage for `platform_listing_id`. Other populated source-observed fields receive their own raw source-field mapping where the parser exposes that field.
 
+## Publication semantics
+
+Two Yandex timestamps remain deliberately separate:
+
+```text
+get_games.firstPublished
+→ listing_state_observations.first_published_at
+→ first-publication metadata used for listing age/recent-release analysis
+
+game page publishedTime
+→ listing_state_observations.published_at
+→ page-level published/update metadata
+→ also preserved in listing_update_observations.source_published_at
+```
+
+Do not substitute one for the other. A later `publishedTime` must not make an old game look newly released.
+
+`developer_name` is also a source-observed listing-state value. Analyst snapshots must not recover it from the mutable current `platform_developers.display_name`, because a later developer rename would otherwise rewrite the apparent metadata of an older frozen snapshot.
+
 ## Missingness
 
 Nullable fields remain nullable.
@@ -122,4 +143,6 @@ Do not infer a new update/status event merely because a later listing-state row 
 
 ## Versioning
 
-Adding listing-state field lineage changes `YandexGameNormalizer` from v2 to v3. Existing v2 normalized observations remain valid historical evidence; new normalization writes use v3 and do not mutate old rows in place.
+`YandexGameNormalizer` v3 introduced persisted listing-state field lineage. Existing v2 normalized observations remain valid historical evidence.
+
+`YandexGameNormalizer` v4 adds snapshot-scoped `developer_name` and `first_published_at` lineage required by `analyst-market-export-v1`. Existing v3 observations remain valid; they simply cannot provide those two fields to a frozen export unless they were actually observed/persisted under a supporting normalizer version.

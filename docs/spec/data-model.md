@@ -7,6 +7,7 @@ This document owns the logical persistence model. Runtime/package boundaries are
 ```text
 Sources
 → Raw immutable snapshots
+→ Versioned schema observations/contracts where applicable
 → Versioned source parsers
 → Source DTOs
 → Versioned normalizers
@@ -328,14 +329,63 @@ Freeze the dossier/prediction used before build, then store realized development
 
 ## Schema drift
 
-A schema fingerprint alone is insufficient. Phase 2 drift monitoring should include at least:
+A schema fingerprint alone is insufficient. Phase 2 persists replayable structural analyses rather than overwriting one current schema state.
 
 ```text
-field presence
-field types
-important nested shapes
-missingness changes
-parse failures
+schema_observations
+  id
+  raw_snapshot_id
+  analyzer_version
+  contract_id
+  comparison_scope_id
+  source_id
+  request_key
+  retrieved_at
+  content_hash
+  schema_hash
+  profile_status
+  root_type
+  error
+
+schema_field_profiles
+  schema_observation_id
+  field_path
+  value_types
+  present_count
+  parent_count
+  presence_ratio
+
+schema_drift_events
+  id
+  schema_observation_id
+  raw_snapshot_id
+  kind
+  severity
+  field_path
+  previous/current types
+  previous/current presence ratios
+  details
+  message
 ```
 
-Do not silently auto-adapt source interpretations.
+`content_hash` binds an analysis to the exact immutable raw body. The same raw snapshot can have multiple analyses when the analyzer or explicit contract changes; historical analyses are not rewritten.
+
+Temporal change detection is scoped by `comparison_scope_id`. A source adapter owns the definition of comparable request context. For Yandex this prevents different devices, search queries, unrelated `get_games` cohorts, and first-vs-paginated feed observations from becoming false baselines for one another. Volatile pagination token values are not themselves part of the comparison identity.
+
+A temporal baseline must be strictly earlier by `retrieved_at`. Equal timestamps are not given a synthetic causal order by snapshot ID, and an out-of-order historical backfill never compares against a future observation.
+
+Current structural checks include:
+
+```text
+field presence / new / removed fields
+exact JSON value types
+important contract fields/types
+missingness changes with minimum sample guard
+root type
+raw JSON parse failures
+source-parser failures
+```
+
+Breaking explicit-contract drift blocks semantic interpretation only **after** the raw response has been preserved. Warning/info drift remains observable without stopping collection. The registry never silently coerces or auto-adapts parser semantics.
+
+The generic structural profiler currently applies to Yandex JSON `feed`, `search`, and `get_games` responses. Raw `game.page` is HTML; its current drift coverage is parser-failure monitoring around `__playPageData__`, not generic JSON profiling over the HTML document.

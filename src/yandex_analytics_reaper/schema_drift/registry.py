@@ -48,12 +48,7 @@ class SQLiteSchemaDriftRegistry:
         _require_body_matches_metadata(metadata, body)
 
         contract_id = contract.contract_id if contract is not None else "uncontracted"
-        analysis_id = _analysis_id(
-            metadata.id,
-            ANALYZER_VERSION,
-            contract_id,
-            scope_id,
-        )
+        analysis_id = _analysis_id(metadata.id, ANALYZER_VERSION, contract_id, scope_id)
         with self.database.connect() as connection:
             existing = self._load_analysis(connection, analysis_id)
             if existing is not None:
@@ -68,19 +63,18 @@ class SQLiteSchemaDriftRegistry:
                 contract_id=contract_id,
                 comparison_scope_id=scope_id,
             )
-            events = _evaluate(
-                analysis_id=analysis_id,
-                current=profile,
-                previous=previous,
-                contract=contract,
-            )
             analysis = SchemaAnalysis(
                 analysis_id=analysis_id,
                 analyzer_version=ANALYZER_VERSION,
                 contract_id=contract_id,
                 comparison_scope_id=scope_id,
                 profile=profile,
-                events=events,
+                events=_evaluate(
+                    analysis_id=analysis_id,
+                    current=profile,
+                    previous=previous,
+                    contract=contract,
+                ),
             )
             self._persist_analysis(connection, analysis)
             stored = self._load_analysis(connection, analysis_id)
@@ -103,17 +97,13 @@ class SQLiteSchemaDriftRegistry:
         error = _require_non_blank(error, "error")
 
         contract_id = f"parser:{parser_name}:{parser_version}"
-        analysis_id = _analysis_id(
-            metadata.id,
-            ANALYZER_VERSION,
-            contract_id,
-            scope_id,
-        )
+        analysis_id = _analysis_id(metadata.id, ANALYZER_VERSION, contract_id, scope_id)
         profile = SchemaProfile(
             raw_snapshot_id=metadata.id,
             source_id=metadata.source_id,
             request_key=metadata.request_key,
             retrieved_at=metadata.retrieved_at,
+            content_hash=metadata.content_hash,
             schema_hash=metadata.schema_hash,
             status=SchemaProfileStatus.NOT_PROFILED,
         )
@@ -197,10 +187,7 @@ class SQLiteSchemaDriftRegistry:
         return None if analysis is None else analysis.profile
 
     @staticmethod
-    def _persist_analysis(
-        connection: sqlite3.Connection,
-        analysis: SchemaAnalysis,
-    ) -> None:
+    def _persist_analysis(connection: sqlite3.Connection, analysis: SchemaAnalysis) -> None:
         profile = analysis.profile
         connection.execute(
             """
@@ -213,11 +200,12 @@ class SQLiteSchemaDriftRegistry:
                 source_id,
                 request_key,
                 retrieved_at,
+                content_hash,
                 schema_hash,
                 profile_status,
                 root_type,
                 error
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 analysis.analysis_id,
@@ -228,6 +216,7 @@ class SQLiteSchemaDriftRegistry:
                 profile.source_id,
                 profile.request_key,
                 _timestamp(profile.retrieved_at),
+                profile.content_hash,
                 profile.schema_hash,
                 profile.status.value,
                 profile.root_type.value if profile.root_type is not None else None,
@@ -336,6 +325,7 @@ class SQLiteSchemaDriftRegistry:
             source_id=str(row["source_id"]),
             request_key=str(row["request_key"]),
             retrieved_at=_parse_timestamp(str(row["retrieved_at"])),
+            content_hash=str(row["content_hash"]),
             schema_hash=_optional_str(row["schema_hash"]),
             status=SchemaProfileStatus(str(row["profile_status"])),
             root_type=(
@@ -670,6 +660,7 @@ def _assert_analysis_matches_metadata(
         or profile.source_id != metadata.source_id
         or profile.request_key != metadata.request_key
         or profile.retrieved_at != metadata.retrieved_at
+        or profile.content_hash != metadata.content_hash
         or profile.schema_hash != metadata.schema_hash
         or analysis.comparison_scope_id != comparison_scope_id
     ):

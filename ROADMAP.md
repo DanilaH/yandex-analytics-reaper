@@ -40,6 +40,8 @@ Phase 1 is complete when this foundation lands on `main`.
   - [x] freeze `feed-depth-v1` protocol and merge replay/analyzer tooling
   - [ ] execute the empirical calibration with the frozen minimum sample/time-span guards and record the resulting depth decision
 - [ ] session-profile stability experiment
+  - [x] freeze `session-profile-stability-v1` protocol and merge matched-block replay/analyzer tooling
+  - [ ] execute the empirical matched-block calibration with the frozen sample/time/order guards and record per-depth classifications
 - [ ] search query-family model
 - [ ] comparable-set construction
 - [ ] update/status/media histories

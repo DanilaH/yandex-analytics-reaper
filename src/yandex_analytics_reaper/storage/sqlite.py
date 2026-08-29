@@ -203,7 +203,8 @@ ON probe_runs (source_id, request_key, context_id, started_at, id);
 CREATE TABLE IF NOT EXISTS probe_pages (
     run_id TEXT NOT NULL REFERENCES probe_runs(id) ON DELETE CASCADE,
     page_index INTEGER NOT NULL,
-    raw_snapshot_id TEXT NOT NULL UNIQUE,
+    source_id TEXT NOT NULL,
+    raw_snapshot_id TEXT NOT NULL,
     retrieved_at TEXT NOT NULL,
     request_page_id TEXT,
     request_rtx_reqid TEXT,
@@ -211,12 +212,13 @@ CREATE TABLE IF NOT EXISTS probe_pages (
     response_rtx_reqid TEXT,
     has_next_page INTEGER NOT NULL,
     PRIMARY KEY (run_id, page_index),
+    UNIQUE (source_id, raw_snapshot_id),
     CHECK (page_index >= 0),
     CHECK (has_next_page IN (0, 1))
 );
 
 CREATE INDEX IF NOT EXISTS idx_probe_pages_snapshot
-ON probe_pages (raw_snapshot_id, run_id, page_index);
+ON probe_pages (source_id, raw_snapshot_id, run_id, page_index);
 """,
 }
 

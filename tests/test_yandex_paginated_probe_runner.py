@@ -161,6 +161,12 @@ def test_runner_rejects_unprepared_session_context(tmp_path: Path) -> None:
             page_limit=1,
         )
 
+    with pytest.raises(ValueError, match="authenticated_test probe requires"):
+        runner.run_feed(
+            ProbeContext(session_profile=SessionProfile.AUTHENTICATED_TEST),
+            page_limit=1,
+        )
+
 
 def test_feed_runner_groups_cursor_chain_and_completes_on_source_exhaustion(
     tmp_path: Path,

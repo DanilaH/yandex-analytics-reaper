@@ -261,7 +261,7 @@ class SQLiteComparableSetStore:
             or str(context_row["session_profile"]) != SessionProfile.CLEAN_ANONYMOUS.value
             or context_row["session_instance_id"] is not None
             or context_row["cookie_state_hash"] is not None
-            or int(context_row["profile_age_days"]) != 0
+            or context_row["profile_age_days"] != 0
         ):
             raise ValueError(
                 "yandex_search_union_v1 requires one persisted clean-anonymous null-region context"

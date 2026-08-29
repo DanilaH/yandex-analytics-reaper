@@ -11,7 +11,7 @@ CollectedResponse
   ↓
 Raw immutable snapshots
   ↓
-Versioned source parsers
+Schema-drift observation + versioned source parsers
   ↓
 Source DTOs
   ↓
@@ -44,8 +44,9 @@ src/yandex_analytics_reaper/
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
   normalizers/    source DTO → stable domain observation boundary
+  schema_drift/   versioned raw-shape profiling/contracts/drift events
   sources/        source capability contracts
-    yandex/        Yandex client + source DTO parsers
+    yandex/        Yandex client + source DTO parsers/contracts
   storage/        raw snapshot + normalized operational persistence
   taxonomy/       draft taxonomy schema foundations
   cli.py          explicit local probes/debug interface
@@ -75,15 +76,29 @@ Collection produces a `CollectedResponse`. Persist it before any source interpre
 CollectedResponse
   ↓ persist
 RawSnapshotMetadata + exact body
+  ↓ schema profile/contract where applicable
+Raw shape + drift events
   ↓ parser(version)
 Source DTO + exact source object path where applicable
   ↓ normalizer(version)
 Domain Observation + FieldLineage
 ```
 
-Raw snapshots contain request/response facts and safe request context only. They are independent of parser and normalizer versions so historical data can be reparsed/reinterpreted after implementation changes.
+Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
 
 The filesystem raw store supports deterministic metadata lookup by `(source_id, raw_snapshot_id)`, so a lineage record can be resolved back to immutable snapshot metadata and the exact stored body without a separate raw-snapshot database index.
+
+## Schema drift
+
+Schema monitoring observes source shape; it does **not** repair source changes or teach parsers to accept them automatically.
+
+For JSON surfaces the current flow profiles normalized JSON paths, exact value types, parent/present counts, missingness ratios, root type, parse failures, and explicit source contracts. Each persisted analysis is versioned by analyzer + contract and is bound to the raw snapshot's exact SHA-256 content identity.
+
+Temporal comparisons occur only inside a source-defined `comparison_scope_id`. Yandex scope construction keeps relevant request context while excluding volatile pagination-token values, so desktop/mobile, different search queries, and unrelated `get_games` cohorts cannot create false drift against each other. Baselines are strictly earlier by `retrieved_at`; equal timestamps are not artificially ordered by snapshot IDs.
+
+Breaking contract drift stops semantic interpretation **after raw persistence**. Informational/warning drift is recorded without blocking the probe. Parser failures are separate breaking events.
+
+The generic structural profiler currently covers the JSON `feed`, `search`, and `get_games` surfaces. The raw `game.page` response is HTML; it currently has parser-failure monitoring for `__playPageData__`, not generic JSON structural profiling over the HTML body.
 
 ## Lineage
 
@@ -151,7 +166,7 @@ search discovery
 rich game metadata
 ```
 
-Collectors return raw responses. Parsers own Yandex response-shape interpretation and preserve exact source object paths needed for lineage. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations plus field-level lineage.
+Collectors return raw responses. Yandex schema contracts/scopes own source-specific structural expectations and comparison boundaries. Parsers own Yandex response-shape interpretation and preserve exact source object paths needed for lineage. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations plus field-level lineage.
 
 ## Persistence boundary
 
@@ -171,10 +186,11 @@ normalized numeric metric observations
 metric observation/evidence envelopes
 normalizer name/version used for persisted metrics
 field-level observation lineage
+versioned schema observations / field profiles / drift events
 ```
 
 Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
 
-Probe runs and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric/lineage persistence.
+Probe runs and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric/lineage/schema persistence.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

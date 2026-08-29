@@ -63,3 +63,18 @@ def test_cli_parses_explicit_session_profile_blocks() -> None:
         ["probe:five", "probe:six", "probe:seven", "probe:eight"],
     ]
     assert args.output == "data/raw"
+
+
+def test_cli_parses_collection_cadence_manifest() -> None:
+    args = build_parser().parse_args(
+        [
+            "analyze-collection-cadence",
+            "cadence-manifest.json",
+            "--output",
+            "data/raw",
+        ]
+    )
+
+    assert args.command == "analyze-collection-cadence"
+    assert args.manifest == "cadence-manifest.json"
+    assert args.output == "data/raw"

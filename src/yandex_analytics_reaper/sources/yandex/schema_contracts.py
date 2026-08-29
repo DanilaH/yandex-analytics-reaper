@@ -168,11 +168,14 @@ def _normalized_context(request_key: str, context: Mapping[str, object]) -> obje
 
         probe_context = normalized.get("probe_context")
         if isinstance(probe_context, dict):
-            normalized["probe_context"] = {
+            stable_context = {
                 key: value
                 for key, value in probe_context.items()
                 if key not in _VOLATILE_SESSION_CONTEXT_KEYS
             }
+            if stable_context.get("session_instance_id") is None:
+                stable_context.pop("session_instance_id", None)
+            normalized["probe_context"] = stable_context
 
     if request_key == "catalogue.get_games":
         app_ids = normalized.get("app_ids")

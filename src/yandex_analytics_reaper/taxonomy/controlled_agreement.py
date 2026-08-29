@@ -36,7 +36,7 @@ CONTROLLED_DIMENSION_AGREEMENT_CONTRACT_VERSION: Literal[
     "controlled-dimension-agreement-v1"
 ] = "controlled-dimension-agreement-v1"
 CONTROLLED_DIMENSION_AGREEMENT_CONTRACT_V1_CONTENT_HASH = (
-    "HASH_PLACEHOLDER"
+    "9bebd5221d664ace6b6c046384bed76bbd37153908b4852317cfa74a4832798b"
 )
 CONTROLLED_DIMENSION_AGREEMENT_TARGET = 0.90
 _CONTROLLED_DIMENSIONS = tuple(ControlledLabelDimension)
@@ -74,7 +74,9 @@ class ControlledDimensionAgreementSourceBatch(BaseModel):
     @classmethod
     def validate_identifier(cls, value: str) -> str:
         if not value or value != value.strip():
-            raise ValueError("controlled-agreement source identifiers must be nonblank and trimmed")
+            raise ValueError(
+                "controlled-agreement source identifiers must be nonblank and trimmed"
+            )
         return value
 
     @field_validator("annotation_batch_hash")
@@ -114,10 +116,12 @@ class ControlledLabelGoldAlignment(BaseModel):
                 "controlled label assignments must equal gold-alignment true + false positives"
             )
         precision_denominator = (
-            self.gold_alignment_true_positive_count + self.gold_alignment_false_positive_count
+            self.gold_alignment_true_positive_count
+            + self.gold_alignment_false_positive_count
         )
         recall_denominator = (
-            self.gold_alignment_true_positive_count + self.gold_alignment_false_negative_count
+            self.gold_alignment_true_positive_count
+            + self.gold_alignment_false_negative_count
         )
         if self.gold_alignment_precision != _optional_rate(
             self.gold_alignment_true_positive_count,
@@ -164,26 +168,34 @@ class ControlledDimensionAgreementEntry(BaseModel):
             self.dimension
         )
         if self.registry_labels != registry.labels:
-            raise ValueError("controlled-dimension registry labels do not match frozen registry")
+            raise ValueError(
+                "controlled-dimension registry labels do not match frozen registry"
+            )
         if tuple(metric.label for metric in self.label_metrics) != self.registry_labels:
-            raise ValueError("controlled label metrics must follow exact registry-label order")
+            raise ValueError(
+                "controlled label metrics must follow exact registry-label order"
+            )
         if (
             self.pairwise_exact_match_count + self.pairwise_exact_mismatch_count
             != self.pairwise_comparison_count
         ):
-            raise ValueError("controlled-dimension pairwise counts must cover every comparison")
+            raise ValueError(
+                "controlled-dimension pairwise counts must cover every comparison"
+            )
         if self.pairwise_exact_match_rate != (
             self.pairwise_exact_match_count / self.pairwise_comparison_count
         ):
-            raise ValueError("controlled-dimension agreement rate is inconsistent with counts")
+            raise ValueError(
+                "controlled-dimension agreement rate is inconsistent with counts"
+            )
         if self.initial_agreement_target != CONTROLLED_DIMENSION_AGREEMENT_TARGET:
             raise ValueError("controlled-dimension agreement target does not match v1")
         if self.meets_initial_agreement_target != (
             self.pairwise_exact_match_rate >= CONTROLLED_DIMENSION_AGREEMENT_TARGET
         ):
-            raise ValueError("controlled-dimension target result is inconsistent with rate")
-        if self.unanimous_listing_rate < 0.0 or self.unanimous_listing_rate > 1.0:
-            raise ValueError("controlled-dimension unanimous rate is outside [0, 1]")
+            raise ValueError(
+                "controlled-dimension target result is inconsistent with rate"
+            )
         return self
 
 
@@ -208,7 +220,10 @@ class ControlledDimensionAgreementReport(BaseModel):
     source_batches: tuple[ControlledDimensionAgreementSourceBatch, ...] = Field(min_length=2)
     total_labels: int = Field(ge=100, le=200)
     source_batch_count: int = Field(ge=2)
-    dimensions: tuple[ControlledDimensionAgreementEntry, ...] = Field(min_length=4, max_length=4)
+    dimensions: tuple[ControlledDimensionAgreementEntry, ...] = Field(
+        min_length=4,
+        max_length=4,
+    )
     all_dimensions_meet_initial_agreement_target: bool
     agreement_content_hash: str
 
@@ -238,25 +253,42 @@ class ControlledDimensionAgreementReport(BaseModel):
             self.agreement_contract_content_hash
             != CONTROLLED_DIMENSION_AGREEMENT_CONTRACT_V1_CONTENT_HASH
         ):
-            raise ValueError("controlled-agreement contract content hash does not match v1")
+            raise ValueError(
+                "controlled-agreement contract content hash does not match v1"
+            )
         if self.annotation_contract_content_hash != ANNOTATION_CONTRACT_V1_CONTENT_HASH:
-            raise ValueError("controlled-agreement annotation contract hash does not match v1")
+            raise ValueError(
+                "controlled-agreement annotation contract hash does not match v1"
+            )
         if self.label_registry_content_hash != TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH:
-            raise ValueError("controlled-agreement label-registry hash does not match v1")
+            raise ValueError(
+                "controlled-agreement label-registry hash does not match v1"
+            )
         if self.source_batch_count != len(self.source_batches):
-            raise ValueError("controlled-agreement source_batch_count must match source refs")
+            raise ValueError(
+                "controlled-agreement source_batch_count must match source refs"
+            )
         _validate_source_batch_uniqueness(self.source_batches)
         if tuple(entry.dimension for entry in self.dimensions) != _CONTROLLED_DIMENSIONS:
             raise ValueError("controlled-agreement dimensions must follow registry order")
         pair_count = self.source_batch_count * (self.source_batch_count - 1) // 2
         expected_comparisons = pair_count * self.total_labels
+        total_assignments = self.total_labels * self.source_batch_count
         for entry in self.dimensions:
             if entry.pairwise_comparison_count != expected_comparisons:
-                raise ValueError("controlled-dimension comparison count is inconsistent")
+                raise ValueError(
+                    "controlled-dimension comparison count is inconsistent"
+                )
             if entry.unanimous_listing_count > self.total_labels:
-                raise ValueError("controlled-dimension unanimous count exceeds total labels")
-            if entry.unanimous_listing_rate != entry.unanimous_listing_count / self.total_labels:
-                raise ValueError("controlled-dimension unanimous rate is inconsistent with count")
+                raise ValueError(
+                    "controlled-dimension unanimous count exceeds total labels"
+                )
+            if entry.unanimous_listing_rate != (
+                entry.unanimous_listing_count / self.total_labels
+            ):
+                raise ValueError(
+                    "controlled-dimension unanimous rate is inconsistent with count"
+                )
             if len(entry.disagreement_listing_ids) != (
                 self.total_labels - entry.unanimous_listing_count
             ):
@@ -264,18 +296,30 @@ class ControlledDimensionAgreementReport(BaseModel):
                     "controlled-dimension disagreement IDs must cover every non-unanimous listing"
                 )
             for metric in entry.label_metrics:
-                expected_gold_comparisons = metric.gold_support_count * self.source_batch_count
+                if metric.gold_support_count > self.total_labels:
+                    raise ValueError("controlled label gold support exceeds total labels")
+                if metric.annotation_assignment_count > total_assignments:
+                    raise ValueError(
+                        "controlled label assignment count exceeds total assignments"
+                    )
+                expected_gold_comparisons = (
+                    metric.gold_support_count * self.source_batch_count
+                )
                 if (
                     metric.gold_alignment_true_positive_count
                     + metric.gold_alignment_false_negative_count
                     != expected_gold_comparisons
                 ):
-                    raise ValueError("controlled label gold-alignment recall support is inconsistent")
+                    raise ValueError(
+                        "controlled label gold-alignment recall support is inconsistent"
+                    )
         expected_all = all(
             entry.meets_initial_agreement_target for entry in self.dimensions
         )
         if self.all_dimensions_meet_initial_agreement_target != expected_all:
-            raise ValueError("controlled-agreement aggregate target result is inconsistent")
+            raise ValueError(
+                "controlled-agreement aggregate target result is inconsistent"
+            )
         return self
 
 
@@ -339,8 +383,14 @@ def validate_controlled_dimension_agreement_report(
 ) -> ControlledDimensionAgreementReport:
     """Rebuild and compare one persisted controlled-dimension agreement artifact."""
 
-    report = ControlledDimensionAgreementReport.model_validate(report.model_dump(mode="python"))
-    expected = build_controlled_dimension_agreement_report(sample, gold_set, annotation_batches)
+    report = ControlledDimensionAgreementReport.model_validate(
+        report.model_dump(mode="python")
+    )
+    expected = build_controlled_dimension_agreement_report(
+        sample,
+        gold_set,
+        annotation_batches,
+    )
     if report != expected:
         raise ControlledDimensionAgreementError(
             "persisted controlled-dimension agreement report does not match rebuilt content"
@@ -359,7 +409,9 @@ def controlled_dimension_agreement_contract_content_hash() -> str:
         "label_registry_version": LABEL_REGISTRY_VERSION,
         "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
         "controlled_dimensions": [item.value for item in _CONTROLLED_DIMENSIONS],
-        "initial_controlled_dimension_agreement_target": CONTROLLED_DIMENSION_AGREEMENT_TARGET,
+        "initial_controlled_dimension_agreement_target": (
+            CONTROLLED_DIMENSION_AGREEMENT_TARGET
+        ),
         "source_batch_fields": list(ControlledDimensionAgreementSourceBatch.model_fields),
         "label_metric_fields": list(ControlledLabelGoldAlignment.model_fields),
         "dimension_entry_fields": list(ControlledDimensionAgreementEntry.model_fields),
@@ -370,7 +422,9 @@ def controlled_dimension_agreement_contract_content_hash() -> str:
         ),
         "dimension_order": "controlled-label-dimension-enum-order",
         "label_order": "frozen-registry-order",
-        "content_hash_canonicalization": "json-sort-keys-compact-utf8-ensure-ascii-false",
+        "content_hash_canonicalization": (
+            "json-sort-keys-compact-utf8-ensure-ascii-false"
+        ),
     }
     return _content_hash(payload)
 
@@ -400,7 +454,9 @@ def _validate_source_batches(
     batch_ids = tuple(batch.batch_id for batch in validated)
     annotator_ids = tuple(batch.annotator_id for batch in validated)
     if len(batch_ids) != len(set(batch_ids)):
-        raise ControlledDimensionAgreementError("controlled-agreement source batch IDs must be unique")
+        raise ControlledDimensionAgreementError(
+            "controlled-agreement source batch IDs must be unique"
+        )
     if len(annotator_ids) != len(set(annotator_ids)):
         raise ControlledDimensionAgreementError(
             "controlled-agreement source batches require unique annotator identities"
@@ -437,7 +493,11 @@ def _build_dimension_entry(
 
     for label_index, sample_member in enumerate(sample.selected):
         assignments = tuple(
-            _canonical_dimension_values(batch.labels[label_index], dimension, registry_labels)
+            _canonical_dimension_values(
+                batch.labels[label_index],
+                dimension,
+                registry_labels,
+            )
             for batch in validated
         )
         if len(set(assignments)) == 1:
@@ -449,7 +509,9 @@ def _build_dimension_entry(
             for left_index, right_index in combinations(range(source_batch_count), 2)
         )
 
-    pairwise_exact_mismatch_count = pairwise_comparison_count - pairwise_exact_match_count
+    pairwise_exact_mismatch_count = (
+        pairwise_comparison_count - pairwise_exact_match_count
+    )
     unanimous_listing_count = len(sample.selected) - len(disagreement_listing_ids)
     label_metrics = tuple(
         _build_label_metric(label, dimension, gold_set, validated)
@@ -479,15 +541,23 @@ def _build_label_metric(
     validated: tuple[ValidatedTaxonomyAnnotationBatch, ...],
 ) -> ControlledLabelGoldAlignment:
     gold_support_count = sum(
-        label in _dimension_values(gold_label, dimension) for gold_label in gold_set.labels
+        label in _dimension_values(gold_label, dimension)
+        for gold_label in gold_set.labels
     )
     true_positive_count = 0
     false_positive_count = 0
     false_negative_count = 0
     for batch in validated:
-        for gold_label, annotation_label in zip(gold_set.labels, batch.labels, strict=True):
+        for gold_label, annotation_label in zip(
+            gold_set.labels,
+            batch.labels,
+            strict=True,
+        ):
             gold_matches = label in _dimension_values(gold_label, dimension)
-            annotation_matches = label in _dimension_values(annotation_label, dimension)
+            annotation_matches = label in _dimension_values(
+                annotation_label,
+                dimension,
+            )
             if gold_matches and annotation_matches:
                 true_positive_count += 1
             elif annotation_matches:
@@ -516,7 +586,9 @@ def _canonical_dimension_values(
     registry_labels: tuple[str, ...],
 ) -> tuple[str, ...]:
     values = set(_dimension_values(label, dimension))
-    return tuple(registry_label for registry_label in registry_labels if registry_label in values)
+    return tuple(
+        registry_label for registry_label in registry_labels if registry_label in values
+    )
 
 
 def _dimension_values(

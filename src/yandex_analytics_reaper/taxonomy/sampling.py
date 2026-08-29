@@ -139,6 +139,7 @@ class YandexTaxonomyDiversitySampler:
         self.probe_store = probe_store
 
     def analyze(self, manifest: TaxonomySampleManifest) -> TaxonomyDiversitySampleReport:
+        manifest = TaxonomySampleManifest.model_validate(manifest.model_dump(mode="python"))
         parser = YandexFeedParser()
         if parser.version != PARSER_VERSION:
             raise TaxonomySamplingError(

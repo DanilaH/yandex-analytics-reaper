@@ -118,6 +118,8 @@ class ControlledTaxonomyDimensions(BaseModel):
             self.meta_systems,
         )
         registry.validate_membership(ControlledLabelDimension.TONES, self.tones)
+        if "none" in self.meta_systems and len(self.meta_systems) != 1:
+            raise ValueError("meta_systems label 'none' cannot be combined with other labels")
         return self
 
 

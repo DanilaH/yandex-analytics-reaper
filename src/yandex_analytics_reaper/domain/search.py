@@ -3,7 +3,14 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 
 class QueryVariantKind(StrEnum):
@@ -59,7 +66,9 @@ class QueryFamilyVersion(BaseModel):
         if not self.members:
             raise ValueError("query family must contain at least one member")
         seed_indexes = [
-            index for index, member in enumerate(self.members) if member.kind is QueryVariantKind.SEED
+            index
+            for index, member in enumerate(self.members)
+            if member.kind is QueryVariantKind.SEED
         ]
         if seed_indexes != [0]:
             raise ValueError("query family must contain exactly one seed and it must be member 0")

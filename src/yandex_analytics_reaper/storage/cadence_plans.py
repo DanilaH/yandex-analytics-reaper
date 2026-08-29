@@ -77,7 +77,9 @@ class SQLiteCollectionCadencePlanStore:
         normalized_listing_ids = tuple(
             _non_blank(listing_id, "listing_id") for listing_id in listing_ids
         )
-        normalized_checkpoints = tuple(_aware(value, "checkpoint_at") for value in checkpoint_at)
+        normalized_checkpoints = tuple(
+            _aware(value, "checkpoint_at") for value in checkpoint_at
+        )
         if not normalized_listing_ids:
             raise ValueError("collection cadence plan requires listing IDs")
         if not normalized_checkpoints:
@@ -98,7 +100,9 @@ class SQLiteCollectionCadencePlanStore:
                 if existing.content_hash != content_hash:
                     raise ValueError("conflicting content for existing collection cadence plan_id")
                 if existing.frozen_at.astimezone(UTC) > latest:
-                    raise ValueError("existing collection cadence plan was frozen after its deadline")
+                    raise ValueError(
+                        "existing collection cadence plan was frozen after its deadline"
+                    )
                 return existing
 
             frozen_at = _database_now(connection)

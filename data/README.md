@@ -22,7 +22,8 @@ After the real diversity sample has been produced, the intended offline Phase 3 
 yandex-reaper-taxonomy validate-annotation-batch SAMPLE BATCH --report VALIDATED_BATCH
 yandex-reaper-taxonomy build-gold-set SAMPLE GOLD_DECLARATION BATCH... --report GOLD_SET
 yandex-reaper-taxonomy build-primary-validation SAMPLE GOLD_SET REVIEW_DECLARATION --report PRIMARY_REVIEW
-yandex-reaper-taxonomy analyze-primary-agreement SAMPLE GOLD_SET BATCH... --report AGREEMENT_REPORT
+yandex-reaper-taxonomy analyze-primary-agreement SAMPLE GOLD_SET BATCH... --report PRIMARY_AGREEMENT
+yandex-reaper-taxonomy analyze-controlled-agreement SAMPLE GOLD_SET BATCH... --report CONTROLLED_AGREEMENT
 ```
 
 `BATCH...` in agreement analysis must use the exact gold-set source-batch order. Gold-set construction itself verifies exact declared source hashes and derives persisted source order from the declaration. These commands only validate/build artifacts from supplied evidence; they do not generate fake annotation decisions or satisfy any real-data roadmap item on their own.

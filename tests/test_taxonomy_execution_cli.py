@@ -73,7 +73,7 @@ def test_taxonomy_execution_cli_parses_primary_validation() -> None:
     assert args.report is None
 
 
-def test_taxonomy_execution_cli_parses_agreement_analysis() -> None:
+def test_taxonomy_execution_cli_parses_primary_agreement_analysis() -> None:
     args = build_parser().parse_args(
         [
             "analyze-primary-agreement",
@@ -89,6 +89,26 @@ def test_taxonomy_execution_cli_parses_agreement_analysis() -> None:
     assert args.gold_set == "gold.json"
     assert args.batches == ["annotator-a.json", "annotator-b.json"]
     assert args.report is None
+
+
+def test_taxonomy_execution_cli_parses_controlled_agreement_analysis() -> None:
+    args = build_parser().parse_args(
+        [
+            "analyze-controlled-agreement",
+            "sample.json",
+            "gold.json",
+            "annotator-a.json",
+            "annotator-b.json",
+            "--report",
+            "data/reports/controlled-agreement.json",
+        ]
+    )
+
+    assert args.command == "analyze-controlled-agreement"
+    assert args.sample == "sample.json"
+    assert args.gold_set == "gold.json"
+    assert args.batches == ["annotator-a.json", "annotator-b.json"]
+    assert args.report == "data/reports/controlled-agreement.json"
 
 
 def test_taxonomy_execution_main_dispatches_selected_handler(

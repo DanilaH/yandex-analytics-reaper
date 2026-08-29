@@ -11,6 +11,7 @@ from yandex_analytics_reaper.experiments import (
     FeedDepthEligibilityError,
     FeedDepthExperiment,
     FeedDepthTrialObservation,
+    RejectedFeedDepthTrial,
     evaluate_feed_depth_trials,
 )
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
@@ -56,6 +57,11 @@ def test_report_refuses_recommendation_until_sample_is_sufficient() -> None:
 
     assert report.sample_sufficient is False
     assert report.recommended_depth is None
+    assert report.eligible_trial_count == 2
+    assert report.hour_buckets_utc == (
+        "2026-08-29T08:00:00Z",
+        "2026-08-29T09:00:00Z",
+    )
     assert any("eligible trials=2" in reason for reason in report.decision_reasons)
 
 
@@ -100,6 +106,55 @@ def test_policy_skips_failed_shallower_candidate_and_can_choose_three_pages() ->
 
     assert report.sample_sufficient is True
     assert report.recommended_depth == 3
+
+
+def test_rank_stability_threshold_can_reject_good_depth_one_coverage() -> None:
+    base = datetime(2026, 8, 29, 8, 0, tzinfo=UTC)
+    group_a = tuple(range(1, 10))
+    group_b = tuple(range(11, 20))
+    trials: list[FeedDepthTrialObservation] = []
+    for index in range(8):
+        prefix = group_a if index < 4 else group_b
+        full = prefix + (100,)
+        trials.append(
+            FeedDepthTrialObservation(
+                run_id=f"run-{index}",
+                started_at=base + timedelta(hours=index),
+                organic_rankings={
+                    1: prefix,
+                    3: full,
+                    5: full,
+                    10: full,
+                },
+            )
+        )
+
+    report = evaluate_feed_depth_trials(trials)
+    depth_one = next(metric for metric in report.metrics if metric.depth == 1)
+    depth_ten = next(metric for metric in report.metrics if metric.depth == 10)
+
+    assert depth_one.median_coverage_vs_10 == pytest.approx(0.9)
+    assert depth_one.median_marginal_gain_to_next == pytest.approx(0.1)
+    assert depth_one.median_pairwise_ranked_overlap is not None
+    assert depth_ten.median_pairwise_ranked_overlap is not None
+    assert (
+        depth_one.median_pairwise_ranked_overlap
+        < depth_ten.median_pairwise_ranked_overlap - 0.03
+    )
+    assert report.recommended_depth == 3
+
+
+def test_evaluator_rejects_inconsistent_submitted_trial_identity() -> None:
+    base = datetime(2026, 8, 29, 8, 0, tzinfo=UTC)
+    eligible = _trial("eligible", base, depth_1=9, depth_3=10, depth_5=10)
+    rejected = RejectedFeedDepthTrial(run_id="rejected", reason="fixture rejection")
+
+    with pytest.raises(ValueError, match="exactly match"):
+        evaluate_feed_depth_trials(
+            [eligible],
+            submitted_run_ids=["eligible", "different"],
+            rejected_trials=[rejected],
+        )
 
 
 def _persist_feed_trial(
@@ -220,6 +275,23 @@ def test_replay_rejects_trial_with_wrong_page_size(tmp_path: Path) -> None:
         experiment.load_trial(run_id)
 
 
+def test_replay_rejects_stored_page_linkage_that_disagrees_with_raw(tmp_path: Path) -> None:
+    run_id, raw_store, probe_store = _persist_feed_trial(tmp_path)
+    with probe_store.database.connect() as connection:
+        connection.execute(
+            """
+            UPDATE probe_pages
+            SET response_next_page_id = ?
+            WHERE run_id = ? AND page_index = 0
+            """,
+            ("tampered-cursor", run_id),
+        )
+
+    experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
+    with pytest.raises(FeedDepthEligibilityError, match="does not match stored page linkage"):
+        experiment.load_trial(run_id)
+
+
 def test_broken_raw_trial_is_reported_as_rejected_instead_of_aborting(tmp_path: Path) -> None:
     run_id, raw_store, probe_store = _persist_feed_trial(tmp_path)
     record = probe_store.get_run(run_id)
@@ -231,6 +303,7 @@ def test_broken_raw_trial_is_reported_as_rejected_instead_of_aborting(tmp_path: 
     report = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store).analyze([run_id])
 
     assert report.eligible_run_ids == ()
+    assert report.eligible_trial_count == 0
     assert len(report.rejected_trials) == 1
     assert report.rejected_trials[0].run_id == run_id
     assert "raw replay failed" in report.rejected_trials[0].reason

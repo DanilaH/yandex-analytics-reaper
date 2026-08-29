@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 import pytest
@@ -95,10 +96,10 @@ def test_taxonomy_execution_main_dispatches_selected_handler(
 ) -> None:
     observed: dict[str, str] = {}
 
-    def fake_handler(args: object) -> None:
-        observed["command"] = getattr(args, "command")
-        observed["sample"] = getattr(args, "sample")
-        observed["batch"] = getattr(args, "batch")
+    def fake_handler(args: argparse.Namespace) -> None:
+        observed["command"] = args.command
+        observed["sample"] = args.sample
+        observed["batch"] = args.batch
 
     monkeypatch.setattr(taxonomy_cli, "_validate_annotation_batch", fake_handler)
 

@@ -23,9 +23,9 @@ from yandex_analytics_reaper.storage import (
     SQLiteQueryFamilyStore,
 )
 
-ANALYST_SNAPSHOT_SPEC_VERSION = "analyst-snapshot-v1"
-_COLLECTION_PARAMETERS_STATUS = "provisional_uncalibrated"
-_YANDEX_SOURCE_ID = "yandex_public"
+ANALYST_SNAPSHOT_SPEC_VERSION: Literal["analyst-snapshot-v1"] = "analyst-snapshot-v1"
+_COLLECTION_PARAMETERS_STATUS: Literal["provisional_uncalibrated"] = "provisional_uncalibrated"
+_YANDEX_SOURCE_ID: Literal["yandex_public"] = "yandex_public"
 
 
 class AnalystSnapshotError(ValueError):
@@ -145,6 +145,12 @@ class AnalystRichMetadataBinding(BaseModel):
     parsed_listing_ids: tuple[str, ...] = Field(min_length=1)
     relevant_listing_ids: tuple[str, ...] = Field(min_length=1)
 
+    @field_validator("content_hash")
+    @classmethod
+    def validate_content_hash(cls, value: str) -> str:
+        _require_sha256(value, "rich metadata content_hash")
+        return value
+
 
 class AnalystSnapshotPayload(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -161,6 +167,16 @@ class AnalystSnapshotPayload(BaseModel):
 
     @model_validator(mode="after")
     def validate_snapshot_semantics(self) -> Self:
+        comparable_keys = [(item.set_id, item.version) for item in self.comparable_sets]
+        if len(set(comparable_keys)) != len(comparable_keys):
+            raise ValueError("snapshot comparable-set bindings must be unique")
+        feed_run_ids = [item.run_id for item in self.feed_runs]
+        if len(set(feed_run_ids)) != len(feed_run_ids):
+            raise ValueError("snapshot feed-run bindings must be unique")
+        rich_raw_ids = [(item.source_id, item.raw_snapshot_id) for item in self.rich_metadata]
+        if len(set(rich_raw_ids)) != len(rich_raw_ids):
+            raise ValueError("snapshot rich-metadata bindings must be unique")
+
         context_ids = {item.context_id for item in self.comparable_sets}
         if len(context_ids) != 1:
             raise ValueError("snapshot comparable sets must share one context_id")
@@ -203,8 +219,7 @@ class AnalystSnapshotReport(AnalystSnapshotPayload):
     @field_validator("content_hash")
     @classmethod
     def validate_content_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
-            raise ValueError("content_hash must be a lowercase SHA-256 hex digest")
+        _require_sha256(value, "content_hash")
         return value
 
 
@@ -385,8 +400,8 @@ class AnalystSnapshotBuilder:
             latest_evidence_at = _max_datetime(latest_evidence_at, metadata.retrieved_at)
             rich_bindings.append(
                 AnalystRichMetadataBinding(
-                    source_id=metadata.source_id,
-                    request_key=metadata.request_key,
+                    source_id=reference.source_id,
+                    request_key=reference.request_key,
                     raw_snapshot_id=metadata.id,
                     retrieved_at=metadata.retrieved_at,
                     content_hash=metadata.content_hash,
@@ -453,6 +468,11 @@ def _payload_hash(payload: AnalystSnapshotPayload) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _require_sha256(value: str, field_name: str) -> None:
+    if len(value) != 64 or any(char not in "0123456789abcdef" for char in value):
+        raise ValueError(f"{field_name} must be a lowercase SHA-256 hex digest")
 
 
 def _max_datetime(current: datetime | None, candidate: datetime) -> datetime:

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from .models import Platform
 
@@ -50,7 +51,7 @@ class ListingStateObservation(BaseModel):
 
 
 class GameMetricObservation(BaseModel):
-    """One observed semantic metric; missing source values produce no metric observation."""
+    """One observed semantic numeric metric with no coercion from non-numeric input."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -58,3 +59,12 @@ class GameMetricObservation(BaseModel):
     observed_at: datetime
     metric_name: GameMetricName
     value: int | float
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def require_real_number(cls, value: object) -> object:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("metric value must be an int or float, not a coerced value")
+        if not math.isfinite(float(value)):
+            raise ValueError("metric value must be finite")
+        return value

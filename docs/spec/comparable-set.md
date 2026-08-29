@@ -59,6 +59,7 @@ loads ordered ProbePages
 → loads immutable raw metadata/body
 → verifies content SHA-256
 → requires successful HTTP status
+→ validates exact raw query/context/pagination request metadata
 → parses with YandexFeedParser@2
 → reconstructs ProbePage from raw request/context + parsed pagination
 → requires reconstructed ProbePage == stored ProbePage
@@ -151,6 +152,7 @@ Persist parsed organic membership evidence:
 comparable_set_member_evidence
   set_id
   version
+  evidence_ordinal
   platform_listing_id
   probe_run_id
   raw_snapshot_id
@@ -158,7 +160,9 @@ comparable_set_member_evidence
   source_object_path
 ```
 
-The exact same `(set_id, version)` write is idempotent. Different content under an existing identity is a conflict and must never overwrite history.
+`evidence_ordinal` preserves the exact deterministic evidence tuple produced by the frozen traversal. It is a storage-order field, not a relevance/ranking score. Keeping it explicit makes persistence round-trippable and prevents SQLite row order from silently changing the evidence sequence.
+
+The exact same `(set_id, version)` write is idempotent. Different content under an existing identity is a conflict and must never overwrite history. Persistence validates the referenced query family, search runs/context, observation interval, and probe-page raw identities; reads fail closed if those references drift.
 
 ## Coverage semantics
 

@@ -91,7 +91,10 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
     history_store = SQLiteListingHistoryStore(database_path)
     statuses = history_store.status_history(first.platform_listing_id)
     media = history_store.media_history(first.platform_listing_id)
-    assert statuses[0].observation.reason is ListingStatusReason.OBSERVED_IN_CATALOGUE_METADATA
+    assert (
+        statuses[0].observation.reason
+        is ListingStatusReason.OBSERVED_IN_CATALOGUE_METADATA
+    )
     assert len(media[0].observation.manifest_hash) == 64
 
     lineage_store = SQLiteLineageStore(database_path)
@@ -102,6 +105,7 @@ def test_get_games_normalization_persists_metrics_histories_and_raw_lineage(
         assert {item.raw_snapshot_id for item in lineage} == {metadata.id}
         resolved = raw_store.get_metadata("yandex_public", metadata.id)
         assert resolved.content_hash == metadata.content_hash
+        assert raw_store.get_body("yandex_public", metadata.id) == body
 
 
 def test_play_page_normalization_persists_update_history_from_same_raw_snapshot(

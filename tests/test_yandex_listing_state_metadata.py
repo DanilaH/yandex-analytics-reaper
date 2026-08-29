@@ -35,5 +35,11 @@ def test_details_normalizer_keeps_snapshot_scoped_developer_and_first_publicatio
         item.target_field_path: item.source_field_path
         for item in normalized.listing_state_lineage
     }
-    assert lineage["listing_state_observations.developer_name"] == "$.games[0].developer.name"
-    assert lineage["listing_state_observations.first_published_at"] == "$.games[0].firstPublished"
+    assert (
+        lineage["listing_state_observations.developer_name"]
+        == "$.games[0].developer.name"
+    )
+    assert (
+        lineage["listing_state_observations.first_published_at"]
+        == "$.games[0].firstPublished"
+    )

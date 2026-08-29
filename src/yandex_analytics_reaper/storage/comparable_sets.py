@@ -191,7 +191,10 @@ class SQLiteComparableSetStore:
         connection: sqlite3.Connection,
         comparable_set: ComparableSetVersion,
     ) -> None:
-        if comparable_set.construction_method is ComparableSetConstructionMethod.YANDEX_SEARCH_UNION_V1:
+        if (
+            comparable_set.construction_method
+            is ComparableSetConstructionMethod.YANDEX_SEARCH_UNION_V1
+        ):
             if (
                 comparable_set.source_id != _YANDEX_SOURCE_ID
                 or comparable_set.parser_name != _YANDEX_PARSER_NAME

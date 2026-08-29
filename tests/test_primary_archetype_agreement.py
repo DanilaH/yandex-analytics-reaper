@@ -128,6 +128,25 @@ def _batch(
     )
 
 
+def _gold_set_for_batches(
+    sample: TaxonomyDiversitySampleReport,
+    batches: tuple[TaxonomyAnnotationBatch, ...],
+):
+    validated = tuple(validate_taxonomy_annotation_batch(sample, batch) for batch in batches)
+    declaration = TaxonomyGoldSetDeclaration(
+        gold_set_id="gold:agreement",
+        sample_id=sample.sample_id,
+        sample_content_hash=sample.sample_content_hash,
+        adjudicator_id="adjudicator:a",
+        adjudicated_at=datetime(2026, 8, 29, 16, 0, tzinfo=UTC),
+        source_annotation_batch_hashes=tuple(
+            batch.annotation_batch_hash for batch in validated
+        ),
+        labels=_labels(sample, variant="reviewer-a"),
+    )
+    return build_taxonomy_gold_set(sample, declaration, batches)
+
+
 def _gold_fixture():
     sample = _sample()
     batch_a = _batch(
@@ -142,27 +161,13 @@ def _gold_fixture():
         annotator_id="annotator:b",
         variant="reviewer-b",
     )
-    validated_a = validate_taxonomy_annotation_batch(sample, batch_a)
-    validated_b = validate_taxonomy_annotation_batch(sample, batch_b)
-    declaration = TaxonomyGoldSetDeclaration(
-        gold_set_id="gold:agreement",
-        sample_id=sample.sample_id,
-        sample_content_hash=sample.sample_content_hash,
-        adjudicator_id="adjudicator:a",
-        adjudicated_at=datetime(2026, 8, 29, 16, 0, tzinfo=UTC),
-        source_annotation_batch_hashes=(
-            validated_a.annotation_batch_hash,
-            validated_b.annotation_batch_hash,
-        ),
-        labels=_labels(sample, variant="reviewer-a"),
-    )
-    gold_set = build_taxonomy_gold_set(sample, declaration, (batch_a, batch_b))
+    gold_set = _gold_set_for_batches(sample, (batch_a, batch_b))
     return sample, gold_set, batch_a, batch_b
 
 
 def test_primary_agreement_contract_identity_is_frozen() -> None:
     assert PRIMARY_ARCHETYPE_AGREEMENT_CONTRACT_V1_CONTENT_HASH == (
-        "983a701ae530ba504d32297854afffd836462ada1b38a68706f5d166efd99349"
+        "e09af2c913058837724d51fad30a0b29e95faf7dd2d00ce91a99ccb0506e368f"
     )
     assert primary_archetype_agreement_contract_content_hash() == (
         PRIMARY_ARCHETYPE_AGREEMENT_CONTRACT_V1_CONTENT_HASH
@@ -197,12 +202,61 @@ def test_agreement_report_uses_independent_batches_and_symmetric_confusions() ->
         member.platform_listing_id for member in sample.selected[:25]
     )
     assert tuple(
-        (pair.archetype_a, pair.archetype_b, pair.comparison_count)
+        (
+            pair.archetype_a,
+            pair.archetype_b,
+            pair.comparison_count,
+            pair.comparison_rate,
+        )
         for pair in report.confusion_pairs
     ) == (
-        (PrimaryGameplayArchetype.MERGE, PrimaryGameplayArchetype.MATCH, 20),
-        (PrimaryGameplayArchetype.MERGE, PrimaryGameplayArchetype.UNKNOWN, 5),
+        (
+            PrimaryGameplayArchetype.MERGE,
+            PrimaryGameplayArchetype.MATCH,
+            20,
+            0.2,
+        ),
+        (
+            PrimaryGameplayArchetype.MERGE,
+            PrimaryGameplayArchetype.UNKNOWN,
+            5,
+            0.05,
+        ),
     )
+
+
+def test_pairwise_formula_handles_three_independent_annotators() -> None:
+    sample = _sample()
+    batch_a = _batch(
+        sample,
+        batch_id="batch:agreement:a",
+        annotator_id="annotator:a",
+        variant="reviewer-a",
+    )
+    batch_b = _batch(
+        sample,
+        batch_id="batch:agreement:b",
+        annotator_id="annotator:b",
+        variant="reviewer-b",
+    )
+    batch_c = _batch(
+        sample,
+        batch_id="batch:agreement:c",
+        annotator_id="annotator:c",
+        variant="reviewer-a",
+    )
+    batches = (batch_a, batch_b, batch_c)
+    gold_set = _gold_set_for_batches(sample, batches)
+
+    report = build_primary_archetype_agreement_report(sample, gold_set, batches)
+
+    assert report.source_batch_count == 3
+    assert report.pairwise_comparison_count == 300
+    assert report.pairwise_agreement_count == 250
+    assert report.pairwise_disagreement_count == 50
+    assert report.pairwise_agreement_rate == 250 / 300
+    assert report.unanimous_listing_count == 75
+    assert tuple(pair.comparison_count for pair in report.confusion_pairs) == (40, 10)
 
 
 def test_gold_alignment_metrics_are_not_fake_classifier_metrics() -> None:

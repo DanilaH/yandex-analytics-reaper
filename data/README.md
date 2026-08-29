@@ -14,4 +14,6 @@ data/
 
 Raw snapshots are immutable once written. Never commit collected market data to the repository.
 
+`reports/` is the local destination for empirical analysis artifacts such as taxonomy samples, validated annotation batches, adjudicated gold sets, primary-review reports, and agreement/confusion reports. The `yandex-reaper-taxonomy` CLI creates report files exclusively and refuses to overwrite an existing artifact path; choose a new path for a new execution rather than mutating recorded evidence in place.
+
 `sessions/` is operational local state for reusable HTTP profiles. Persistent anonymous profiles may contain raw cookie values required to reuse the same browser-like identity across probes. These files are not analytical evidence: never commit, publish, or share them. Raw snapshots and SQLite provenance must contain only safe session metadata such as the profile label, stable non-secret local profile-instance ID, cookie-state fingerprint, and profile age. The instance ID is cohort provenance for one local persistent profile and is not a Yandex account/user identifier or credential.

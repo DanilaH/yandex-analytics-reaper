@@ -50,6 +50,8 @@ Repeated observations therefore form an update-metadata history. A changed `app_
 
 `firstPublished` remains the listing's first-publication metadata and is not rewritten as update history.
 
+Source-derived text is not silently normalized. In particular, `appVersion` is preserved exactly once parsed; leading/trailing whitespace is rejected at the domain boundary rather than trimmed without a declared transformation.
+
 ## Status-history semantics
 
 The first source-neutral status values are intentionally conservative:
@@ -103,14 +105,14 @@ JSON values preserved
 
 The raw snapshot and parser-owned source path remain the authority for the actual source manifest. The hash answers "did the observed manifest change?" without leaking the Yandex DTO shape into platform-neutral analytics.
 
-Missing `media` and present-but-empty `media: {}` are different source facts. The parser must preserve that distinction:
+Missing `media` and present-but-empty `media: {}` are different source facts. The parser preserves that distinction:
 
 ```text
 field absent/non-object → media = null → no media observation
 field present as {}     → media = {}   → hash the empty manifest
 ```
 
-The current `YandexGetGamesParser@3` collapses those states, so implementing this history requires a semantic parser bump to `YandexGetGamesParser@4` plus regressions. This parser change does not affect the frozen feed/session experiments, which depend on `YandexFeedParser@2`.
+The pre-history `YandexGetGamesParser@3` collapsed those states. This implementation therefore uses the semantic bump `YandexGetGamesParser@4` with explicit regressions. The parser change does not affect the frozen feed/session experiments, which depend on `YandexFeedParser@2`.
 
 ## Normalizer boundary
 
@@ -141,6 +143,8 @@ media
 
 For `requested_but_not_returned`, lineage points to the observed `$.games` collection boundary because the evidence is the requested ID's absence from that successful collection.
 
+Every normalized update/status/media item requires at least one `FieldLineage` record. A source-derived history item without raw lineage is invalid rather than merely lower confidence.
+
 ## Persistence
 
 All three histories use the existing normalized-observation envelope:
@@ -157,7 +161,7 @@ normalized_observations
   normalizer_version
 ```
 
-New typed tables:
+Typed tables:
 
 ```text
 listing_update_observations
@@ -193,7 +197,13 @@ listing_history_evidence
   lineage_refs_json
 ```
 
-Field-level source lineage continues to use `observation_lineage` and is written in the same transaction as the typed history observation.
+Field-level source lineage continues to use `observation_lineage`.
+
+One normalized history bundle is persisted transactionally. The typed row, normalized envelope, evidence row, and field lineage either all commit or all roll back. A lineage conflict must not leave a partially persisted update/status/media bundle.
+
+The persistence boundary revalidates the supplied write instead of trusting an already-created Pydantic object. `normalizer_name` / `normalizer_version` must agree with each lineage `transformation_name` / `transformation_version`; inconsistent provenance is rejected.
+
+A platform listing must already exist before a history row can be persisted. This is especially important for `requested_but_not_returned`: only a previously known listing can acquire that conservative unknown-status observation.
 
 ## Observation identity and immutability
 
@@ -209,9 +219,7 @@ retrieved_at
 normalizer name/version
 ```
 
-The observed value itself is not part of identity. Rewriting the exact same observation is idempotent; a different update/status/media value under the same deterministic observation identity is a conflict rather than an overwrite.
-
-A platform listing must already exist before a history row can be persisted.
+The observed value itself is not part of identity. Rewriting the exact same observation is idempotent; a different update/status/media value or evidence envelope under the same deterministic observation identity is a conflict rather than an overwrite.
 
 ## Point-in-time reconstruction
 
@@ -223,7 +231,9 @@ retrieved_at
 observation_id
 ```
 
-The latest observation at/before an `as_of` timestamp is the latest **observed** state for that history family. Absence of a newer row means "not observed more recently", not "unchanged with certainty".
+An optional `as_of` bound filters on `observed_at <= as_of`. The latest returned observation is the latest **observed** state for that history family. Absence of a newer row means "not observed more recently", not "unchanged with certainty".
+
+Readers fail closed on inconsistent stored `observation_type`, missing listing-history evidence, or missing field lineage instead of silently hiding an orphan/corrupt history row.
 
 Media history reconstructs the manifest fingerprint, not the nested Yandex media object. Exact media source content is recovered through lineage → immutable raw snapshot when required.
 

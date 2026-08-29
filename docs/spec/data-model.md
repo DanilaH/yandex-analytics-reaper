@@ -23,7 +23,7 @@ Sources
 
 Phase 2 starts with SQLite as the operational normalized store for the private single-user collector. This is a deployment/maintenance choice, not part of the analytical semantics.
 
-The logical model below must remain portable. Parquet/DuckDB may later serve analytical scans/backtests; PostgreSQL is only justified if measured operational requirements outgrow SQLite.
+The logical model below must remain portable. A single versioned migration registry owns the SQLite schema. Parquet/DuckDB may later serve analytical scans/backtests; PostgreSQL is only justified if measured operational requirements outgrow SQLite.
 
 ## Identity
 
@@ -131,6 +131,8 @@ normalized_observations
   normalizer_version
 ```
 
+The envelope is already persisted for numeric metric observations. A persisted metric requires `retrieved_at`; all stored temporal values must be timezone-aware, and `available_at` cannot be later than `retrieved_at`.
+
 Typed tables reference `normalized_observations.id`.
 
 Examples:
@@ -165,6 +167,8 @@ $.gameData.gqRating
 
 A decision-relevant dossier value must be traceable through derived feature → domain observation → lineage → raw snapshot.
 
+Metric envelopes currently preserve coarse `lineage_refs` so source references are not discarded before this table exists. Those refs do **not** satisfy the field-level lineage requirement; explicit lineage persistence is the next Phase 2 task.
+
 ## Game metrics
 
 `game_metric_observations` stores:
@@ -185,6 +189,12 @@ revision_status
 uncertainty
 missing_reason
 ```
+
+The current metric writer supports finite numeric observed values. Boolean values are rejected at the domain boundary rather than being coerced to `0/1`.
+
+Metric observation identity is deterministic from source/listing/metric/time-window/retrieval/normalizer metadata. Rewriting the exact same observation is idempotent; supplying conflicting evidence/value for that same observation is an error rather than an overwrite. Metric batches are transactional.
+
+A listing identity must exist before metrics referencing it can be persisted.
 
 Do not attach contextual dimensions unless empirical evidence shows the metric itself varies by context.
 

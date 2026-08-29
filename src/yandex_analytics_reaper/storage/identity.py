@@ -1,49 +1,13 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
 from yandex_analytics_reaper.domain import Platform, PlatformDeveloper, PlatformListing
 
-SCHEMA_VERSION = 1
-
-_SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS platform_listings (
-    id TEXT PRIMARY KEY,
-    platform TEXT NOT NULL,
-    external_app_id TEXT NOT NULL,
-    listing_url TEXT,
-    developer_external_id TEXT,
-    first_seen_at TEXT NOT NULL,
-    last_seen_at TEXT NOT NULL,
-    first_published_at TEXT,
-    UNIQUE (platform, external_app_id)
-);
-
-CREATE TABLE IF NOT EXISTS platform_developers (
-    id TEXT PRIMARY KEY,
-    platform TEXT NOT NULL,
-    external_developer_id TEXT NOT NULL,
-    display_name TEXT,
-    first_seen_at TEXT NOT NULL,
-    last_seen_at TEXT NOT NULL,
-    UNIQUE (platform, external_developer_id)
-);
-
-CREATE TABLE IF NOT EXISTS listing_developer_observations (
-    listing_id TEXT NOT NULL REFERENCES platform_listings(id) ON DELETE CASCADE,
-    developer_id TEXT NOT NULL REFERENCES platform_developers(id),
-    observed_at TEXT NOT NULL,
-    PRIMARY KEY (listing_id, observed_at)
-);
-
-CREATE INDEX IF NOT EXISTS idx_listing_developer_observations_developer
-ON listing_developer_observations (developer_id, observed_at);
-"""
+from .sqlite import SQLiteDatabase
 
 
 class IdentityStore(Protocol):
@@ -65,9 +29,11 @@ class SQLiteIdentityStore:
     """Zero-ops operational store for normalized listing/developer identity data."""
 
     def __init__(self, path: Path) -> None:
-        self.path = path
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        self.database = SQLiteDatabase(path)
+
+    @property
+    def path(self) -> Path:
+        return self.database.path
 
     def persist_listing_identity(
         self,
@@ -78,7 +44,7 @@ class SQLiteIdentityStore:
         seen_at = _timestamp(observed_at)
         self._validate_developer_link(listing, developer)
 
-        with self._connect() as connection:
+        with self.database.connect() as connection:
             if developer is not None:
                 self._upsert_developer(connection, developer, seen_at)
             self._upsert_listing(connection, listing, seen_at)
@@ -86,7 +52,7 @@ class SQLiteIdentityStore:
                 self._record_assignment(connection, listing.id, developer.id, seen_at)
 
     def get_listing(self, listing_id: str) -> PlatformListing | None:
-        with self._connect() as connection:
+        with self.database.connect() as connection:
             row = connection.execute(
                 "SELECT * FROM platform_listings WHERE id = ?",
                 (listing_id,),
@@ -105,7 +71,7 @@ class SQLiteIdentityStore:
         )
 
     def get_developer(self, developer_id: str) -> PlatformDeveloper | None:
-        with self._connect() as connection:
+        with self.database.connect() as connection:
             row = connection.execute(
                 "SELECT * FROM platform_developers WHERE id = ?",
                 (developer_id,),
@@ -122,7 +88,7 @@ class SQLiteIdentityStore:
         )
 
     def developer_assignments(self, listing_id: str) -> tuple[tuple[str, datetime], ...]:
-        with self._connect() as connection:
+        with self.database.connect() as connection:
             rows = connection.execute(
                 """
                 SELECT developer_id, observed_at
@@ -136,35 +102,6 @@ class SQLiteIdentityStore:
             (str(row["developer_id"]), _parse_timestamp(str(row["observed_at"])))
             for row in rows
         )
-
-    def _initialize(self) -> None:
-        with self._connect() as connection:
-            row = connection.execute("PRAGMA user_version").fetchone()
-            if row is None:
-                raise RuntimeError("SQLite did not return user_version")
-            version = int(row[0])
-            if version == 0:
-                connection.executescript(_SCHEMA_SQL)
-                connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            elif version != SCHEMA_VERSION:
-                raise RuntimeError(
-                    f"unsupported normalized-store schema version {version}; "
-                    f"expected {SCHEMA_VERSION}"
-                )
-
-    @contextmanager
-    def _connect(self) -> Iterator[sqlite3.Connection]:
-        connection = sqlite3.connect(self.path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield connection
-            connection.commit()
-        except Exception:
-            connection.rollback()
-            raise
-        finally:
-            connection.close()
 
     @staticmethod
     def _validate_developer_link(

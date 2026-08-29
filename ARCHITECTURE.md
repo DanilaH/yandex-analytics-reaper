@@ -85,7 +85,7 @@ Raw snapshots contain request/response facts and safe request context only. They
 
 ## Lineage
 
-Decision-relevant values must be reconstructable through:
+Decision-relevant values must eventually be reconstructable through:
 
 ```text
 candidate evidence
@@ -96,7 +96,7 @@ candidate evidence
 → raw snapshot
 ```
 
-Lineage is many-to-many: one domain observation may combine multiple raw/source observations.
+The current metric persistence stores an observation/evidence envelope and any existing coarse `lineage_refs`, but **field-level normalization lineage is not implemented yet**. The next Phase 2 task replaces that coarse bridge with explicit many-to-many field-level lineage records.
 
 ## Identity
 
@@ -143,7 +143,9 @@ Collectors return raw responses. Parsers own Yandex response-shape interpretatio
 
 Raw responses remain immutable filesystem snapshots.
 
-Phase 2 uses SQLite as the initial **operational normalized store** because the tool is private/single-user, collection is batch-oriented, and the current workload does not justify a database service. The storage contract remains domain-oriented so this is not a commitment to SQLite as a permanent analytical backend.
+Phase 2 uses SQLite as the initial **operational normalized store** because the tool is private/single-user, collection is batch-oriented, and the current workload does not justify a database service. The storage contracts remain domain-oriented so this is not a commitment to SQLite as a permanent analytical backend.
+
+A single versioned SQLite migration registry owns the operational schema. Independent stores must not maintain competing `PRAGMA user_version` schemes.
 
 SQLite currently owns:
 
@@ -151,8 +153,13 @@ SQLite currently owns:
 platform listing identities
 platform developer identities
 listing ↔ developer observation history
+normalized numeric metric observations
+metric observation/evidence envelopes
+normalizer name/version used for persisted metrics
 ```
 
-Metric observations, observation envelopes/field-level lineage, probe runs, and other historical state are added by their explicit Phase 2 roadmap tasks rather than hidden inside the identity store.
+Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
+
+Field-level lineage, probe runs, and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric persistence.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

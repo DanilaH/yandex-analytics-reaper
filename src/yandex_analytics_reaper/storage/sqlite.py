@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -468,6 +468,10 @@ CREATE TABLE IF NOT EXISTS listing_state_observations (
 
 CREATE INDEX IF NOT EXISTS idx_listing_state_history
 ON listing_state_observations (platform_listing_id, observation_id);
+""",
+    12: """
+ALTER TABLE listing_state_observations ADD COLUMN developer_name TEXT;
+ALTER TABLE listing_state_observations ADD COLUMN first_published_at TEXT;
 """,
 }
 

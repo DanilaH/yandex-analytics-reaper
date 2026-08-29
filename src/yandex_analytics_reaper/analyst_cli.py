@@ -7,7 +7,14 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from yandex_analytics_reaper.analyst import AnalystSnapshotBuilder, AnalystSnapshotDeclaration
+from yandex_analytics_reaper.analyst import (
+    AnalystMarketExporter,
+    AnalystSnapshotBuilder,
+    AnalystSnapshotDeclaration,
+    AnalystSnapshotReport,
+    validate_analyst_market_export,
+    write_analyst_export_csv,
+)
 from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import QueryFamilyVersion
@@ -153,6 +160,26 @@ def _build_snapshot(args: argparse.Namespace) -> None:
     print(f"analyst_snapshot={report.snapshot_id} content_hash={report.content_hash}")
 
 
+def _export_snapshot(args: argparse.Namespace) -> None:
+    raw_store = _raw_store(args.output)
+    database_path = _database_path(raw_store)
+    if not database_path.is_file():
+        raise SystemExit(f"operational database not found: {database_path}")
+    try:
+        snapshot = AnalystSnapshotReport.model_validate_json(_read_text(args.snapshot_report))
+        export = AnalystMarketExporter(
+            raw_store=raw_store,
+            database_path=database_path,
+        ).build(snapshot)
+        export = validate_analyst_market_export(export)
+        _write_report(args.report, export.model_dump_json(indent=2))
+        if args.csv_dir is not None:
+            write_analyst_export_csv(export, Path(args.csv_dir))
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print(f"analyst_export={export.snapshot_id} content_hash={export.content_hash}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-analyst",
@@ -196,6 +223,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
     )
     snapshot.set_defaults(handler=_build_snapshot)
+
+    export = sub.add_parser(
+        "export-snapshot",
+        help="Build analyst-market-export-v1 from one frozen analyst snapshot report.",
+    )
+    export.add_argument("snapshot_report", help="Path to an AnalystSnapshotReport JSON file.")
+    export.add_argument("--report", required=True, help="Create-only market export JSON path.")
+    export.add_argument(
+        "--csv-dir",
+        help="Optional create-only directory for analyst-readable CSV tables.",
+    )
+    export.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    export.set_defaults(handler=_export_snapshot)
     return parser
 
 

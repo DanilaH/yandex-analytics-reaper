@@ -35,13 +35,19 @@ def _listing(listing_id: str = "yandex_games:10") -> PlatformListing:
 
 
 def _lineage(raw_id: str, *, target: str = "platform_listing_id") -> FieldLineage:
-    source = "appID" if target == "platform_listing_id" else target
+    sources = {
+        "platform_listing_id": "appID",
+        "developer_id": "developer.id",
+        "developer_name": "developer.name",
+        "first_published_at": "firstPublished",
+    }
+    source = sources.get(target, target)
     return FieldLineage(
         raw_snapshot_id=raw_id,
         source_field_path=f"$.games[0].{source}",
         target_field_path=f"listing_state_observations.{target}",
         transformation_name=f"YandexGameNormalizer.listing_state.{target}",
-        transformation_version="3",
+        transformation_version="4",
     )
 
 
@@ -58,6 +64,8 @@ def _write(
             observed_at=observed_at,
             title=title,
             developer_id="yandex_games:dev-1",
+            developer_name="Dev One",
+            first_published_at=observed_at - timedelta(days=60),
             app_version="1.2.3",
             published_at=observed_at - timedelta(days=30),
             languages=("ru", "en"),
@@ -85,10 +93,12 @@ def _write(
             lineage_refs=("raw-ref:b", "raw-ref:a"),
         ),
         normalizer_name="YandexGameNormalizer",
-        normalizer_version="3",
+        normalizer_version="4",
         lineage=(
             _lineage(raw_id),
             _lineage(raw_id, target="title"),
+            _lineage(raw_id, target="developer_name"),
+            _lineage(raw_id, target="first_published_at"),
             _lineage(raw_id, target="leaderboards"),
         ),
     )
@@ -114,12 +124,14 @@ def test_listing_state_store_round_trips_fields_evidence_and_lineage(tmp_path: P
     persisted = history[0]
     assert persisted.observation_id == observation_id
     assert persisted.observation.title == "Merge Lab"
+    assert persisted.observation.developer_name == "Dev One"
+    assert persisted.observation.first_published_at == _BASE - timedelta(days=60)
     assert persisted.observation.languages == ("ru", "en")
     assert persisted.observation.leaderboards is False
     assert persisted.observation.has_products is False
     assert persisted.evidence.lineage_refs == ("raw-ref:a", "raw-ref:b")
     assert {item.raw_snapshot_id for item in persisted.lineage} == {"raw:one"}
-    assert persisted.normalizer_version == "3"
+    assert persisted.normalizer_version == "4"
 
 
 def test_listing_state_store_is_idempotent_and_rejects_conflict(tmp_path: Path) -> None:

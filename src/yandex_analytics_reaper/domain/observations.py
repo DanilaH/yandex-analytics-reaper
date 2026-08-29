@@ -36,6 +36,8 @@ class ListingStateObservation(BaseModel):
     observed_at: datetime
     title: str | None = None
     developer_id: str | None = None
+    developer_name: str | None = None
+    first_published_at: datetime | None = None
     app_version: str | None = None
     published_at: datetime | None = None
     languages: tuple[str, ...] | None = None

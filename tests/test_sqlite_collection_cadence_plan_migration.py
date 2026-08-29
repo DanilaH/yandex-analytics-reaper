@@ -22,7 +22,7 @@ def test_v9_database_migrates_to_collection_cadence_plan_schema(tmp_path: Path) 
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 11
+        assert version[0] == 12
         tables = {
             str(row[0])
             for row in connection.execute(

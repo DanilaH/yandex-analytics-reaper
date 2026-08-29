@@ -95,21 +95,21 @@ Still required for analyst use:
 
 - [x] expose query-family declaration/persistence through a supported operator-facing CLI/file workflow
 - [x] expose `yandex_search_union_v1` comparable-set construction through a supported operator-facing CLI/file workflow
-- [ ] add a small reproducible **analyst snapshot manifest/workflow** that binds the exact feed/search/query-family/rich-metadata evidence used for one analysis session
-- [ ] require the snapshot to record explicit collection context/depth/session choices and label still-uncalibrated choices as provisional rather than hiding them behind an “optimal” default
-- [ ] fail closed when an analyst snapshot mixes incompatible contexts or incomplete/failed evidence
+- [x] add a small reproducible **analyst snapshot manifest/workflow** that binds the exact feed/search/query-family/rich-metadata evidence used for one analysis session
+- [x] require the snapshot to record explicit collection context/depth/session choices and label still-uncalibrated choices as provisional rather than hiding them behind an “optimal” default
+- [x] fail closed when an analyst snapshot mixes incompatible contexts or incomplete/failed evidence
 
 Pending feed-depth/session/cadence experiments remain pending and must not be reverse-engineered from whatever explicit parameters were used in an early analyst snapshot.
 
 ### M1.2 — Analyst-readable market snapshot
 
-- [ ] add a read/export boundary over persisted observations instead of requiring direct SQLite inspection
-- [ ] export current listing identity/title/developer/basic metadata with evidence references
-- [ ] export available `gqRating`, player rating, `ratingCount`, publication/update metadata, and known missingness
-- [ ] export feed/search exposure observations separately from game metrics
-- [ ] export search `totalGamesCount` as a query-supply signal, never a canonical competitor count
-- [ ] export comparable-set membership with exact source query/run/raw provenance
-- [ ] provide JSON and/or CSV artifacts suitable for manual analysis; no dashboard is required
+- [x] add a read/export boundary over persisted observations instead of requiring direct SQLite inspection
+- [x] export current listing identity/title/developer/basic metadata with evidence references
+- [x] export available `gqRating`, player rating, `ratingCount`, publication/update metadata, and known missingness
+- [x] export feed/search exposure observations separately from game metrics
+- [x] export search `totalGamesCount` as a query-supply signal, never a canonical competitor count
+- [x] export comparable-set membership with exact source query/run/raw provenance
+- [x] provide JSON and/or CSV artifacts suitable for manual analysis; no dashboard is required
 
 ### M1.3 — Minimal comparable-market features
 

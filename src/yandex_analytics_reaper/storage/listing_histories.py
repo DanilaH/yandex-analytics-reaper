@@ -5,9 +5,9 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, Self
+from typing import Protocol, Self, TypeAlias
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from yandex_analytics_reaper.domain import (
     ListingMediaObservation,
@@ -16,30 +16,42 @@ from yandex_analytics_reaper.domain import (
     ListingStatusReason,
     ListingUpdateObservation,
 )
-from yandex_analytics_reaper.evidence import EvidenceEnvelope
-from yandex_analytics_reaper.normalizers import (
-    NormalizedListingHistories,
-    NormalizedListingMedia,
-    NormalizedListingStatus,
-    NormalizedListingUpdate,
-)
+from yandex_analytics_reaper.evidence import EvidenceEnvelope, FieldLineage
 
 from .lineage import persist_lineage_in_connection
 from .sqlite import SQLiteDatabase
+
+HistoryObservation: TypeAlias = (
+    ListingUpdateObservation | ListingStatusObservation | ListingMediaObservation
+)
 
 _HISTORY_TABLE_TYPES = {
     "listing_update_observations": "listing_update",
     "listing_status_observations": "listing_status",
     "listing_media_observations": "listing_media",
 }
+_HISTORY_ORDER = {
+    "listing_update": 0,
+    "listing_status": 1,
+    "listing_media": 2,
+}
 
 
-class ListingHistoryWrite(BaseModel):
-    """One normalized history bundle plus shared evidence/provenance metadata."""
+class ListingHistoryObservationWrite(BaseModel):
+    """One platform-neutral history observation plus its exact raw field lineage."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    histories: NormalizedListingHistories
+    observation: HistoryObservation
+    lineage: tuple[FieldLineage, ...] = Field(min_length=1)
+
+
+class ListingHistoryWrite(BaseModel):
+    """Atomic history batch plus shared evidence and normalizer provenance."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    observations: tuple[ListingHistoryObservationWrite, ...] = Field(min_length=1)
     evidence: EvidenceEnvelope
     normalizer_name: str
     normalizer_version: str
@@ -64,13 +76,17 @@ class ListingHistoryWrite(BaseModel):
         if self.evidence.period_start is not None or self.evidence.period_end is not None:
             raise ValueError("listing-history evidence does not accept metric periods")
 
-        observations = _history_observations(self.histories)
-        if any(
-            item.observation.observed_at != self.evidence.observed_at
-            for item in observations
-        ):
-            raise ValueError("history observations and evidence observed_at must match")
-        for item in observations:
+        listing_ids: set[str] = set()
+        observation_types: set[str] = set()
+        for item in self.observations:
+            observation = item.observation
+            listing_ids.add(observation.platform_listing_id)
+            observation_type = _observation_type(observation)
+            if observation_type in observation_types:
+                raise ValueError("listing-history batch cannot repeat one observation type")
+            observation_types.add(observation_type)
+            if observation.observed_at != self.evidence.observed_at:
+                raise ValueError("history observations and evidence observed_at must match")
             for lineage in item.lineage:
                 if lineage.transformation_version != self.normalizer_version:
                     raise ValueError(
@@ -80,6 +96,8 @@ class ListingHistoryWrite(BaseModel):
                     raise ValueError(
                         "history lineage transformation_name must match normalizer_name"
                     )
+        if len(listing_ids) != 1:
+            raise ValueError("one listing-history write must target exactly one listing")
         return self
 
 
@@ -150,35 +168,23 @@ class SQLiteListingHistoryStore:
 
     def persist(self, write: ListingHistoryWrite) -> tuple[str, ...]:
         write = ListingHistoryWrite.model_validate(write.model_dump(mode="python"))
+        ordered = sorted(
+            write.observations,
+            key=lambda item: _HISTORY_ORDER[_observation_type(item.observation)],
+        )
+        listing_id = ordered[0].observation.platform_listing_id
+
         with self.database.connect() as connection:
-            listing_ids = {
-                item.observation.platform_listing_id
-                for item in _history_observations(write.histories)
-            }
-            if len(listing_ids) != 1:
-                raise ValueError("one listing-history write must target exactly one listing")
-            listing_id = next(iter(listing_ids))
             listing = connection.execute(
                 "SELECT id FROM platform_listings WHERE id = ?",
                 (listing_id,),
             ).fetchone()
             if listing is None:
                 raise ValueError(f"listing {listing_id} must be persisted before histories")
-
-            persisted_ids: list[str] = []
-            if write.histories.update is not None:
-                persisted_ids.append(
-                    self._persist_update(connection, write, write.histories.update)
-                )
-            if write.histories.status is not None:
-                persisted_ids.append(
-                    self._persist_status(connection, write, write.histories.status)
-                )
-            if write.histories.media is not None:
-                persisted_ids.append(
-                    self._persist_media(connection, write, write.histories.media)
-                )
-            return tuple(persisted_ids)
+            return tuple(
+                self._persist_item(connection, write, item)
+                for item in ordered
+            )
 
     def update_history(
         self,
@@ -258,27 +264,51 @@ class SQLiteListingHistoryStore:
                     raise RuntimeError("stored listing history observation_type is invalid")
                 if raw_row["evidence_observation_id"] is None:
                     raise RuntimeError("stored listing history is missing evidence")
-                lineage = connection.execute(
+                lineage_rows = connection.execute(
                     """
-                    SELECT 1
+                    SELECT transformation_name, transformation_version
                     FROM observation_lineage
                     WHERE normalized_observation_id = ?
-                    LIMIT 1
                     """,
                     (str(raw_row["id"]),),
-                ).fetchone()
-                if lineage is None:
+                ).fetchall()
+                if not lineage_rows:
                     raise RuntimeError("stored listing history is missing field lineage")
+                normalizer_name = str(raw_row["normalizer_name"])
+                normalizer_version = str(raw_row["normalizer_version"])
+                if any(
+                    str(lineage["transformation_version"]) != normalizer_version
+                    or not str(lineage["transformation_name"]).startswith(
+                        f"{normalizer_name}."
+                    )
+                    for lineage in lineage_rows
+                ):
+                    raise RuntimeError("stored listing history lineage provenance is invalid")
                 rows.append(raw_row)
         return rows
+
+    def _persist_item(
+        self,
+        connection: sqlite3.Connection,
+        write: ListingHistoryWrite,
+        item: ListingHistoryObservationWrite,
+    ) -> str:
+        observation = item.observation
+        if isinstance(observation, ListingUpdateObservation):
+            return self._persist_update(connection, write, observation, item.lineage)
+        if isinstance(observation, ListingStatusObservation):
+            return self._persist_status(connection, write, observation, item.lineage)
+        if isinstance(observation, ListingMediaObservation):
+            return self._persist_media(connection, write, observation, item.lineage)
+        raise TypeError("unsupported listing history observation")
 
     def _persist_update(
         self,
         connection: sqlite3.Connection,
         write: ListingHistoryWrite,
-        item: NormalizedListingUpdate,
+        observation: ListingUpdateObservation,
+        lineage: tuple[FieldLineage, ...],
     ) -> str:
-        observation = item.observation
         observation_id = _observation_id(
             write,
             "listing_update",
@@ -316,16 +346,16 @@ class SQLiteListingHistoryStore:
         }
         if row is None or _typed_row(row) != expected:
             raise ValueError(f"conflicting listing update observation {observation_id}")
-        persist_lineage_in_connection(connection, observation_id, item.lineage)
+        persist_lineage_in_connection(connection, observation_id, lineage)
         return observation_id
 
     def _persist_status(
         self,
         connection: sqlite3.Connection,
         write: ListingHistoryWrite,
-        item: NormalizedListingStatus,
+        observation: ListingStatusObservation,
+        lineage: tuple[FieldLineage, ...],
     ) -> str:
-        observation = item.observation
         observation_id = _observation_id(
             write,
             "listing_status",
@@ -363,16 +393,16 @@ class SQLiteListingHistoryStore:
         }
         if row is None or _typed_row(row) != expected:
             raise ValueError(f"conflicting listing status observation {observation_id}")
-        persist_lineage_in_connection(connection, observation_id, item.lineage)
+        persist_lineage_in_connection(connection, observation_id, lineage)
         return observation_id
 
     def _persist_media(
         self,
         connection: sqlite3.Connection,
         write: ListingHistoryWrite,
-        item: NormalizedListingMedia,
+        observation: ListingMediaObservation,
+        lineage: tuple[FieldLineage, ...],
     ) -> str:
-        observation = item.observation
         observation_id = _observation_id(
             write,
             "listing_media",
@@ -407,7 +437,7 @@ class SQLiteListingHistoryStore:
         }
         if row is None or _typed_row(row) != expected:
             raise ValueError(f"conflicting listing media observation {observation_id}")
-        persist_lineage_in_connection(connection, observation_id, item.lineage)
+        persist_lineage_in_connection(connection, observation_id, lineage)
         return observation_id
 
     @staticmethod
@@ -496,17 +526,14 @@ class SQLiteListingHistoryStore:
             raise ValueError(f"conflicting listing-history envelope {observation_id}")
 
 
-def _history_observations(
-    histories: NormalizedListingHistories,
-) -> tuple[NormalizedListingUpdate | NormalizedListingStatus | NormalizedListingMedia, ...]:
-    items: list[NormalizedListingUpdate | NormalizedListingStatus | NormalizedListingMedia] = []
-    if histories.update is not None:
-        items.append(histories.update)
-    if histories.status is not None:
-        items.append(histories.status)
-    if histories.media is not None:
-        items.append(histories.media)
-    return tuple(items)
+def _observation_type(observation: HistoryObservation) -> str:
+    if isinstance(observation, ListingUpdateObservation):
+        return "listing_update"
+    if isinstance(observation, ListingStatusObservation):
+        return "listing_status"
+    if isinstance(observation, ListingMediaObservation):
+        return "listing_media"
+    raise TypeError("unsupported listing history observation")
 
 
 def _observation_id(

@@ -37,19 +37,19 @@ Implemented:
 - SQLite operational persistence for normalized listing/developer identities and developer-assignment history;
 - normalized numeric metric persistence with observation/evidence envelopes and versioned normalizer metadata;
 - field-level metric lineage from exact parser source path back to raw snapshot identity;
+- versioned schema-drift monitoring for Yandex JSON surfaces with field/type/missingness contracts, scoped temporal comparisons, parser-failure records, and raw-content identity checks;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
 - Yandex game metadata normalizers;
-- manual CLI probes that persist raw responses before parsing;
+- manual CLI probes that persist raw responses before parsing and stop interpretation on breaking JSON contract drift;
 - fixture/unit tests;
 - Ruff, strict mypy, pytest, and GitHub Actions quality gates;
 - reviewed living specifications under `docs/spec/`.
 
 Not implemented yet:
 
-- schema-drift registry;
 - production scheduled collection/probe-run grouping;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
@@ -130,7 +130,7 @@ Game page / `__playPageData__`:
 yandex-reaper probe-page 438560 --output data/raw
 ```
 
-Each probe persists the raw response before parsing.
+Each probe persists the raw response before parsing. JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
 
 ## Read before changing the project
 

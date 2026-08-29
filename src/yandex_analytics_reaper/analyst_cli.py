@@ -202,6 +202,12 @@ def _build_market_features(args: argparse.Namespace) -> None:
 
 def _verify_pilot(args: argparse.Namespace) -> None:
     raw_store = _raw_store(args.output)
+    database_path = _database_path(raw_store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "pilot verification must replay normalized observations as well as raw evidence"
+        )
     try:
         snapshot = AnalystSnapshotReport.model_validate_json(_read_text(args.snapshot_report))
         market_export = AnalystMarketExportReport.model_validate_json(
@@ -210,6 +216,16 @@ def _verify_pilot(args: argparse.Namespace) -> None:
         market_features = AnalystMarketFeaturesReport.model_validate_json(
             _read_text(args.market_features)
         )
+        rebuilt_export = AnalystMarketExporter(
+            raw_store=raw_store,
+            database_path=database_path,
+        ).build(snapshot)
+        rebuilt_export = validate_analyst_market_export(rebuilt_export)
+        if rebuilt_export != market_export:
+            raise ValueError(
+                "market export artifact does not match a fresh rebuild from "
+                "snapshot/raw/normalized evidence"
+            )
         report = AnalystPilotVerifier(raw_store=raw_store).build(
             snapshot,
             market_export,
@@ -293,7 +309,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     pilot = sub.add_parser(
         "verify-pilot",
-        help="Replay raw evidence and verify the real M1 analyst pilot artifact chain.",
+        help="Replay normalized/raw evidence and verify the real M1 analyst pilot chain.",
     )
     pilot.add_argument("snapshot_report", help="Path to an AnalystSnapshotReport JSON file.")
     pilot.add_argument("market_export", help="Path to an AnalystMarketExportReport JSON file.")

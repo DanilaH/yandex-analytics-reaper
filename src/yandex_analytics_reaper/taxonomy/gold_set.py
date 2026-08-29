@@ -118,9 +118,7 @@ class TaxonomyAnnotationBatch(BaseModel):
     @field_validator("batch_id", "annotator_id", "sample_id")
     @classmethod
     def validate_identifier(cls, value: str) -> str:
-        if not value or value != value.strip():
-            raise ValueError("taxonomy annotation identifiers must be nonblank and trimmed")
-        return value
+        return _trimmed_identifier(value, "taxonomy annotation identifier")
 
     @field_validator("sample_content_hash")
     @classmethod
@@ -135,9 +133,7 @@ class TaxonomyAnnotationBatch(BaseModel):
 
     @model_validator(mode="after")
     def validate_unique_members(self) -> Self:
-        listing_ids = tuple(label.platform_listing_id for label in self.labels)
-        if len(listing_ids) != len(set(listing_ids)):
-            raise ValueError("taxonomy annotation batch cannot contain duplicate listing IDs")
+        _validate_unique_label_members(self.labels, "taxonomy annotation batch")
         return self
 
 
@@ -154,8 +150,24 @@ class ValidatedTaxonomyAnnotationBatch(BaseModel):
     sample_id: str
     sample_content_hash: str
     created_at: datetime
-    labels: tuple[TaxonomyManualLabel, ...]
+    labels: tuple[TaxonomyManualLabel, ...] = Field(min_length=100, max_length=200)
     annotation_batch_hash: str
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at(cls, value: datetime) -> datetime:
+        return _utc_datetime(value, "created_at")
+
+    @field_validator(
+        "annotation_contract_content_hash",
+        "label_registry_content_hash",
+        "sample_content_hash",
+        "annotation_batch_hash",
+    )
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        _validate_sha256(value, "validated annotation hash")
+        return value
 
 
 class TaxonomyGoldSetDeclaration(BaseModel):
@@ -175,9 +187,7 @@ class TaxonomyGoldSetDeclaration(BaseModel):
     @field_validator("gold_set_id", "sample_id", "adjudicator_id")
     @classmethod
     def validate_identifier(cls, value: str) -> str:
-        if not value or value != value.strip():
-            raise ValueError("taxonomy gold-set identifiers must be nonblank and trimmed")
-        return value
+        return _trimmed_identifier(value, "taxonomy gold-set identifier")
 
     @field_validator("sample_content_hash")
     @classmethod
@@ -201,9 +211,7 @@ class TaxonomyGoldSetDeclaration(BaseModel):
 
     @model_validator(mode="after")
     def validate_unique_members(self) -> Self:
-        listing_ids = tuple(label.platform_listing_id for label in self.labels)
-        if len(listing_ids) != len(set(listing_ids)):
-            raise ValueError("taxonomy gold set cannot contain duplicate listing IDs")
+        _validate_unique_label_members(self.labels, "taxonomy gold set")
         return self
 
 
@@ -213,6 +221,17 @@ class TaxonomyGoldSetSourceBatch(BaseModel):
     batch_id: str
     annotator_id: str
     annotation_batch_hash: str
+
+    @field_validator("batch_id", "annotator_id")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        return _trimmed_identifier(value, "taxonomy gold-set source identifier")
+
+    @field_validator("annotation_batch_hash")
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        _validate_sha256(value, "annotation_batch_hash")
+        return value
 
 
 class TaxonomyGoldSetReport(BaseModel):
@@ -229,9 +248,30 @@ class TaxonomyGoldSetReport(BaseModel):
     sample_content_hash: str
     adjudicator_id: str
     adjudicated_at: datetime
-    source_batches: tuple[TaxonomyGoldSetSourceBatch, ...]
-    labels: tuple[TaxonomyManualLabel, ...]
+    source_batches: tuple[TaxonomyGoldSetSourceBatch, ...] = Field(min_length=1)
+    labels: tuple[TaxonomyManualLabel, ...] = Field(min_length=100, max_length=200)
     gold_set_content_hash: str
+
+    @field_validator("gold_set_id", "sample_id", "adjudicator_id")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        return _trimmed_identifier(value, "taxonomy gold-set report identifier")
+
+    @field_validator("adjudicated_at")
+    @classmethod
+    def validate_adjudicated_at(cls, value: datetime) -> datetime:
+        return _utc_datetime(value, "adjudicated_at")
+
+    @field_validator(
+        "annotation_contract_content_hash",
+        "label_registry_content_hash",
+        "sample_content_hash",
+        "gold_set_content_hash",
+    )
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        _validate_sha256(value, "taxonomy gold-set report hash")
+        return value
 
 
 def validate_taxonomy_annotation_batch(
@@ -250,21 +290,7 @@ def validate_taxonomy_annotation_batch(
         sample_content_hash=batch.sample_content_hash,
         labels=batch.labels,
     )
-    batch_hash = _content_hash(
-        {
-            "spec_version": batch.spec_version,
-            "annotation_contract_version": batch.annotation_contract_version,
-            "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
-            "label_registry_version": batch.label_registry_version,
-            "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
-            "batch_id": batch.batch_id,
-            "annotator_id": batch.annotator_id,
-            "sample_id": batch.sample_id,
-            "sample_content_hash": batch.sample_content_hash,
-            "created_at": batch.created_at.isoformat(),
-            "labels": [label.model_dump(mode="json") for label in batch.labels],
-        }
-    )
+    batch_hash = _content_hash(_annotation_batch_payload(batch))
     return ValidatedTaxonomyAnnotationBatch(
         batch_id=batch.batch_id,
         annotator_id=batch.annotator_id,
@@ -325,21 +351,15 @@ def build_taxonomy_gold_set(
         for batch in ordered_batches
     )
     gold_hash = _content_hash(
-        {
-            "spec_version": declaration.spec_version,
-            "annotation_spec_version": ANNOTATION_SPEC_VERSION,
-            "annotation_contract_version": declaration.annotation_contract_version,
-            "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
-            "label_registry_version": declaration.label_registry_version,
-            "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
-            "gold_set_id": declaration.gold_set_id,
-            "sample_id": declaration.sample_id,
-            "sample_content_hash": declaration.sample_content_hash,
-            "adjudicator_id": declaration.adjudicator_id,
-            "adjudicated_at": declaration.adjudicated_at.isoformat(),
-            "source_batches": [batch.model_dump(mode="json") for batch in source_batches],
-            "labels": [label.model_dump(mode="json") for label in declaration.labels],
-        }
+        _gold_set_payload(
+            gold_set_id=declaration.gold_set_id,
+            sample_id=declaration.sample_id,
+            sample_content_hash=declaration.sample_content_hash,
+            adjudicator_id=declaration.adjudicator_id,
+            adjudicated_at=declaration.adjudicated_at,
+            source_batches=source_batches,
+            labels=declaration.labels,
+        )
     )
     return TaxonomyGoldSetReport(
         gold_set_id=declaration.gold_set_id,
@@ -351,6 +371,43 @@ def build_taxonomy_gold_set(
         labels=declaration.labels,
         gold_set_content_hash=gold_hash,
     )
+
+
+def validate_taxonomy_gold_set_report(
+    sample: TaxonomyDiversitySampleReport,
+    report: TaxonomyGoldSetReport,
+) -> TaxonomyGoldSetReport:
+    """Revalidate a persisted gold-set artifact against its exact sample and frozen contract."""
+
+    sample = TaxonomyDiversitySampleReport.model_validate(sample.model_dump(mode="python"))
+    report = TaxonomyGoldSetReport.model_validate(report.model_dump(mode="python"))
+    _validate_annotation_contract()
+    _validate_sample_shape(sample)
+    _validate_sample_binding(
+        sample=sample,
+        sample_id=report.sample_id,
+        sample_content_hash=report.sample_content_hash,
+        labels=report.labels,
+    )
+    if report.annotation_contract_content_hash != ANNOTATION_CONTRACT_V1_CONTENT_HASH:
+        raise TaxonomyGoldSetError("gold set annotation-contract content hash does not match v1")
+    if report.label_registry_content_hash != TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH:
+        raise TaxonomyGoldSetError("gold set label-registry content hash does not match v1")
+    _validate_source_batch_refs(report.source_batches)
+    expected_hash = _content_hash(
+        _gold_set_payload(
+            gold_set_id=report.gold_set_id,
+            sample_id=report.sample_id,
+            sample_content_hash=report.sample_content_hash,
+            adjudicator_id=report.adjudicator_id,
+            adjudicated_at=report.adjudicated_at,
+            source_batches=report.source_batches,
+            labels=report.labels,
+        )
+    )
+    if report.gold_set_content_hash != expected_hash:
+        raise TaxonomyGoldSetError("gold set content hash does not match report content")
+    return report
 
 
 def taxonomy_annotation_contract_content_hash() -> str:
@@ -377,11 +434,18 @@ def _validate_sample_shape(sample: TaxonomyDiversitySampleReport) -> None:
     if len(sample.selected) != sample.target_size:
         raise TaxonomyGoldSetError("taxonomy sample selected membership does not match target_size")
     if sample.candidate_pool_size < len(sample.selected):
-        raise TaxonomyGoldSetError("taxonomy sample candidate pool is smaller than selected membership")
-    if sample.parser_name != _SAMPLE_PARSER_NAME or sample.parser_version != _SAMPLE_PARSER_VERSION:
+        raise TaxonomyGoldSetError(
+            "taxonomy sample candidate pool is smaller than selected membership"
+        )
+    if (
+        sample.parser_name != _SAMPLE_PARSER_NAME
+        or sample.parser_version != _SAMPLE_PARSER_VERSION
+    ):
         raise TaxonomyGoldSetError("manual gold-set tooling requires the frozen sampling parser")
     if sample.max_per_developer != _SAMPLE_MAX_PER_DEVELOPER:
-        raise TaxonomyGoldSetError("manual gold-set tooling requires the frozen sampling developer cap")
+        raise TaxonomyGoldSetError(
+            "manual gold-set tooling requires the frozen sampling developer cap"
+        )
     input_run_ids = sample.input_run_ids
     if any(not run_id or run_id != run_id.strip() for run_id in input_run_ids):
         raise TaxonomyGoldSetError("taxonomy sample input run IDs must be nonblank and trimmed")
@@ -413,6 +477,61 @@ def _validate_sample_binding(
         )
 
 
+def _validate_source_batch_refs(source_batches: tuple[TaxonomyGoldSetSourceBatch, ...]) -> None:
+    batch_ids = tuple(batch.batch_id for batch in source_batches)
+    annotator_ids = tuple(batch.annotator_id for batch in source_batches)
+    hashes = tuple(batch.annotation_batch_hash for batch in source_batches)
+    if len(batch_ids) != len(set(batch_ids)):
+        raise TaxonomyGoldSetError("gold set source batch IDs must be unique")
+    if len(annotator_ids) != len(set(annotator_ids)):
+        raise TaxonomyGoldSetError("gold set source annotators must be unique")
+    if len(hashes) != len(set(hashes)):
+        raise TaxonomyGoldSetError("gold set source batch hashes must be unique")
+
+
+def _annotation_batch_payload(batch: TaxonomyAnnotationBatch) -> dict[str, object]:
+    return {
+        "spec_version": batch.spec_version,
+        "annotation_contract_version": batch.annotation_contract_version,
+        "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
+        "label_registry_version": batch.label_registry_version,
+        "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
+        "batch_id": batch.batch_id,
+        "annotator_id": batch.annotator_id,
+        "sample_id": batch.sample_id,
+        "sample_content_hash": batch.sample_content_hash,
+        "created_at": batch.created_at.isoformat(),
+        "labels": [label.model_dump(mode="json") for label in batch.labels],
+    }
+
+
+def _gold_set_payload(
+    *,
+    gold_set_id: str,
+    sample_id: str,
+    sample_content_hash: str,
+    adjudicator_id: str,
+    adjudicated_at: datetime,
+    source_batches: tuple[TaxonomyGoldSetSourceBatch, ...],
+    labels: tuple[TaxonomyManualLabel, ...],
+) -> dict[str, object]:
+    return {
+        "spec_version": GOLD_SET_SPEC_VERSION,
+        "annotation_spec_version": ANNOTATION_SPEC_VERSION,
+        "annotation_contract_version": ANNOTATION_CONTRACT_VERSION,
+        "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
+        "label_registry_version": LABEL_REGISTRY_VERSION,
+        "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
+        "gold_set_id": gold_set_id,
+        "sample_id": sample_id,
+        "sample_content_hash": sample_content_hash,
+        "adjudicator_id": adjudicator_id,
+        "adjudicated_at": adjudicated_at.isoformat(),
+        "source_batches": [batch.model_dump(mode="json") for batch in source_batches],
+        "labels": [label.model_dump(mode="json") for label in labels],
+    }
+
+
 def _taxonomy_sample_content_hash(sample: TaxonomyDiversitySampleReport) -> str:
     payload = {
         "spec_version": sample.spec_version,
@@ -426,6 +545,21 @@ def _taxonomy_sample_content_hash(sample: TaxonomyDiversitySampleReport) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _trimmed_identifier(value: str, field_name: str) -> str:
+    if not value or value != value.strip():
+        raise ValueError(f"{field_name} must be nonblank and trimmed")
+    return value
+
+
+def _validate_unique_label_members(
+    labels: tuple[TaxonomyManualLabel, ...],
+    artifact_name: str,
+) -> None:
+    listing_ids = tuple(label.platform_listing_id for label in labels)
+    if len(listing_ids) != len(set(listing_ids)):
+        raise ValueError(f"{artifact_name} cannot contain duplicate listing IDs")
+
+
 def _utc_datetime(value: datetime, field_name: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
@@ -433,7 +567,9 @@ def _utc_datetime(value: datetime, field_name: str) -> datetime:
 
 
 def _validate_sha256(value: str, field_name: str) -> None:
-    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+    if len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value
+    ):
         raise ValueError(f"{field_name} must be 64 lowercase hexadecimal characters")
 
 

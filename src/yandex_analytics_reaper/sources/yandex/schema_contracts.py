@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+import hashlib
+import json
+from collections.abc import Mapping
+
 from yandex_analytics_reaper.schema_drift import (
     FieldExpectation,
     JsonValueType,
     SchemaContract,
 )
+from yandex_analytics_reaper.storage import RawSnapshotMetadata
 
 _NUMERIC = (JsonValueType.INTEGER, JsonValueType.NUMBER)
+_VOLATILE_PAGINATION_KEYS = {"page_id", "rtx-reqid"}
 
 _FEED_FIELDS = (
     FieldExpectation(
@@ -80,7 +86,7 @@ YANDEX_GET_GAMES_SCHEMA_V1 = SchemaContract(
         FieldExpectation(
             path="$.games[].appID",
             allowed_types=(JsonValueType.INTEGER,),
-            required=True,
+            required=False,
             minimum_presence_ratio=1.0,
         ),
         FieldExpectation(
@@ -123,3 +129,56 @@ _CONTRACTS = {
 
 def schema_contract_for_request(request_key: str) -> SchemaContract | None:
     return _CONTRACTS.get(request_key)
+
+
+def schema_comparison_scope_for_snapshot(metadata: RawSnapshotMetadata) -> str:
+    """Build a stable scope for temporal drift comparisons within comparable requests."""
+
+    context = _normalized_context(metadata.request_key, metadata.request_context)
+    payload = json.dumps(
+        {"request_key": metadata.request_key, "context": context},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    digest = hashlib.sha256(payload).hexdigest()[:20]
+    return f"{metadata.request_key}:{digest}"
+
+
+def _normalized_context(request_key: str, context: Mapping[str, object]) -> object:
+    normalized = _canonical_value(context)
+    if not isinstance(normalized, dict):
+        return normalized
+
+    if request_key in {"catalogue.feed", "catalogue.search"}:
+        params = normalized.get("params")
+        if isinstance(params, dict):
+            page_kind = "paged" if any(key in params for key in _VOLATILE_PAGINATION_KEYS) else "first"
+            normalized["params"] = {
+                key: value
+                for key, value in params.items()
+                if key not in _VOLATILE_PAGINATION_KEYS
+            }
+            normalized["page_kind"] = page_kind
+
+    if request_key == "catalogue.get_games":
+        app_ids = normalized.get("app_ids")
+        if isinstance(app_ids, list) and all(isinstance(item, int) for item in app_ids):
+            normalized["app_ids"] = sorted(app_ids)
+
+    return normalized
+
+
+def _canonical_value(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {
+            str(key): _canonical_value(child)
+            for key, child in sorted(value.items(), key=lambda item: str(item[0]))
+        }
+    if isinstance(value, list):
+        return [_canonical_value(child) for child in value]
+    if isinstance(value, tuple):
+        return [_canonical_value(child) for child in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return repr(value)

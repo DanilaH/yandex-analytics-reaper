@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Platform(StrEnum):
@@ -64,3 +65,12 @@ class ProbeContext(BaseModel):
     )
     cookie_state_hash: str | None = None
     profile_age_days: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_session_instance_semantics(self) -> Self:
+        if (
+            self.session_profile is SessionProfile.CLEAN_ANONYMOUS
+            and self.session_instance_id is not None
+        ):
+            raise ValueError("clean_anonymous context cannot carry session_instance_id")
+        return self

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 from pydantic import ValidationError
@@ -132,13 +132,14 @@ def test_unknown_and_other_require_explicit_rationale() -> None:
 
 def test_annotation_batch_validates_exact_sample_and_canonicalizes_time() -> None:
     sample = _sample()
+    plus_three = timezone(timedelta(hours=3))
     batch = _batch(sample).model_copy(
-        update={"created_at": datetime(2026, 8, 29, 15, 0, tzinfo=UTC) + timedelta(hours=3)}
+        update={"created_at": datetime(2026, 8, 29, 15, 0, tzinfo=plus_three)}
     )
     validated = validate_taxonomy_annotation_batch(sample, batch)
 
     assert len(validated.labels) == 100
-    assert validated.created_at.tzinfo is UTC
+    assert validated.created_at == datetime(2026, 8, 29, 12, 0, tzinfo=UTC)
     assert len(validated.annotation_batch_hash) == 64
 
     wrong_order = _batch(sample).model_copy(update={"labels": tuple(reversed(_labels(sample)))})
@@ -152,6 +153,15 @@ def test_annotation_boundary_revalidates_model_copy_updates() -> None:
 
     with pytest.raises(ValidationError):
         validate_taxonomy_annotation_batch(sample, tampered)
+
+
+def test_annotation_boundary_rejects_tampered_sample_content() -> None:
+    sample = _sample()
+    tampered_member = sample.selected[0].model_copy(update={"observed_titles": ("Changed",)})
+    tampered = sample.model_copy(update={"selected": (tampered_member,) + sample.selected[1:]})
+
+    with pytest.raises(TaxonomyGoldSetError, match="content hash"):
+        validate_taxonomy_annotation_batch(tampered, _batch(sample))
 
 
 def test_gold_set_reconciles_source_batches_and_hashes_adjudication() -> None:

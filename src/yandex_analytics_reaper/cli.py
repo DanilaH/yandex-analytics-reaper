@@ -8,6 +8,8 @@ from pathlib import Path
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
 from yandex_analytics_reaper.experiments import (
+    CollectionCadenceExperiment,
+    CollectionCadenceManifest,
     FeedDepthExperiment,
     SessionProfileStabilityExperiment,
 )
@@ -15,6 +17,7 @@ from yandex_analytics_reaper.ingestion import (
     ProbeCollectionError,
     SessionConfigurationError,
     SessionStateError,
+    YandexNormalizationPersistence,
     YandexPaginatedProbeRunner,
     YandexSessionManager,
 )
@@ -285,6 +288,28 @@ def _analyze_session_profile_stability(args: argparse.Namespace) -> None:
     print(report.model_dump_json(indent=2))
 
 
+def _analyze_collection_cadence(args: argparse.Namespace) -> None:
+    store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "collect daily cadence evidence before analysis"
+        )
+    manifest_path = Path(args.manifest)
+    try:
+        manifest = CollectionCadenceManifest.model_validate_json(
+            manifest_path.read_text(encoding="utf-8")
+        )
+        report = CollectionCadenceExperiment(
+            raw_store=store,
+            database_path=database_path,
+        ).analyze(manifest)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print(report.model_dump_json(indent=2))
+
+
 def _probe_games(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
@@ -303,20 +328,29 @@ def _probe_games(args: argparse.Namespace) -> None:
             error=exc,
         )
         raise
+
+    persistence = YandexNormalizationPersistence(_database_path(store))
+    persisted = tuple(
+        persistence.persist_details(game, metadata)
+        for game in parsed.games
+    )
     print(
         json.dumps(
-            [
-                {
-                    "appID": game.app_id,
-                    "title": game.title,
-                    "gqRating": game.yandex_rating,
-                    "rating": game.player_rating,
-                    "ratingCount": game.rating_count,
-                    "firstPublished": game.first_published,
-                    "minLoadTime": game.min_load_time,
-                }
-                for game in parsed.games
-            ],
+            {
+                "games": [
+                    {
+                        "appID": game.app_id,
+                        "title": game.title,
+                        "gqRating": game.yandex_rating,
+                        "rating": game.player_rating,
+                        "ratingCount": game.rating_count,
+                        "firstPublished": game.first_published,
+                        "minLoadTime": game.min_load_time,
+                    }
+                    for game in parsed.games
+                ],
+                "normalized": [item.model_dump(mode="json") for item in persisted],
+            },
             ensure_ascii=False,
             indent=2,
         )
@@ -340,7 +374,24 @@ def _probe_page(args: argparse.Namespace) -> None:
             error=exc,
         )
         raise
-    print(parsed.model_dump_json(indent=2, exclude={"raw_game_data"}))
+    if parsed.app_id != args.app_id:
+        raise SystemExit(
+            f"game page returned appID={parsed.app_id}; expected requested appID={args.app_id}"
+        )
+    persisted = YandexNormalizationPersistence(_database_path(store)).persist_play_page(
+        parsed,
+        metadata,
+    )
+    print(
+        json.dumps(
+            {
+                "page": parsed.model_dump(mode="json", exclude={"raw_game_data"}),
+                "normalized": persisted.model_dump(mode="json"),
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+    )
 
 
 def _add_context_args(parser: argparse.ArgumentParser) -> None:
@@ -407,6 +458,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
     )
     session_profiles.set_defaults(handler=_analyze_session_profile_stability)
+
+    cadence = sub.add_parser(
+        "analyze-collection-cadence",
+        help="Replay a frozen daily-reference manifest and evaluate collection-cadence-v1.",
+    )
+    cadence.add_argument("manifest", help="Path to the collection-cadence-v1 JSON manifest.")
+    cadence.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    cadence.set_defaults(handler=_analyze_collection_cadence)
 
     games = sub.add_parser("probe-games", help="Fetch and persist rich metadata for app IDs.")
     games.add_argument("app_ids", nargs="+", type=int)

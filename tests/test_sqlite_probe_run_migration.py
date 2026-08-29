@@ -27,6 +27,8 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
         connection.execute("DROP TABLE probe_pages")
         connection.execute("DROP TABLE probe_runs")
         connection.execute("DROP TABLE probe_contexts")
+        connection.execute("DROP TABLE query_family_members")
+        connection.execute("DROP TABLE query_family_versions")
         connection.execute("PRAGMA user_version = 4")
 
     SQLiteProbeRunStore(path)
@@ -37,14 +39,20 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 6
+        assert version[0] == 7
         tables = {
             str(row[0])
             for row in connection.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
         }
-        assert {"probe_contexts", "probe_runs", "probe_pages"} <= tables
+        assert {
+            "probe_contexts",
+            "probe_runs",
+            "probe_pages",
+            "query_family_versions",
+            "query_family_members",
+        } <= tables
 
         context_columns = {
             str(row[1])

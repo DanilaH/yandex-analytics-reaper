@@ -13,6 +13,7 @@ production-assessment.md
 market-observation.md
 feed-depth-experiment.md
 session-profile-stability-experiment.md
+search-query-family.md
 historical-backtesting.md
 data-model.md
 decision-policy.md

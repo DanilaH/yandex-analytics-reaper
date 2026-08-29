@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -223,6 +223,35 @@ ON probe_pages (source_id, raw_snapshot_id, run_id, page_index);
 """,
     6: """
 ALTER TABLE probe_contexts ADD COLUMN session_instance_id TEXT;
+""",
+    7: """
+CREATE TABLE IF NOT EXISTS query_family_versions (
+    family_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    source_id TEXT NOT NULL,
+    language TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (family_id, version),
+    CHECK (version >= 1)
+);
+
+CREATE TABLE IF NOT EXISTS query_family_members (
+    family_id TEXT NOT NULL,
+    version INTEGER NOT NULL,
+    ordinal INTEGER NOT NULL,
+    query_text TEXT NOT NULL,
+    variant_kind TEXT NOT NULL,
+    PRIMARY KEY (family_id, version, ordinal),
+    UNIQUE (family_id, version, query_text),
+    FOREIGN KEY (family_id, version)
+        REFERENCES query_family_versions(family_id, version)
+        ON DELETE CASCADE,
+    CHECK (ordinal >= 0)
+);
+
+CREATE INDEX IF NOT EXISTS idx_query_family_versions_latest
+ON query_family_versions (family_id, version DESC);
 """,
 }
 

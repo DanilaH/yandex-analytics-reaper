@@ -57,6 +57,14 @@ def test_v2_metric_database_migrates_to_lineage_schema_without_data_loss(
     )
 
     with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE query_family_members")
+        connection.execute("DROP TABLE query_family_versions")
+        connection.execute("DROP TABLE probe_pages")
+        connection.execute("DROP TABLE probe_runs")
+        connection.execute("DROP TABLE probe_contexts")
+        connection.execute("DROP TABLE schema_drift_events")
+        connection.execute("DROP TABLE schema_field_profiles")
+        connection.execute("DROP TABLE schema_observations")
         connection.execute("DROP TABLE observation_lineage")
         connection.execute("PRAGMA user_version = 2")
 
@@ -67,4 +75,16 @@ def test_v2_metric_database_migrates_to_lineage_schema_without_data_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 3
+        assert version[0] == 7
+        tables = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        assert {
+            "observation_lineage",
+            "schema_observations",
+            "probe_contexts",
+            "query_family_versions",
+        } <= tables

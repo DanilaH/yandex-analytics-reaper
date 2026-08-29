@@ -199,20 +199,23 @@ Possible cadence: daily, several times/week, weekly, or event-driven.
 
 ## Search discovery and competitor sets
 
-`totalGamesCount` remains a search-supply signal.
+`totalGamesCount` remains a per-search supply signal. Do not sum it across variants and call the result a competitor count.
 
-Comparable-game construction uses:
+Search intent definitions use the immutable/versioned query-family semantics in `search-query-family.md`:
 
 ```text
-versioned query family
-→ synonyms/variants
+exact QueryFamilyVersion
+→ exact ordered member strings
+→ search ProbeRuns whose persisted query_text matches declared members
 → result union
 → dedupe listing IDs
 → taxonomy filtering/similarity
 → versioned comparable set
 ```
 
-Store the query-family version and exact comparable-set membership for reproducibility.
+Query-family membership is explicit and versioned; it is never inferred from fuzzy similarity after collection. Downstream result unions/comparable sets must record the exact family/version they consumed rather than resolving `latest` retrospectively.
+
+Result-union and comparable-set construction remain separate roadmap work. The query-family model itself does not generate synonyms or claim completeness of its variants.
 
 ## Listing availability
 

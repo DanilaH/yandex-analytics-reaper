@@ -23,18 +23,24 @@ mechanics[]
 objectives[]
 meta_systems[]
 tones[]
+confidence
+rationale
 ```
 
 It does **not** require manual labels for themes, trend layers, session model, replayability, social mode, presentation, or monetization. Those fields are outside this validation contract and must not inflate annotation workload implicitly.
 
-The controlled dimensions use label registry v1. The annotation contract records a frozen SHA-256 content identity covering:
+The controlled dimensions use label registry v1. Before the first real annotation execution, the v1 annotation contract is frozen with SHA-256 content identity `9815b185ef709cb9275985474970165f16eef8f78ea74e73c1397b38fa646c17` covering:
 
+- the exact manual-label field surface including listing identity, primary label, controlled axes, confidence, and rationale;
 - the ordered `PrimaryGameplayArchetype` values;
 - the four controlled dimensions;
+- the exact confidence values `high / medium / low`;
+- the rule that `other` and `unknown` require rationale;
+- the rule that `meta_systems=none` is exclusive;
 - label-registry version 1;
 - the exact label-registry-v1 content hash.
 
-Changing any of those semantics requires a new annotation-contract version/content identity rather than silently reinterpreting historical labels.
+Changing any of those semantics after real annotations exist requires a new annotation-contract version/content identity rather than silently reinterpreting historical labels.
 
 ## `unknown` and `other`
 
@@ -133,6 +139,8 @@ The final `gold_set_content_hash` covers:
 - adjudicator and UTC adjudication time;
 - ordered source-batch identities;
 - exact ordered adjudicated labels.
+
+A persisted gold-set report can be revalidated later against the exact sample, frozen annotation/registry identities, source-batch references, and its recomputed content hash. Persisted JSON is not trusted solely because it parses.
 
 ## Agreement analysis boundary
 

@@ -23,7 +23,7 @@ ANNOTATION_SPEC_VERSION: Literal["taxonomy-manual-annotation-v1"] = (
 GOLD_SET_SPEC_VERSION: Literal["taxonomy-gold-set-v1"] = "taxonomy-gold-set-v1"
 ANNOTATION_CONTRACT_VERSION: Literal["phase3-draft-v1"] = "phase3-draft-v1"
 ANNOTATION_CONTRACT_V1_CONTENT_HASH = (
-    "5ca971d9cec8a9282ec23388049fb68d3e78a030a335c32bdf92d908f388e8b3"
+    "9815b185ef709cb9275985474970165f16eef8f78ea74e73c1397b38fa646c17"
 )
 LABEL_REGISTRY_VERSION: Literal[1] = 1
 _SAMPLE_PARSER_NAME = "YandexFeedParser"
@@ -35,6 +35,21 @@ _CONTROLLED_DIMENSIONS = (
     ControlledLabelDimension.META_SYSTEMS,
     ControlledLabelDimension.TONES,
 )
+_MANUAL_LABEL_FIELDS = (
+    "platform_listing_id",
+    "primary_archetype",
+    "mechanics",
+    "objectives",
+    "meta_systems",
+    "tones",
+    "confidence",
+    "rationale",
+)
+_RATIONALE_REQUIRED_PRIMARY_STATES = (
+    PrimaryGameplayArchetype.OTHER,
+    PrimaryGameplayArchetype.UNKNOWN,
+)
+_EXCLUSIVE_META_LABELS = ("none",)
 
 
 class TaxonomyAnnotationConfidence(StrEnum):
@@ -64,9 +79,7 @@ class TaxonomyManualLabel(BaseModel):
     @field_validator("platform_listing_id")
     @classmethod
     def validate_listing_id(cls, value: str) -> str:
-        if not value or value != value.strip():
-            raise ValueError("taxonomy annotation listing ID must be nonblank and trimmed")
-        return value
+        return _trimmed_identifier(value, "taxonomy annotation listing ID")
 
     @field_validator("mechanics", "objectives", "meta_systems", "tones")
     @classmethod
@@ -81,9 +94,7 @@ class TaxonomyManualLabel(BaseModel):
     def validate_rationale(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if not value or value != value.strip():
-            raise ValueError("taxonomy annotation rationale must be nonblank and trimmed")
-        return value
+        return _trimmed_identifier(value, "taxonomy annotation rationale")
 
     @model_validator(mode="after")
     def validate_semantics(self) -> Self:
@@ -94,10 +105,7 @@ class TaxonomyManualLabel(BaseModel):
         registry.validate_membership(ControlledLabelDimension.TONES, self.tones)
         if "none" in self.meta_systems and len(self.meta_systems) != 1:
             raise ValueError("meta_systems label 'none' cannot be combined with other labels")
-        if self.primary_archetype in {
-            PrimaryGameplayArchetype.UNKNOWN,
-            PrimaryGameplayArchetype.OTHER,
-        } and self.rationale is None:
+        if self.primary_archetype in _RATIONALE_REQUIRED_PRIMARY_STATES and self.rationale is None:
             raise ValueError("unknown/other primary archetype requires an explicit rationale")
         return self
 
@@ -413,8 +421,14 @@ def validate_taxonomy_gold_set_report(
 def taxonomy_annotation_contract_content_hash() -> str:
     payload = {
         "annotation_contract_version": ANNOTATION_CONTRACT_VERSION,
+        "label_fields": list(_MANUAL_LABEL_FIELDS),
         "primary_archetypes": [item.value for item in PrimaryGameplayArchetype],
         "controlled_dimensions": [item.value for item in _CONTROLLED_DIMENSIONS],
+        "confidence_values": [item.value for item in TaxonomyAnnotationConfidence],
+        "rationale_required_primary_states": [
+            item.value for item in _RATIONALE_REQUIRED_PRIMARY_STATES
+        ],
+        "exclusive_meta_labels": list(_EXCLUSIVE_META_LABELS),
         "label_registry_version": LABEL_REGISTRY_VERSION,
         "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
     }

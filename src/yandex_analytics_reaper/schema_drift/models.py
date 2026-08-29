@@ -210,10 +210,16 @@ class SchemaAnalysis(BaseModel):
     analysis_id: str
     analyzer_version: str
     contract_id: str
+    comparison_scope_id: str
     profile: SchemaProfile
     events: tuple[DriftEvent, ...] = ()
 
-    @field_validator("analysis_id", "analyzer_version", "contract_id")
+    @field_validator(
+        "analysis_id",
+        "analyzer_version",
+        "contract_id",
+        "comparison_scope_id",
+    )
     @classmethod
     def require_analysis_identity(cls, value: str) -> str:
         stripped = value.strip()

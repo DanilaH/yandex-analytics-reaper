@@ -31,7 +31,7 @@ SOURCE_ID = "yandex_public"
 PARSER_NAME = "YandexFeedParser"
 PARSER_VERSION = "2"
 DEFAULT_TARGET_SIZE = 150
-DEFAULT_MAX_PER_DEVELOPER = 2
+DEFAULT_MAX_PER_DEVELOPER: Literal[2] = 2
 _PAGINATION_KEYS = {"page_id", "rtx-reqid"}
 
 
@@ -103,7 +103,7 @@ class TaxonomyDiversitySampleReport(BaseModel):
     context_id: str
     input_run_ids: tuple[str, ...]
     target_size: int
-    max_per_developer: int
+    max_per_developer: Literal[2]
     candidate_pool_size: int
     selected: tuple[TaxonomySampleMember, ...]
     pool_category_id_count: int

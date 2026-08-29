@@ -42,7 +42,7 @@ Phase 1 is complete when this foundation lands on `main`.
 - [ ] session-profile stability experiment
   - [x] freeze `session-profile-stability-v1` protocol and merge matched-block replay/analyzer tooling
   - [ ] execute the empirical matched-block calibration with the frozen sample/time/order guards and record per-depth classifications
-- [ ] search query-family model
+- [x] search query-family model
 - [ ] comparable-set construction
 - [ ] update/status/media histories
 - [ ] decide actual collection cadence from measured volatility

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC
 from enum import StrEnum
-from itertools import combinations
 from math import floor
 from statistics import median
 from typing import Self
@@ -67,12 +66,18 @@ class SessionProfileRunObservation(BaseModel):
     organic_rankings: dict[int, tuple[int, ...]]
 
     @model_validator(mode="after")
-    def validate_rankings(self) -> Self:
-        if self.session_profile not in {
-            SessionProfile.CLEAN_ANONYMOUS,
-            SessionProfile.PERSISTENT_ANONYMOUS,
-        }:
+    def validate_run_observation(self) -> Self:
+        if self.session_profile is SessionProfile.CLEAN_ANONYMOUS:
+            if self.session_instance_id is not None:
+                raise ValueError("clean session-profile observation cannot carry session_instance_id")
+        elif self.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
+            if not _is_session_instance_id(self.session_instance_id):
+                raise ValueError(
+                    "persistent session-profile observation requires a valid session_instance_id"
+                )
+        else:
             raise ValueError("session-profile trial supports only clean/persistent anonymous")
+
         if set(self.organic_rankings) != set(CANDIDATE_DEPTHS):
             raise ValueError("session-profile run must contain rankings for 1/3/5/10 pages")
         full = self.organic_rankings[10]
@@ -96,6 +101,61 @@ class SessionProfileBlockObservation(BaseModel):
     persistent_session_instance_id: str
     clean_runs: tuple[SessionProfileRunObservation, SessionProfileRunObservation]
     persistent_runs: tuple[SessionProfileRunObservation, SessionProfileRunObservation]
+
+    @model_validator(mode="after")
+    def validate_block_observation(self) -> Self:
+        if not _is_session_instance_id(self.persistent_session_instance_id):
+            raise ValueError("session-profile block requires a valid persistent session instance")
+
+        clean = self.clean_runs
+        persistent = self.persistent_runs
+        if any(run.session_profile is not SessionProfile.CLEAN_ANONYMOUS for run in clean):
+            raise ValueError("clean_runs must contain only clean_anonymous observations")
+        if any(
+            run.session_profile is not SessionProfile.PERSISTENT_ANONYMOUS
+            for run in persistent
+        ):
+            raise ValueError(
+                "persistent_runs must contain only persistent_anonymous observations"
+            )
+        if any(
+            run.session_instance_id != self.persistent_session_instance_id
+            for run in persistent
+        ):
+            raise ValueError(
+                "persistent_runs must share the block persistent_session_instance_id"
+            )
+
+        all_runs = (clean[0], clean[1], persistent[0], persistent[1])
+        if len({run.run_id for run in all_runs}) != 4:
+            raise ValueError("session-profile block observations must have unique run IDs")
+        starts = [run.started_at.astimezone(UTC) for run in all_runs]
+        if len(set(starts)) != 4:
+            raise ValueError("session-profile block run starts must be distinct")
+        span_minutes = (max(starts) - min(starts)).total_seconds() / 60.0
+        if span_minutes > MAX_BLOCK_SPAN_MINUTES:
+            raise ValueError(
+                f"session-profile block span={span_minutes:.2f}m exceeds "
+                f"{MAX_BLOCK_SPAN_MINUTES:.2f}m"
+            )
+
+        chronological = tuple(sorted(all_runs, key=lambda run: run.started_at))
+        chronological_ids = (
+            chronological[0].run_id,
+            chronological[1].run_id,
+            chronological[2].run_id,
+            chronological[3].run_id,
+        )
+        if self.run_ids != chronological_ids:
+            raise ValueError("session-profile block run_ids must be chronological")
+        if self.started_at != chronological[0].started_at:
+            raise ValueError("session-profile block started_at must equal its earliest run start")
+
+        profile_sequence = tuple(run.session_profile for run in chronological)
+        expected_order = _block_order(profile_sequence)
+        if self.order is not expected_order:
+            raise ValueError("session-profile block order does not match chronological profiles")
+        return self
 
 
 class RejectedSessionProfileBlock(BaseModel):
@@ -240,7 +300,7 @@ class SessionProfileStabilityExperiment:
         elif context.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
             fingerprint = context.cookie_state_hash
             if (
-                context.session_instance_id is None
+                not _is_session_instance_id(context.session_instance_id)
                 or fingerprint is None
                 or len(fingerprint) != 64
                 or any(character not in "0123456789abcdef" for character in fingerprint)
@@ -352,7 +412,7 @@ class SessionProfileStabilityExperiment:
                 f"{MAX_BLOCK_SPAN_MINUTES:.2f}m"
             )
 
-        chronological = sorted(runs, key=lambda run: run.started_at)
+        chronological = tuple(sorted(runs, key=lambda run: run.started_at))
         clean = tuple(
             run
             for run in chronological
@@ -369,26 +429,10 @@ class SessionProfileStabilityExperiment:
             )
 
         profile_sequence = tuple(run.session_profile for run in chronological)
-        clean_outer = (
-            SessionProfile.CLEAN_ANONYMOUS,
-            SessionProfile.PERSISTENT_ANONYMOUS,
-            SessionProfile.PERSISTENT_ANONYMOUS,
-            SessionProfile.CLEAN_ANONYMOUS,
-        )
-        persistent_outer = (
-            SessionProfile.PERSISTENT_ANONYMOUS,
-            SessionProfile.CLEAN_ANONYMOUS,
-            SessionProfile.CLEAN_ANONYMOUS,
-            SessionProfile.PERSISTENT_ANONYMOUS,
-        )
-        if profile_sequence == clean_outer:
-            order = SessionProfileBlockOrder.CLEAN_OUTER
-        elif profile_sequence == persistent_outer:
-            order = SessionProfileBlockOrder.PERSISTENT_OUTER
-        else:
-            raise SessionProfileEligibilityError(
-                "session-profile block order must be C-P-P-C or P-C-C-P"
-            )
+        try:
+            order = _block_order(profile_sequence)
+        except ValueError as exc:
+            raise SessionProfileEligibilityError(str(exc)) from exc
 
         persistent_ids = {run.session_instance_id for run in persistent}
         if None in persistent_ids or len(persistent_ids) != 1:
@@ -399,8 +443,14 @@ class SessionProfileStabilityExperiment:
         if persistent_id is None:
             raise RuntimeError("validated persistent session instance ID disappeared")
 
+        run_ids_chronological = (
+            chronological[0].run_id,
+            chronological[1].run_id,
+            chronological[2].run_id,
+            chronological[3].run_id,
+        )
         return SessionProfileBlockObservation(
-            run_ids=tuple(run.run_id for run in chronological),
+            run_ids=run_ids_chronological,
             started_at=chronological[0].started_at,
             order=order,
             persistent_session_instance_id=persistent_id,
@@ -461,6 +511,18 @@ def evaluate_session_profile_blocks(
     if eligible_run_sets & rejected_run_sets:
         raise ValueError("session-profile block cannot be both eligible and rejected")
 
+    evidence_run_ids = [
+        run_id
+        for block in eligible
+        for run_id in block.run_ids
+    ] + [
+        run_id
+        for block in rejected
+        for run_id in block.run_ids
+    ]
+    if len(set(evidence_run_ids)) != len(evidence_run_ids):
+        raise ValueError("session-profile run IDs cannot be reused across blocks")
+
     persistent_ids = {block.persistent_session_instance_id for block in eligible}
     if len(persistent_ids) > 1:
         raise SessionProfileCohortError(
@@ -474,6 +536,15 @@ def evaluate_session_profile_blocks(
         submitted = tuple(block.run_ids for block in eligible)
     else:
         submitted = tuple(submitted_blocks)
+        submitted_run_ids: list[str] = []
+        for block in submitted:
+            if len(block) != 4 or any(not run_id.strip() for run_id in block):
+                raise ValueError(
+                    "every submitted session-profile block must contain four non-blank run IDs"
+                )
+            submitted_run_ids.extend(block)
+        if len(set(submitted_run_ids)) != len(submitted_run_ids):
+            raise ValueError("submitted session-profile run IDs cannot be reused across blocks")
         submitted_sets = {frozenset(block) for block in submitted}
         if len(submitted_sets) != len(submitted):
             raise ValueError("submitted session-profile blocks must be unique")
@@ -713,9 +784,7 @@ def _sufficiency_reasons(
 ) -> list[str]:
     reasons: list[str] = []
     if len(blocks) < MIN_ELIGIBLE_BLOCKS:
-        reasons.append(
-            f"eligible blocks={len(blocks)} < required {MIN_ELIGIBLE_BLOCKS}"
-        )
+        reasons.append(f"eligible blocks={len(blocks)} < required {MIN_ELIGIBLE_BLOCKS}")
     if span_hours < MIN_SAMPLE_SPAN_HOURS:
         reasons.append(
             f"sample span={span_hours:.2f}h < required {MIN_SAMPLE_SPAN_HOURS:.2f}h"
@@ -750,6 +819,35 @@ def _hour_buckets_utc(
         for block in blocks
     }
     return tuple(value.isoformat().replace("+00:00", "Z") for value in sorted(buckets))
+
+
+def _block_order(
+    profiles: Sequence[SessionProfile],
+) -> SessionProfileBlockOrder:
+    clean_outer = (
+        SessionProfile.CLEAN_ANONYMOUS,
+        SessionProfile.PERSISTENT_ANONYMOUS,
+        SessionProfile.PERSISTENT_ANONYMOUS,
+        SessionProfile.CLEAN_ANONYMOUS,
+    )
+    persistent_outer = (
+        SessionProfile.PERSISTENT_ANONYMOUS,
+        SessionProfile.CLEAN_ANONYMOUS,
+        SessionProfile.CLEAN_ANONYMOUS,
+        SessionProfile.PERSISTENT_ANONYMOUS,
+    )
+    if tuple(profiles) == clean_outer:
+        return SessionProfileBlockOrder.CLEAN_OUTER
+    if tuple(profiles) == persistent_outer:
+        return SessionProfileBlockOrder.PERSISTENT_OUTER
+    raise ValueError("session-profile block order must be C-P-P-C or P-C-C-P")
+
+
+def _is_session_instance_id(value: str | None) -> bool:
+    if value is None or not value.startswith("session:"):
+        return False
+    suffix = value.removeprefix("session:")
+    return len(suffix) == 32 and all(character in "0123456789abcdef" for character in suffix)
 
 
 def _jaccard(first: Sequence[int], second: Sequence[int]) -> float:

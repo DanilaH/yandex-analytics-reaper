@@ -6,8 +6,14 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from yandex_analytics_reaper.config import load_settings
-from yandex_analytics_reaper.domain.models import ProbeContext
-from yandex_analytics_reaper.ingestion import ProbeCollectionError, YandexPaginatedProbeRunner
+from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
+from yandex_analytics_reaper.ingestion import (
+    ProbeCollectionError,
+    SessionConfigurationError,
+    SessionStateError,
+    YandexPaginatedProbeRunner,
+    YandexSessionManager,
+)
 from yandex_analytics_reaper.schema_drift import DriftSeverity, SQLiteSchemaDriftRegistry
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
 from yandex_analytics_reaper.sources.yandex import (
@@ -31,6 +37,7 @@ def _context(args: argparse.Namespace) -> ProbeContext:
         language=args.lang,
         device_type=args.device,
         platform=args.platform,
+        session_profile=SessionProfile(args.session_profile),
     )
 
 
@@ -51,6 +58,16 @@ def _schema_registry(store: FilesystemRawSnapshotStore) -> SQLiteSchemaDriftRegi
 def _client() -> YandexPublicClient:
     settings = load_settings()
     return YandexPublicClient(
+        base_url=settings.yandex_base_url,
+        timeout_seconds=settings.http_timeout_seconds,
+        user_agent=settings.user_agent,
+    )
+
+
+def _session_manager(store: FilesystemRawSnapshotStore) -> YandexSessionManager:
+    settings = load_settings()
+    return YandexSessionManager(
+        state_root=store.root.parent / "sessions",
         base_url=settings.yandex_base_url,
         timeout_seconds=settings.http_timeout_seconds,
         user_agent=settings.user_agent,
@@ -154,15 +171,15 @@ def _paginated_runner(
 
 def _probe_feed(args: argparse.Namespace) -> None:
     store = _store(args.output)
-    with _client() as client:
-        try:
-            result = _paginated_runner(store, client).run_feed(
-                _context(args),
+    try:
+        with _session_manager(store).open(_context(args)) as session:
+            result = _paginated_runner(store, session.client).run_feed(
+                session.context,
                 page_limit=args.pages,
                 count=args.count,
             )
-        except ProbeCollectionError as exc:
-            raise SystemExit(str(exc)) from exc
+    except (ProbeCollectionError, SessionConfigurationError, SessionStateError) as exc:
+        raise SystemExit(str(exc)) from exc
 
     cards = [game for page in result.parsed_pages for game in page.games]
     unique_app_ids = list(dict.fromkeys(game.app_id for game in cards))
@@ -187,15 +204,15 @@ def _probe_feed(args: argparse.Namespace) -> None:
 
 def _probe_search(args: argparse.Namespace) -> None:
     store = _store(args.output)
-    with _client() as client:
-        try:
-            result = _paginated_runner(store, client).run_search(
+    try:
+        with _session_manager(store).open(_context(args)) as session:
+            result = _paginated_runner(store, session.client).run_search(
                 args.query,
-                _context(args),
+                session.context,
                 page_limit=args.pages,
             )
-        except ProbeCollectionError as exc:
-            raise SystemExit(str(exc)) from exc
+    except (ProbeCollectionError, SessionConfigurationError, SessionStateError) as exc:
+        raise SystemExit(str(exc)) from exc
 
     cards = [game for page in result.parsed_pages for game in page.games]
     unique_app_ids = list(dict.fromkeys(game.app_id for game in cards))
@@ -288,6 +305,12 @@ def _add_context_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--lang", default="ru")
     parser.add_argument("--device", choices=["desktop", "mobile"], default="desktop")
     parser.add_argument("--platform", default="desktop_other")
+    parser.add_argument(
+        "--session-profile",
+        choices=[profile.value for profile in SessionProfile],
+        default=SessionProfile.CLEAN_ANONYMOUS.value,
+        help="HTTP session isolation profile for contextual feed/search probes.",
+    )
     parser.add_argument("--output", help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.")
 
 

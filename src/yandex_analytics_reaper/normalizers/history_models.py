@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from yandex_analytics_reaper.domain import (
     ListingMediaObservation,
@@ -16,21 +16,21 @@ class NormalizedListingUpdate(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     observation: ListingUpdateObservation
-    lineage: tuple[FieldLineage, ...]
+    lineage: tuple[FieldLineage, ...] = Field(min_length=1)
 
 
 class NormalizedListingStatus(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     observation: ListingStatusObservation
-    lineage: tuple[FieldLineage, ...]
+    lineage: tuple[FieldLineage, ...] = Field(min_length=1)
 
 
 class NormalizedListingMedia(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     observation: ListingMediaObservation
-    lineage: tuple[FieldLineage, ...]
+    lineage: tuple[FieldLineage, ...] = Field(min_length=1)
 
 
 class NormalizedListingHistories(BaseModel):

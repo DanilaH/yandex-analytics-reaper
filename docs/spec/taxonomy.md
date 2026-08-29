@@ -34,6 +34,7 @@ The Phase 3 draft model is intentionally split into a coarse primary bucket and 
 GameTaxonomyDraft
   primary_archetype
   dimensions
+    label_registry_version
     mechanics[]
     objectives[]
     meta_systems[]
@@ -50,7 +51,7 @@ GameTaxonomyDraft
   observed_monetization
 ```
 
-`ControlledTaxonomyDimensions` controls the **shape of the axes** now. Concrete versioned label registries for mechanics/objectives/meta/tone and related controlled values are a separate roadmap task and must not be silently invented in this structural refactor.
+`ControlledTaxonomyDimensions` owns the durable axis shape. The four free-string aggregation axes `mechanics`, `objectives`, `meta_systems`, and `tones` are validated against one explicit immutable label-registry version.
 
 Open theme/trend entities intentionally remain outside `ControlledTaxonomyDimensions` because their vocabulary must evolve independently of durable aggregation axes.
 
@@ -102,24 +103,25 @@ Do not create primary buckets such as `shoot`, `collect`, `build_place`, or `exp
 
 A classifier must be allowed to return `unknown`; it must not guess merely to satisfy the schema. `other` is valid only when the evidence is sufficient to conclude that the dominant gameplay pattern genuinely falls outside the current registry.
 
-## Controlled dimensions
+## Controlled label registries
 
-Use versioned label registries for dimensions that drive aggregation:
+Draft controlled labels are versioned independently from the later validated taxonomy freeze.
 
 ```text
-mechanics[]
-objectives[]
-meta_systems[]
-session_model
-replayability_sources[]
-tones[]
-social_mode
-presentation dimensions
+label_registry_version = 1
 ```
 
-The structural model already forbids undeclared axes and arbitrary presentation keys. The concrete label registries are not frozen yet. Their definition/versioning belongs to the dedicated Phase 3 registry task.
+Versioning rules:
 
-### Mechanics examples
+- a registry version is immutable once classifications may reference it;
+- adding, removing, renaming, splitting, or merging a controlled label creates a new version;
+- historical classifications retain the exact version they used;
+- an unknown label is rejected rather than silently accepted or mapped to a nearby label;
+- gold-set validation may replace draft v1 with a later version before the first validated taxonomy is frozen.
+
+The v1 bundle controls exactly four free-string axes. `session_model` and `social_mode` already use explicit enums. `replayability_sources` and presentation value registries remain outside this roadmap item and must not be treated as frozen merely because their structural fields exist.
+
+### Mechanics v1
 
 ```text
 tap
@@ -152,7 +154,7 @@ physics
 destroy
 ```
 
-### Objectives examples
+### Objectives v1
 
 ```text
 reach_finish
@@ -171,7 +173,7 @@ create_customize
 explore
 ```
 
-### Meta examples
+### Meta systems v1
 
 ```text
 none
@@ -194,6 +196,22 @@ prestige_reset
 idle_return
 liveops_events
 ```
+
+### Tones v1
+
+```text
+absurd
+comedic
+cozy
+dark
+dramatic
+horror
+relaxing
+tense
+wholesome
+```
+
+The v1 tone list is intentionally compact and provisional. Gold-set confusion/coverage analysis, not intuition alone, decides whether later versions add or merge labels.
 
 ## Theme / setting
 
@@ -247,7 +265,7 @@ camera: top_down / side / first_person / third_person / isometric / fixed_board 
 art_style: versioned controlled registry
 ```
 
-The concrete registries are not frozen in this structural task.
+These presentation value registries are not frozen by the v1 mechanics/objectives/meta/tones bundle.
 
 ## Monetization taxonomy
 
@@ -273,6 +291,7 @@ Every classification stores:
 
 ```text
 taxonomy_version
+label_registry_version
 classifier_version
 classified_at
 input_snapshot_ids[]

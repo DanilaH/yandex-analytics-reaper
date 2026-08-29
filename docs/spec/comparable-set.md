@@ -10,6 +10,7 @@ The first frozen construction method is:
 
 ```text
 construction_method = yandex_search_union_v1
+parser = YandexFeedParser@2
 ```
 
 Inputs:
@@ -58,14 +59,16 @@ loads ordered ProbePages
 → loads immutable raw metadata/body
 → verifies content SHA-256
 → requires successful HTTP status
-→ parses with the construction-declared YandexFeedParser version
+→ parses with YandexFeedParser@2
 → reconstructs ProbePage from raw request/context + parsed pagination
 → requires reconstructed ProbePage == stored ProbePage
 ```
 
-Only organic search cards enter `yandex_search_union_v1`. Sponsored cards remain observable source facts but are not search-relevance evidence for peer-set membership.
+`yandex_search_union_v1` deliberately uses the **parsed-card semantics of `YandexFeedParser@2`**. That parser deduplicates repeated `appID` values within one raw page and retains the first parsed representation. This construction does not reinterpret the same raw page with a second competing parser merely to recover duplicate representations.
 
-For every organic occurrence store provenance:
+Only parsed organic search cards enter `yandex_search_union_v1`. A parsed sponsored card is not search-relevance evidence for peer-set membership. If future evidence shows that parser-level first-representation dedupe materially hides useful organic occurrences, fix that with a new parser/construction version rather than silently changing historical v1 membership.
+
+For every parsed organic occurrence that supports membership store provenance:
 
 ```text
 query member ordinal
@@ -75,7 +78,7 @@ page_index
 source_object_path
 ```
 
-The source object path is parser-owned raw lineage such as `$.feed[0].items[3]`.
+The source object path is parser-owned raw lineage such as `$.feed[0].items[3]`. Immutable raw bodies remain available for future re-interpretation under a new explicit parser/construction version.
 
 ## Union and deterministic order
 
@@ -93,7 +96,7 @@ query-family member ordinal
 → parsed organic card order within the page
 ```
 
-A listing receives its comparable-set `ordinal` at its first organic occurrence in that traversal. Later organic occurrences add evidence but do not create duplicate members or change the first-occurrence ordinal.
+A listing receives its comparable-set `ordinal` at its first parsed organic occurrence in that traversal. Later parsed organic occurrences add evidence but do not create duplicate members or change the first-occurrence ordinal.
 
 This ordering is deterministic provenance/convenience. It is **not** a relevance score or ranking model.
 
@@ -142,7 +145,7 @@ comparable_set_members
   platform_listing_id
 ```
 
-Persist all organic membership evidence:
+Persist parsed organic membership evidence:
 
 ```text
 comparable_set_member_evidence
@@ -159,7 +162,7 @@ The exact same `(set_id, version)` write is idempotent. Different content under 
 
 ## Coverage semantics
 
-A search-derived set represents **the union observed under its exact family, context, page limit, run IDs, and time interval**. It is not declared exhaustive merely because every query-family member was executed.
+A search-derived set represents **the union observed under its exact family, context, page limit, run IDs, parser version, and time interval**. It is not declared exhaustive merely because every query-family member was executed.
 
 `totalGamesCount` remains a per-query supply signal and is not summed into comparable-set size.
 

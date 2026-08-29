@@ -27,6 +27,12 @@ from yandex_analytics_reaper.normalizers import (
 from .lineage import persist_lineage_in_connection
 from .sqlite import SQLiteDatabase
 
+_HISTORY_TABLE_TYPES = {
+    "listing_update_observations": "listing_update",
+    "listing_status_observations": "listing_status",
+    "listing_media_observations": "listing_media",
+}
+
 
 class ListingHistoryWrite(BaseModel):
     """One normalized history bundle plus shared evidence/provenance metadata."""
@@ -40,6 +46,9 @@ class ListingHistoryWrite(BaseModel):
 
     @model_validator(mode="after")
     def validate_contract(self) -> Self:
+        _require_exact_non_blank(self.evidence.source_id, "evidence.source_id")
+        _require_exact_non_blank(self.normalizer_name, "normalizer_name")
+        _require_exact_non_blank(self.normalizer_version, "normalizer_version")
         _require_aware(self.evidence.observed_at, "evidence.observed_at")
         if self.evidence.retrieved_at is None:
             raise ValueError("persisted listing-history evidence requires retrieved_at")
@@ -54,8 +63,6 @@ class ListingHistoryWrite(BaseModel):
                 raise ValueError("available_at cannot be later than retrieved_at")
         if self.evidence.period_start is not None or self.evidence.period_end is not None:
             raise ValueError("listing-history evidence does not accept metric periods")
-        if not self.normalizer_name.strip() or not self.normalizer_version.strip():
-            raise ValueError("normalizer name/version cannot be blank")
 
         observations = _history_observations(self.histories)
         if any(
@@ -63,6 +70,16 @@ class ListingHistoryWrite(BaseModel):
             for item in observations
         ):
             raise ValueError("history observations and evidence observed_at must match")
+        for item in observations:
+            for lineage in item.lineage:
+                if lineage.transformation_version != self.normalizer_version:
+                    raise ValueError(
+                        "history lineage transformation_version must match normalizer_version"
+                    )
+                if not lineage.transformation_name.startswith(f"{self.normalizer_name}."):
+                    raise ValueError(
+                        "history lineage transformation_name must match normalizer_name"
+                    )
         return self
 
 
@@ -132,6 +149,7 @@ class SQLiteListingHistoryStore:
         return self.database.path
 
     def persist(self, write: ListingHistoryWrite) -> tuple[str, ...]:
+        write = ListingHistoryWrite.model_validate(write.model_dump(mode="python"))
         with self.database.connect() as connection:
             listing_ids = {
                 item.observation.platform_listing_id
@@ -195,21 +213,20 @@ class SQLiteListingHistoryStore:
         listing_id: str,
         as_of: AwareDatetime | None,
     ) -> list[sqlite3.Row]:
-        if typed_table not in {
-            "listing_update_observations",
-            "listing_status_observations",
-            "listing_media_observations",
-        }:
+        expected_type = _HISTORY_TABLE_TYPES.get(typed_table)
+        if expected_type is None:
             raise ValueError("unsupported listing history table")
         query = f"""
             SELECT
                 n.id,
                 n.source_id,
+                n.observation_type,
                 n.observed_at,
                 n.available_at,
                 n.retrieved_at,
                 n.normalizer_name,
                 n.normalizer_version,
+                h.observation_id AS evidence_observation_id,
                 h.provenance,
                 h.measurement_kind,
                 h.semantic_confidence,
@@ -219,9 +236,9 @@ class SQLiteListingHistoryStore:
                 h.uncertainty_json,
                 h.lineage_refs_json,
                 t.*
-            FROM normalized_observations AS n
-            JOIN listing_history_evidence AS h ON h.observation_id = n.id
-            JOIN {typed_table} AS t ON t.observation_id = n.id
+            FROM {typed_table} AS t
+            JOIN normalized_observations AS n ON n.id = t.observation_id
+            LEFT JOIN listing_history_evidence AS h ON h.observation_id = n.id
             WHERE t.platform_listing_id = ?
         """
         params: list[object] = [listing_id]
@@ -230,8 +247,30 @@ class SQLiteListingHistoryStore:
             query += " AND n.observed_at <= ?"
             params.append(_timestamp(as_of))
         query += " ORDER BY n.observed_at, n.retrieved_at, n.id"
+
+        rows: list[sqlite3.Row] = []
         with self.database.connect() as connection:
-            return connection.execute(query, params).fetchall()
+            raw_rows = connection.execute(query, params).fetchall()
+            for raw_row in raw_rows:
+                if not isinstance(raw_row, sqlite3.Row):
+                    raise RuntimeError("listing history query did not return sqlite rows")
+                if str(raw_row["observation_type"]) != expected_type:
+                    raise RuntimeError("stored listing history observation_type is invalid")
+                if raw_row["evidence_observation_id"] is None:
+                    raise RuntimeError("stored listing history is missing evidence")
+                lineage = connection.execute(
+                    """
+                    SELECT 1
+                    FROM observation_lineage
+                    WHERE normalized_observation_id = ?
+                    LIMIT 1
+                    """,
+                    (str(raw_row["id"]),),
+                ).fetchone()
+                if lineage is None:
+                    raise RuntimeError("stored listing history is missing field lineage")
+                rows.append(raw_row)
+        return rows
 
     def _persist_update(
         self,
@@ -622,6 +661,13 @@ def _json_list(value: object) -> list[str]:
     if not isinstance(parsed, list) or not all(isinstance(item, str) for item in parsed):
         raise ValueError("stored lineage_refs_json is invalid")
     return parsed
+
+
+def _require_exact_non_blank(value: str, field: str) -> None:
+    if not value:
+        raise ValueError(f"{field} cannot be blank")
+    if value != value.strip():
+        raise ValueError(f"{field} must already be trimmed")
 
 
 def _require_aware(value: datetime, field: str) -> None:

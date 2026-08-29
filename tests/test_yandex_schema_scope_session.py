@@ -69,6 +69,29 @@ def test_cookie_fingerprint_and_profile_age_do_not_fragment_schema_scope() -> No
     assert schema_comparison_scope_for_snapshot(first) == schema_comparison_scope_for_snapshot(later)
 
 
+def test_nullable_session_instance_is_backward_compatible_with_legacy_scope() -> None:
+    current = _metadata(
+        session_profile="clean_anonymous",
+        session_instance_id=None,
+        cookie_state_hash=None,
+        profile_age_days=0,
+    )
+    legacy_probe_context = dict(current.request_context["probe_context"])
+    legacy_probe_context.pop("session_instance_id")
+    legacy = current.model_copy(
+        update={
+            "request_context": {
+                **current.request_context,
+                "probe_context": legacy_probe_context,
+            }
+        }
+    )
+
+    assert schema_comparison_scope_for_snapshot(current) == schema_comparison_scope_for_snapshot(
+        legacy
+    )
+
+
 def test_persistent_session_instance_remains_part_of_schema_scope() -> None:
     first = _metadata(
         session_profile="persistent_anonymous",

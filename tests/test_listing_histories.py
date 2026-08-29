@@ -38,7 +38,10 @@ from yandex_analytics_reaper.storage import (
 )
 
 
-def _context(observed_at: datetime, raw_snapshot_id: str = "raw:history") -> NormalizationContext:
+def _context(
+    observed_at: datetime,
+    raw_snapshot_id: str = "raw:history",
+) -> NormalizationContext:
     return NormalizationContext(
         raw_snapshot_id=raw_snapshot_id,
         observed_at=observed_at,
@@ -71,6 +74,20 @@ def _persist_listing(path: Path, observed_at: datetime) -> None:
         ),
         None,
         observed_at,
+    )
+
+
+def _write(
+    histories: object,
+    context: NormalizationContext,
+) -> ListingHistoryWrite:
+    return ListingHistoryWrite.model_validate(
+        {
+            "histories": histories,
+            "evidence": _evidence(context),
+            "normalizer_name": YandexListingHistoryNormalizer.__name__,
+            "normalizer_version": YandexListingHistoryNormalizer.version,
+        }
     )
 
 
@@ -110,10 +127,16 @@ def test_history_normalizer_keeps_status_conservative_and_media_canonical() -> N
     assert first_history.status.observation.status is ListingStatus.PUBLISHED
     assert first_history.media is not None
     assert second_history.media is not None
-    assert first_history.media.observation.manifest_hash == second_history.media.observation.manifest_hash
+    assert (
+        first_history.media.observation.manifest_hash
+        == second_history.media.observation.manifest_hash
+    )
     assert missing.status is not None
     assert missing.status.observation.status is ListingStatus.UNKNOWN
-    assert missing.status.observation.reason is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED
+    assert (
+        missing.status.observation.reason
+        is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED
+    )
     assert missing.update is None
     assert missing.media is None
 
@@ -132,10 +155,15 @@ def test_empty_media_manifest_is_observed_but_missing_media_is_not() -> None:
 
     assert missing_history.media is None
     assert empty_history.media is not None
-    assert empty_history.media.observation.manifest_hash == hashlib.sha256(b"{}").hexdigest()
+    assert (
+        empty_history.media.observation.manifest_hash
+        == hashlib.sha256(b"{}").hexdigest()
+    )
 
 
-def test_play_page_history_persists_idempotently_with_lineage_and_as_of(tmp_path: Path) -> None:
+def test_play_page_history_persists_idempotently_with_lineage_and_as_of(
+    tmp_path: Path,
+) -> None:
     observed_at = datetime(2026, 8, 29, 11, 0, tzinfo=UTC)
     context = _context(observed_at)
     histories = YandexListingHistoryNormalizer().normalize_play_page(
@@ -149,12 +177,7 @@ def test_play_page_history_persists_idempotently_with_lineage_and_as_of(tmp_path
     path = tmp_path / "market.sqlite3"
     _persist_listing(path, observed_at)
     store = SQLiteListingHistoryStore(path)
-    write = ListingHistoryWrite(
-        histories=histories,
-        evidence=_evidence(context),
-        normalizer_name=YandexListingHistoryNormalizer.__name__,
-        normalizer_version=YandexListingHistoryNormalizer.version,
-    )
+    write = _write(histories, context)
 
     first_ids = store.persist(write)
     second_ids = store.persist(write)
@@ -183,7 +206,48 @@ def test_play_page_history_persists_idempotently_with_lineage_and_as_of(tmp_path
     assert status_lineage[0].source_field_path == "$.__playPageData__.gameData.appID"
 
 
-def test_conflicting_value_under_same_history_identity_is_rejected(tmp_path: Path) -> None:
+def test_catalogue_media_and_unknown_status_round_trip(tmp_path: Path) -> None:
+    path = tmp_path / "market.sqlite3"
+    first_at = datetime(2026, 8, 29, 11, 30, tzinfo=UTC)
+    _persist_listing(path, first_at)
+    parser = YandexGetGamesParser()
+    normalizer = YandexListingHistoryNormalizer()
+    details = parser.parse(
+        json.dumps({"games": [{"appID": 1, "media": {"cover": "one"}}]}).encode()
+    ).games[0]
+    first_context = _context(first_at, "raw:catalogue-present")
+    first_histories = normalizer.normalize_details(details, first_context)
+    store = SQLiteListingHistoryStore(path)
+
+    first_ids = store.persist(_write(first_histories, first_context))
+
+    assert len(first_ids) == 2
+    media = store.media_history("yandex_games:1")
+    statuses = store.status_history("yandex_games:1")
+    assert len(media) == 1
+    assert len(statuses) == 1
+    assert statuses[0].observation.status is ListingStatus.PUBLISHED
+
+    second_at = first_at + timedelta(minutes=1)
+    second_context = _context(second_at, "raw:catalogue-missing")
+    missing_histories = normalizer.normalize_missing_catalogue_app(1, second_context)
+    store.persist(_write(missing_histories, second_context))
+
+    statuses = store.status_history("yandex_games:1")
+    assert [item.observation.status for item in statuses] == [
+        ListingStatus.PUBLISHED,
+        ListingStatus.UNKNOWN,
+    ]
+    assert (
+        statuses[-1].observation.reason
+        is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED
+    )
+    assert store.status_history("yandex_games:1", as_of=first_at) == statuses[:1]
+
+
+def test_conflicting_value_or_evidence_under_same_history_identity_is_rejected(
+    tmp_path: Path,
+) -> None:
     observed_at = datetime(2026, 8, 29, 11, 0, tzinfo=UTC)
     context = _context(observed_at)
     histories = YandexListingHistoryNormalizer().normalize_play_page(
@@ -194,12 +258,7 @@ def test_conflicting_value_under_same_history_identity_is_rejected(tmp_path: Pat
     path = tmp_path / "market.sqlite3"
     _persist_listing(path, observed_at)
     store = SQLiteListingHistoryStore(path)
-    write = ListingHistoryWrite(
-        histories=histories,
-        evidence=_evidence(context),
-        normalizer_name=YandexListingHistoryNormalizer.__name__,
-        normalizer_version=YandexListingHistoryNormalizer.version,
-    )
+    write = _write(histories, context)
     store.persist(write)
 
     conflicting_update = histories.update.model_copy(
@@ -210,9 +269,28 @@ def test_conflicting_value_under_same_history_identity_is_rejected(tmp_path: Pat
         }
     )
     conflicting_histories = histories.model_copy(update={"update": conflicting_update})
-
     with pytest.raises(ValueError, match="conflicting listing update observation"):
         store.persist(write.model_copy(update={"histories": conflicting_histories}))
+
+    conflicting_evidence = write.evidence.model_copy(
+        update={"semantic_confidence": SemanticConfidence.LOW}
+    )
+    with pytest.raises(ValueError, match="conflicting listing-history envelope"):
+        store.persist(write.model_copy(update={"evidence": conflicting_evidence}))
+
+
+def test_history_store_requires_existing_listing(tmp_path: Path) -> None:
+    observed_at = datetime(2026, 8, 29, 11, 0, tzinfo=UTC)
+    context = _context(observed_at)
+    histories = YandexListingHistoryNormalizer().normalize_play_page(
+        PlayPageData(app_id=1, app_version="1.2.3"),
+        context,
+    )
+
+    with pytest.raises(ValueError, match="must be persisted before histories"):
+        SQLiteListingHistoryStore(tmp_path / "market.sqlite3").persist(
+            _write(histories, context)
+        )
 
 
 def test_lineage_conflict_rolls_back_whole_history_bundle(tmp_path: Path) -> None:
@@ -232,14 +310,7 @@ def test_lineage_conflict_rolls_back_whole_history_bundle(tmp_path: Path) -> Non
     store = SQLiteListingHistoryStore(path)
 
     with pytest.raises(ValueError, match="duplicate lineage key"):
-        store.persist(
-            ListingHistoryWrite(
-                histories=invalid_histories,
-                evidence=_evidence(context),
-                normalizer_name=YandexListingHistoryNormalizer.__name__,
-                normalizer_version=YandexListingHistoryNormalizer.version,
-            )
-        )
+        store.persist(_write(invalid_histories, context))
 
     assert store.update_history("yandex_games:1") == ()
     assert store.status_history("yandex_games:1") == ()

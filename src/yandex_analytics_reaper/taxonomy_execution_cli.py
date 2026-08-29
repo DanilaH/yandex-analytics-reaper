@@ -131,7 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     gold.add_argument(
         "batches",
         nargs="+",
-        help="Source annotation batch JSON paths in declaration source-hash order.",
+        help="Source annotation batch JSON paths referenced by the declaration.",
     )
     _add_report_argument(gold)
     gold.set_defaults(handler=_build_gold_set)

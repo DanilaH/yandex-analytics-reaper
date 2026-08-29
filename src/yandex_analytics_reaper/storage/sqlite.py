@@ -471,6 +471,7 @@ ON listing_state_observations (platform_listing_id, observation_id);
 """,
     12: """
 ALTER TABLE listing_state_observations ADD COLUMN developer_name TEXT;
+ALTER TABLE listing_state_observations ADD COLUMN first_published_at TEXT;
 """,
 }
 

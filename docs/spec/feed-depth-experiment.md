@@ -10,6 +10,8 @@ This experiment does **not** decide session-profile, device, language, or long-t
 
 ```text
 spec_version = feed-depth-v1
+analyzer_version = 1
+feed_parser_version = 2
 surface = recommendation_feed
 candidate_depths = 1 / 3 / 5 / 10 pages
 page_size = 20 requested cards
@@ -19,7 +21,9 @@ baseline_platform = desktop_other
 baseline_session_profile = clean_anonymous
 ```
 
-A trial is one logical `ProbeRun` requested at **10 pages**. Depths 1/3/5/10 are derived as prefixes of that same run. Do not collect four independent runs for the four candidate depths: doing so would mix depth effects with time/random/session variation.
+A trial is one logical `ProbeRun` requested at **up to 10 pages**. Depths 1/3/5/10 are derived as prefixes of that same run. Do not collect four independent runs for the four candidate depths: doing so would mix depth effects with time/random/session variation.
+
+If the source legitimately exhausts before page 10, the trial remains eligible. Candidate depths beyond source exhaustion saturate at the final available organic ranking. For example, if the source ends after page 7, the derived depth-10 ranking is the seven-page result; if it ends after page 2, the derived depth-3/5/10 rankings are all the same two-page result. This mirrors real collection semantics: a configured page limit is a maximum, not a promise that the source has that many pages.
 
 Only organic cards participate in depth selection. Sponsored cards remain observable but never count toward organic coverage or rank stability.
 
@@ -33,20 +37,20 @@ A trial is eligible only when all of the following hold:
 probe_kind = recommendation_feed
 status = completed
 requested_page_limit = 10
-persisted pages = 10
-page indexes = 0..9
+persisted pages = contiguous prefix from page 0, with 1..10 pages total
+if fewer than 10 pages exist, the final page reports source exhaustion
 session_profile = clean_anonymous
 cookie_state_hash = null
 profile_age_days = 0
 language = ru
 device_type = desktop
 platform = desktop_other
-every raw page requested games_count = 20
+every persisted raw page requested games_count = 20
 all raw bodies still match their persisted content hashes
-all 10 pages can be replayed by the current declared feed parser
+all persisted pages can be replayed by YandexFeedParser@2
 ```
 
-A run that exhausts before page 10, becomes `partial`/`failed`, has missing raw data, or uses a different context is not silently coerced into an eligible trial.
+A run that becomes `partial`/`failed`, has a non-contiguous page chain, has missing/tampered raw data, uses a different context, or stops before page 10 without source exhaustion is not silently coerced into an eligible trial.
 
 Operational failures are not evidence that a shallower depth is analytically sufficient. They must be diagnosed separately rather than converted into artificial depth wins.
 
@@ -72,6 +76,8 @@ For each trial and candidate depth `N`:
 organic_unique_N
 coverage_vs_10_N = organic_unique_N / organic_unique_10
 ```
+
+When the source exhausted before a candidate depth, that depth uses the final available ranking as described above.
 
 For each candidate depth except 10:
 
@@ -112,10 +118,10 @@ median ranked_prefix_overlap_N >= median ranked_prefix_overlap_10 - 0.03
 
 Interpretation:
 
-- at least 90% of the full 10-page organic set is captured in a typical trial;
+- at least 90% of the full up-to-10-page organic set is captured in a typical trial;
 - the lower quartile still captures at least 85%;
 - the next tested depth adds no more than 10% median unique organic coverage;
-- shallower sampling does not materially reduce top-weighted cross-run rank reproducibility relative to 10 pages.
+- shallower sampling does not materially reduce top-weighted cross-run rank reproducibility relative to the up-to-10-page baseline.
 
 If no depth in `1/3/5` passes and the sample is sufficient, select **10 pages** as the conservative fallback.
 
@@ -127,7 +133,11 @@ The experiment report must include:
 
 ```text
 spec_version
+analyzer_version
+feed parser version
+submitted trial IDs
 eligible trial IDs
+rejected trials + reasons
 sample size
 sample time span
 represented hour buckets

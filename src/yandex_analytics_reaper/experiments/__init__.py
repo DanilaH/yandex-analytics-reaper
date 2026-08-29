@@ -12,6 +12,14 @@ from .collection_cadence import (
     StateSignalReport,
     evaluate_collection_cadence,
 )
+from .collection_cadence_evidence import (
+    CadenceCheckpointInput,
+    CollectionCadenceEvidenceError,
+    CollectionCadenceExperiment,
+    CollectionCadenceExperimentReport,
+    CollectionCadenceManifest,
+    RejectedCadenceSeries,
+)
 from .feed_depth import (
     FeedDepthDecisionPolicy,
     FeedDepthEligibilityError,
@@ -39,8 +47,13 @@ from .session_profile_stability import (
 
 __all__ = [
     "CadenceCapability",
+    "CadenceCheckpointInput",
     "CadenceStateSignal",
     "CollectionCadenceDecisionPolicy",
+    "CollectionCadenceEvidenceError",
+    "CollectionCadenceExperiment",
+    "CollectionCadenceExperimentReport",
+    "CollectionCadenceManifest",
     "CollectionCadenceReport",
     "FeedDepthDecisionPolicy",
     "FeedDepthEligibilityError",
@@ -51,6 +64,7 @@ __all__ = [
     "RankingCadenceReport",
     "RankingReferencePoint",
     "RankingSeriesObservation",
+    "RejectedCadenceSeries",
     "RejectedFeedDepthTrial",
     "RejectedSessionProfileBlock",
     "SessionProfileBlockObservation",

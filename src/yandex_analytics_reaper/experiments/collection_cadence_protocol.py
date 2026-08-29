@@ -26,11 +26,9 @@ from .collection_cadence import (
     MIN_LISTING_SERIES,
     MIN_REFERENCE_DAYS,
     SPEC_VERSION,
-    CadenceCapability,
     CadenceStateSignal,
     CollectionCadenceReport,
     StateReferencePoint,
-    StateSeriesObservation,
 )
 from .collection_cadence_evidence import (
     CadenceCheckpointInput,
@@ -217,8 +215,6 @@ class CollectionCadenceExperiment:
         raw_store: FilesystemRawSnapshotStore,
         database_path: Path,
     ) -> None:
-        self.raw_store = raw_store
-        self.database_path = database_path
         self.metric_store = SQLiteMetricStore(database_path)
         self.history_store = SQLiteListingHistoryStore(database_path)
         self.lineage_store = SQLiteLineageStore(database_path)
@@ -320,14 +316,26 @@ class CollectionCadenceExperiment:
         for checkpoint in manifest.checkpoints:
             observation_id: str | None = None
             if metric_history is not None:
-                observation = _latest_metric(metric_history, checkpoint.checkpoint_at)
-                observation_id = None if observation is None else observation.observation_id
+                metric_observation = _latest_metric(
+                    metric_history,
+                    checkpoint.checkpoint_at,
+                )
+                if metric_observation is not None:
+                    observation_id = metric_observation.observation_id
             elif media_history is not None:
-                observation = _latest_media(media_history, checkpoint.checkpoint_at)
-                observation_id = None if observation is None else observation.observation_id
+                media_observation = _latest_media(
+                    media_history,
+                    checkpoint.checkpoint_at,
+                )
+                if media_observation is not None:
+                    observation_id = media_observation.observation_id
             elif update_history is not None:
-                observation = _latest_update(update_history, checkpoint.checkpoint_at)
-                observation_id = None if observation is None else observation.observation_id
+                update_observation = _latest_update(
+                    update_history,
+                    checkpoint.checkpoint_at,
+                )
+                if update_observation is not None:
+                    observation_id = update_observation.observation_id
             if observation_id is None:
                 raise RuntimeError(
                     f"eligible cadence series {listing_id}/{signal.value} lost its evidence"

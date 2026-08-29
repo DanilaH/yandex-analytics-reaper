@@ -31,7 +31,7 @@ Market Prior
 Implemented:
 
 - source capability contracts;
-- immutable filesystem raw-snapshot store with deterministic snapshot lookup;
+- immutable filesystem raw-snapshot store with deterministic metadata/body replay and content-integrity checks;
 - platform-neutral domain primitives;
 - explicit source DTO → domain normalizer boundary;
 - SQLite operational persistence for normalized listing/developer identities and developer-assignment history;
@@ -40,6 +40,7 @@ Implemented:
 - versioned schema-drift monitoring for Yandex JSON surfaces with field/type/missingness contracts, scoped temporal comparisons, parser-failure records, and raw-content identity checks;
 - logical paginated feed/search probe runs with deterministic context identity, ordered page/cursor linkage, terminal status, and raw error provenance;
 - explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with safe cookie-state fingerprint/profile-age provenance;
+- frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -52,6 +53,7 @@ Implemented:
 
 Not implemented yet:
 
+- empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - authenticated test-session credential provider;
 - production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
@@ -158,6 +160,37 @@ For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical 
 Feed/search probes persist each raw response before interpretation and group pages into one logical run. Each later page must consume the exact continuation tokens emitted by the preceding page. A run is persisted as `completed`, `partial`, or `failed`; when a received raw response caused a terminal error, the run retains that raw snapshot ID for inspection.
 
 JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
+
+## Feed-depth calibration tooling
+
+`feed-depth-v1` is frozen in `docs/spec/feed-depth-experiment.md`. It compares maximum depths `1 / 3 / 5 / 10` without collecting four independent runs per trial: each real trial is collected once with a maximum of 10 pages, then the analyzer derives all candidate prefixes from the same immutable raw run.
+
+Collect eligible baseline trials with the frozen context:
+
+```bash
+yandex-reaper probe-feed \
+  --count 20 \
+  --pages 10 \
+  --session-profile clean_anonymous \
+  --lang ru \
+  --device desktop \
+  --platform desktop_other \
+  --output data/raw
+```
+
+A legitimate source exhaustion before page 10 is still eligible. Partial/failed runs, wrong context/page size, broken raw data, and inconsistent replay linkage are rejected by the analyzer rather than silently coerced.
+
+Do not make a depth decision until there are at least 8 eligible trials spanning at least 4 hours and 3 distinct UTC hour buckets. Then analyze the **explicit** run IDs:
+
+```bash
+yandex-reaper analyze-feed-depth \
+  probe:<run-id-1> \
+  probe:<run-id-2> \
+  probe:<run-id-3> \
+  --output data/raw
+```
+
+The command replays raw bodies, verifies content hashes and stored page linkage, excludes sponsored cards from depth selection, reports rejected trials, and applies the predeclared thresholds. Until the minimum sample is satisfied it returns `recommended_depth = null`; do not treat synthetic fixture tests as the empirical calibration result.
 
 ## Read before changing the project
 

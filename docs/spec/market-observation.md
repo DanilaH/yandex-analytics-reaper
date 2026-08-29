@@ -26,20 +26,37 @@ request parameters
 
 ### Session-profile semantics
 
+The persisted `ProbeContext` is the **effective context actually opened by the session manager**, not merely the user's requested label.
+
 ```text
 clean_anonymous
-→ new cookie jar/profile state for the probe run; no auth; no persisted recommendation history reused
+→ a fresh HTTP client and cookie jar for every logical probe run
+→ no auth
+→ no cookie/profile state reused from an earlier run
+→ cookie_state_hash = null
+→ profile_age_days = 0
 
 persistent_anonymous
-→ stable anonymous profile/cookie state intentionally reused across runs
+→ one explicit local anonymous profile is loaded before the run
+→ its cookie jar is reused and updated across runs
+→ cookie_state_hash = SHA-256 fingerprint of the cookie state loaded at run start
+→ profile_age_days = whole days since that local profile was created
 
 authenticated_test
-→ explicit test account/profile; behavior must be kept separate from anonymous cohorts
+→ reserved for an explicit controlled credential/profile provider
+→ current default collector fails closed because no such provider is configured
+→ it must never silently fall back to anonymous behavior
 ```
 
-Never persist raw auth cookies/tokens in snapshot metadata.
+The persistent anonymous cookie jar is local runtime state, not market evidence. Raw cookie values may exist only in the local session-state file needed to reproduce the anonymous profile. They must never be copied into raw-snapshot request metadata, SQLite probe context, logs, or analytical tables.
 
-The exact implementation mechanics for creating/reusing these profiles are a separate Phase 2 task. Persisting the declared `session_profile` on a context does not by itself prove that the collector has implemented those semantics correctly.
+`cookie_state_hash` is provenance for distinguishing anonymous states; it is not an authentication token and must never be used to reconstruct cookie values. The fingerprint describes the state **loaded at the start of the run**. Cookies learned during the run are persisted locally for the next persistent run, so the next run receives the next fingerprint.
+
+`cookie_state_hash` and `profile_age_days` participate in `ProbeContext` identity because they describe the actual observation state, but they are intentionally excluded from schema-drift comparison scope so normal cookie churn does not fragment schema baselines. `session_profile` remains part of schema scope because anonymous vs future authenticated surfaces may legitimately differ in shape. This scope-semantics change requires a new schema-analyzer version.
+
+Persistent state is saved when the prepared session closes, including after a partial/failed probe when possible. A local state-save failure must not replace the original collection/parser failure; the original error remains primary and the state error is attached as secondary diagnostic context.
+
+If the persistent profile is incomplete, corrupt, or has impossible time metadata, collection fails closed. Do not silently reset it and call the resulting observation the same persistent cohort.
 
 ## Probe run grouping
 

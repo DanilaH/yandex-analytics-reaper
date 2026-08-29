@@ -13,6 +13,7 @@ from yandex_analytics_reaper.storage import RawSnapshotMetadata
 
 _NUMERIC = (JsonValueType.INTEGER, JsonValueType.NUMBER)
 _VOLATILE_PAGINATION_KEYS = {"page_id", "rtx-reqid"}
+_VOLATILE_SESSION_CONTEXT_KEYS = {"cookie_state_hash", "profile_age_days"}
 
 _FEED_FIELDS = (
     FieldExpectation(
@@ -164,6 +165,14 @@ def _normalized_context(request_key: str, context: Mapping[str, object]) -> obje
                 if key not in _VOLATILE_PAGINATION_KEYS
             }
             normalized["page_kind"] = page_kind
+
+        probe_context = normalized.get("probe_context")
+        if isinstance(probe_context, dict):
+            normalized["probe_context"] = {
+                key: value
+                for key, value in probe_context.items()
+                if key not in _VOLATILE_SESSION_CONTEXT_KEYS
+            }
 
     if request_key == "catalogue.get_games":
         app_ids = normalized.get("app_ids")

@@ -241,7 +241,7 @@ status_reason
 
 ## Probe runs / exposure
 
-`probe_contexts` deduplicates the declared observation context by deterministic canonical identity:
+`probe_contexts` deduplicates the **effective observation context actually opened for the run** by deterministic canonical identity:
 
 ```text
 probe_contexts
@@ -255,6 +255,26 @@ probe_contexts
   cookie_state_hash
   profile_age_days
 ```
+
+Session provenance semantics:
+
+```text
+clean_anonymous
+→ cookie_state_hash = null
+→ profile_age_days = 0
+→ no cookie state is reused
+
+persistent_anonymous
+→ cookie_state_hash = one-way fingerprint of the cookie jar loaded at run start
+→ profile_age_days = whole days since the local anonymous profile was created
+→ the raw cookie jar remains local runtime state and is never stored in this table
+
+authenticated_test
+→ reserved for an explicitly configured test credential/profile provider
+→ current collector does not create this context by silently falling back to anonymous
+```
+
+`cookie_state_hash` is provenance, not a credential or user identity. Raw cookie/token values are forbidden in `probe_contexts`, raw snapshot metadata, and analytical tables. Persistent cookie material lives only in the local ignored runtime session directory needed to reproduce that anonymous HTTP profile.
 
 `probe_runs` stores one logical paginated feed/search observation:
 

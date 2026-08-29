@@ -39,6 +39,7 @@ Implemented:
 - field-level metric lineage from exact parser source path back to raw snapshot identity;
 - versioned schema-drift monitoring for Yandex JSON surfaces with field/type/missingness contracts, scoped temporal comparisons, parser-failure records, and raw-content identity checks;
 - logical paginated feed/search probe runs with deterministic context identity, ordered page/cursor linkage, terminal status, and raw error provenance;
+- explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with safe cookie-state fingerprint/profile-age provenance;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -51,7 +52,7 @@ Implemented:
 
 Not implemented yet:
 
-- technical session-profile isolation/reuse semantics for clean vs persistent collection;
+- authenticated test-session credential provider;
 - production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
@@ -66,7 +67,7 @@ See `ROADMAP.md` for the authoritative sequence and phase Definition of Done.
 ```text
 src/yandex_analytics_reaper/   application/source/domain code
 tests/                         unit/fixture-driven tests
-data/                          local runtime data; collected data is gitignored
+data/                          local runtime data; collected/session data is gitignored
 docs/spec/                     living analytical/domain specifications
 docs/research/                 dated factual probes/research evidence
 docs/history/                  historical review/decision records
@@ -108,7 +109,7 @@ All three remain required quality checks. GitHub-hosted CI is currently treated 
 
 The current CLI is a **manual probe/debug interface**, not the production scheduled collector.
 
-Feed, one page by default:
+Feed, one page and a fresh anonymous session by default:
 
 ```bash
 yandex-reaper probe-feed --count 20 --output data/raw
@@ -120,16 +121,22 @@ Explicit multi-page feed run:
 yandex-reaper probe-feed --count 20 --pages 3 --output data/raw
 ```
 
-Search, one page by default:
+Persistent anonymous feed profile reused across runs:
+
+```bash
+yandex-reaper probe-feed --pages 3 --session-profile persistent_anonymous --output data/raw
+```
+
+Search, one page and a fresh anonymous session by default:
 
 ```bash
 yandex-reaper probe-search "merge" --output data/raw
 ```
 
-Explicit multi-page search run:
+Explicit persistent multi-page search run:
 
 ```bash
-yandex-reaper probe-search "merge" --pages 3 --output data/raw
+yandex-reaper probe-search "merge" --pages 3 --session-profile persistent_anonymous --output data/raw
 ```
 
 Rich game metadata:
@@ -143,6 +150,10 @@ Game page / `__playPageData__`:
 ```bash
 yandex-reaper probe-page 438560 --output data/raw
 ```
+
+For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run. `persistent_anonymous` stores and reuses one local anonymous cookie jar under the runtime `sessions/` directory. Raw cookie values stay only in that local session-state file; raw snapshots and SQLite probe contexts receive only the session profile, a SHA-256 cookie-state fingerprint, and profile age. Do not commit or share the runtime session directory.
+
+`authenticated_test` is intentionally fail-closed until an explicit credential provider exists; selecting it does not silently run an anonymous probe.
 
 Feed/search probes persist each raw response before interpretation and group pages into one logical run. Each later page must consume the exact continuation tokens emitted by the preceding page. A run is persisted as `completed`, `partial`, or `failed`; when a received raw response caused a terminal error, the run retains that raw snapshot ID for inspection.
 

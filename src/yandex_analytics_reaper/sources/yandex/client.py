@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from http.cookiejar import CookieJar
 from typing import Any
 
 import httpx
@@ -21,6 +22,7 @@ class YandexPublicClient:
         base_url: str = "https://yandex.ru/games",
         timeout_seconds: float = 30.0,
         user_agent: str = "YandexAnalyticsReaper/0.1 (+private-research)",
+        cookies: CookieJar | httpx.Cookies | None = None,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self._client = httpx.Client(
@@ -30,6 +32,7 @@ class YandexPublicClient:
                 "User-Agent": user_agent,
                 "Accept-Language": "ru,en-US;q=0.8,en;q=0.7",
             },
+            cookies=cookies,
         )
 
     def __enter__(self) -> YandexPublicClient:
@@ -37,6 +40,10 @@ class YandexPublicClient:
 
     def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
         self.close()
+
+    @property
+    def cookies(self) -> httpx.Cookies:
+        return self._client.cookies
 
     def close(self) -> None:
         self._client.close()

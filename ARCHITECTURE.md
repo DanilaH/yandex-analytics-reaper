@@ -43,7 +43,7 @@ src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
-  ingestion/      application-owned collection/run orchestration
+  ingestion/      application-owned collection/run/session orchestration
   normalizers/    source DTO → stable domain observation boundary
   schema_drift/   versioned raw-shape profiling/contracts/drift events
   sources/        source capability contracts
@@ -69,6 +69,39 @@ TrendProvider
 
 A provider may implement only a subset. A new official/third-party source replaces only the capabilities it actually supplies.
 
+## Context/session boundary
+
+Contextual Yandex feed/search collection has a session-preparation step before the paginated probe runner:
+
+```text
+requested ProbeContext
+→ YandexSessionManager
+→ prepared HTTP client + effective ProbeContext
+→ YandexPaginatedProbeRunner
+```
+
+`YandexSessionManager` owns only HTTP session isolation/reuse and local cookie state. It does not parse responses or persist market observations.
+
+Current mechanics:
+
+```text
+clean_anonymous
+→ fresh client/cookie jar per logical run
+→ no local state reused
+
+persistent_anonymous
+→ source-specific local cookie jar loaded before the run
+→ same anonymous profile updated after the run
+→ effective context contains only cookie-state fingerprint + profile age
+
+authenticated_test
+→ fail closed until an explicit credential provider is introduced
+```
+
+Persistent cookie files are **local runtime state**, not operational market persistence. They may contain raw cookie values because those values are required to reuse the anonymous HTTP profile. They must stay outside raw-snapshot metadata and SQLite analytical/operational tables and must never be committed. The operational context stores only the session profile, a one-way SHA-256 state fingerprint, and profile age.
+
+The cookie fingerprint describes state loaded at run start. This makes runs distinguishable without pretending that a hash is a user identity or an authentication credential.
+
 ## Raw-first ingestion
 
 Collection produces a `CollectedResponse`. Persist it before any source interpretation:
@@ -89,7 +122,8 @@ Domain Observation + FieldLineage
 For paginated Yandex feed/search collection, the application `ingestion` layer owns the complete run lifecycle:
 
 ```text
-collect page
+prepare session + effective context
+→ collect page
 → persist raw
 → reject non-2xx
 → persist schema analysis
@@ -99,9 +133,12 @@ collect page
 → append ProbePage to ProbeRun
 → follow exact continuation tokens
 → persist COMPLETED / PARTIAL / FAILED terminal state
+→ persist reusable anonymous session state when applicable
 ```
 
-The CLI delegates this lifecycle to the ingestion runner; it must not duplicate pagination or terminal-state business logic. A failed/partial run keeps the raw snapshot ID that caused the terminal condition when a response was actually received. If failure occurs before any response exists, terminal raw provenance remains absent rather than being invented.
+The CLI delegates session preparation and run lifecycle to ingestion services; it must not duplicate cookie/pagination/terminal-state business logic. A failed/partial run keeps the raw snapshot ID that caused the terminal condition when a response was actually received. If failure occurs before any response exists, terminal raw provenance remains absent rather than being invented.
+
+If a probe fails and persistent-session state also cannot be saved, the probe/source error remains the primary exception and the state-save failure is secondary diagnostic context. A corrupt or incomplete persistent session fails closed rather than being silently reset into a different cohort.
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
 
@@ -210,6 +247,8 @@ probe contexts
 logical paginated probe runs
 ordered probe pages + cursor-chain/raw-snapshot linkage
 ```
+
+Probe contexts store session provenance, not secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
 
 Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 

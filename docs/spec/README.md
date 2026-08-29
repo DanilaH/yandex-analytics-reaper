@@ -13,6 +13,7 @@ taxonomy-sampling.md
 taxonomy-gold-set.md
 taxonomy-primary-validation.md
 taxonomy-agreement-analysis.md
+taxonomy-controlled-agreement.md
 production-assessment.md
 market-observation.md
 feed-depth-experiment.md
@@ -33,7 +34,7 @@ Ownership reminder:
 ```text
 /ARCHITECTURE.md  code/runtime boundaries
 /ROADMAP.md       implementation sequencing and Definition of Done
-/docs/spec/*      analytical/domain semantics
+/docs/spec/*      living analytical/domain specifications
 /docs/research/*  dated factual observations/probes
 /docs/history/*   historical review/decision records
 ```

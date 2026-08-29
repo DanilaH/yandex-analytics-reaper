@@ -49,6 +49,14 @@ def test_dimensions_reject_unknown_registry_version() -> None:
         ControlledTaxonomyDimensions(label_registry_version=999)
 
 
+def test_meta_system_none_cannot_be_combined_with_other_labels() -> None:
+    with pytest.raises(ValidationError, match="cannot be combined"):
+        ControlledTaxonomyDimensions(meta_systems=("none", "linear_levels"))
+
+    dimensions = ControlledTaxonomyDimensions(meta_systems=("none",))
+    assert dimensions.meta_systems == ("none",)
+
+
 def test_registry_declaration_rejects_duplicate_labels() -> None:
     with pytest.raises(ValidationError, match="duplicate labels"):
         TaxonomyLabelRegistry(

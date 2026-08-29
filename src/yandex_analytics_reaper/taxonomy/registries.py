@@ -195,7 +195,10 @@ _REGISTRY_V1 = TaxonomyLabelRegistryBundle(
     ),
 )
 
-if taxonomy_label_registry_content_hash(_REGISTRY_V1) != TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH:
+if (
+    taxonomy_label_registry_content_hash(_REGISTRY_V1)
+    != TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH
+):
     raise RuntimeError(
         "taxonomy label registry v1 changed without a new version/content identity"
     )

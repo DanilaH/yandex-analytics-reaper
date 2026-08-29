@@ -11,6 +11,7 @@ evidence-model.md
 taxonomy.md
 taxonomy-sampling.md
 taxonomy-gold-set.md
+taxonomy-primary-validation.md
 production-assessment.md
 market-observation.md
 feed-depth-experiment.md

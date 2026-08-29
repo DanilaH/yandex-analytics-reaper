@@ -13,9 +13,15 @@ from yandex_analytics_reaper.domain import (
     ComparableSetVersion,
     ProbeKind,
     ProbeRunStatus,
+    SessionProfile,
 )
 
 from .sqlite import SQLiteDatabase
+
+_YANDEX_SOURCE_ID = "yandex_public"
+_YANDEX_SEARCH_REQUEST_KEY = "catalogue.search"
+_YANDEX_PARSER_NAME = "YandexFeedParser"
+_YANDEX_PARSER_VERSION = "2"
 
 
 class ComparableSetStore(Protocol):
@@ -185,6 +191,16 @@ class SQLiteComparableSetStore:
         connection: sqlite3.Connection,
         comparable_set: ComparableSetVersion,
     ) -> None:
+        if comparable_set.construction_method is ComparableSetConstructionMethod.YANDEX_SEARCH_UNION_V1:
+            if (
+                comparable_set.source_id != _YANDEX_SOURCE_ID
+                or comparable_set.parser_name != _YANDEX_PARSER_NAME
+                or comparable_set.parser_version != _YANDEX_PARSER_VERSION
+            ):
+                raise ValueError(
+                    "yandex_search_union_v1 requires frozen Yandex source/parser semantics"
+                )
+
         family_row = connection.execute(
             """
             SELECT source_id, language
@@ -221,6 +237,36 @@ class SQLiteComparableSetStore:
                 "comparable-set runs do not exactly match persisted query-family membership"
             )
 
+        context_row = connection.execute(
+            """
+            SELECT
+                language,
+                country_observed,
+                collector_region,
+                session_profile,
+                session_instance_id,
+                cookie_state_hash,
+                profile_age_days
+            FROM probe_contexts
+            WHERE id = ?
+            """,
+            (comparable_set.context_id,),
+        ).fetchone()
+        if context_row is None:
+            raise ValueError("referenced comparable-set ProbeContext is not persisted")
+        if (
+            str(context_row["language"]) != comparable_set.language
+            or context_row["country_observed"] is not None
+            or context_row["collector_region"] is not None
+            or str(context_row["session_profile"]) != SessionProfile.CLEAN_ANONYMOUS.value
+            or context_row["session_instance_id"] is not None
+            or context_row["cookie_state_hash"] is not None
+            or int(context_row["profile_age_days"]) != 0
+        ):
+            raise ValueError(
+                "yandex_search_union_v1 requires one persisted clean-anonymous null-region context"
+            )
+
         starts: list[datetime] = []
         completions: list[datetime] = []
         for run in comparable_set.runs:
@@ -245,7 +291,7 @@ class SQLiteComparableSetStore:
                 raise ValueError(f"referenced probe run is not persisted: {run.probe_run_id}")
             if (
                 str(row["source_id"]) != comparable_set.source_id
-                or str(row["request_key"]) != "catalogue.search"
+                or str(row["request_key"]) != _YANDEX_SEARCH_REQUEST_KEY
                 or str(row["probe_kind"]) != ProbeKind.SEARCH.value
                 or str(row["context_id"]) != comparable_set.context_id
                 or str(row["query_text"]) != run.query_text
@@ -362,7 +408,7 @@ class SQLiteComparableSetStore:
             raise RuntimeError("stored comparable-set evidence ordinals are not contiguous")
 
         try:
-            return ComparableSetVersion(
+            comparable_set = ComparableSetVersion(
                 set_id=str(row["set_id"]),
                 version=int(row["version"]),
                 construction_method=ComparableSetConstructionMethod(
@@ -405,8 +451,14 @@ class SQLiteComparableSetStore:
                     for item in evidence_rows
                 ),
             )
-        except ValueError as exc:
+        except (TypeError, ValueError) as exc:
             raise RuntimeError("stored comparable-set version is invalid") from exc
+
+        try:
+            SQLiteComparableSetStore._validate_references(connection, comparable_set)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("stored comparable-set provenance is invalid") from exc
+        return comparable_set
 
 
 def _identity(set_id: str, version: int) -> tuple[str, int]:

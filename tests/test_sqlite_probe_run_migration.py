@@ -45,3 +45,8 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
             ).fetchall()
         }
         assert {"probe_contexts", "probe_runs", "probe_pages"} <= tables
+        page_columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(probe_pages)").fetchall()
+        }
+        assert {"source_id", "raw_snapshot_id"} <= page_columns

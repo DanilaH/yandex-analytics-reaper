@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -19,10 +18,8 @@ from yandex_analytics_reaper.taxonomy import (
     validate_taxonomy_annotation_batch,
 )
 
-_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
-
-def _load_model(path_value: str, model_type: type[_ModelT]) -> _ModelT:
+def _load_model[ModelT: BaseModel](path_value: str, model_type: type[ModelT]) -> ModelT:
     path = Path(path_value)
     try:
         payload = path.read_text(encoding="utf-8")

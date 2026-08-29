@@ -9,7 +9,14 @@ from typing import Self
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
-from yandex_analytics_reaper.domain import ProbeContext, ProbeKind, ProbeRun, ProbeRunStatus, SessionProfile
+from yandex_analytics_reaper.domain import (
+    ProbeContext,
+    ProbeKind,
+    ProbePage,
+    ProbeRun,
+    ProbeRunStatus,
+    SessionProfile,
+)
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
 from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
 from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLiteProbeRunStore
@@ -299,7 +306,7 @@ def evaluate_feed_depth_trials(
 def _validate_trial_identity(
     run: ProbeRun,
     context: ProbeContext,
-    pages: Sequence[object],
+    pages: Sequence[ProbePage],
 ) -> None:
     if run.source_id != SOURCE_ID:
         raise FeedDepthEligibilityError(f"feed-depth-v1 requires source_id={SOURCE_ID}")
@@ -313,13 +320,12 @@ def _validate_trial_identity(
         raise FeedDepthEligibilityError("feed-depth trial must request exactly 10 pages")
 
     page_count = len(pages)
-    page_indexes = tuple(getattr(page, "page_index", None) for page in pages)
+    page_indexes = tuple(page.page_index for page in pages)
     if not 1 <= page_count <= 10 or page_indexes != tuple(range(page_count)):
         raise FeedDepthEligibilityError(
             "feed-depth trial must contain a contiguous page prefix from 0 with at most 10 pages"
         )
-    last_page = pages[-1]
-    if page_count < 10 and getattr(last_page, "has_next_page", True):
+    if page_count < 10 and pages[-1].has_next_page:
         raise FeedDepthEligibilityError(
             "feed-depth trial stopped before page 10 without source exhaustion"
         )

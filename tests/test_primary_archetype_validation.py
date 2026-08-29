@@ -196,7 +196,7 @@ def _declaration(gold_set) -> PrimaryArchetypeValidationDeclaration:
 
 def test_primary_validation_contract_identity_is_frozen() -> None:
     assert PRIMARY_ARCHETYPE_VALIDATION_CONTRACT_V1_CONTENT_HASH == (
-        "6cd79128d565e4673dc61e76612587cd0ad849eafa3ab4e37468e3bc51c72576"
+        "83d983d0062d61a6fb434b9b18debc536aba712b7a31ee584fdb7268f8f93d57"
     )
     assert (
         primary_archetype_validation_contract_content_hash()
@@ -252,6 +252,52 @@ def test_zero_support_forces_insufficient_evidence() -> None:
         build_primary_archetype_validation_report(sample, gold_set, declaration)
 
 
+def test_substantive_disposition_requires_evidence() -> None:
+    sample = _sample()
+    gold_set = _gold_set(sample)
+    reviews = list(_reviews(gold_set))
+    reviews[0] = reviews[0].model_copy(update={"evidence_listing_ids": ()})
+    declaration = PrimaryArchetypeValidationDeclaration(
+        review_id="primary-review:missing-evidence",
+        reviewer_id="reviewer:a",
+        gold_set_id=gold_set.gold_set_id,
+        gold_set_content_hash=gold_set.gold_set_content_hash,
+        reviewed_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
+        reviews=tuple(reviews),
+    )
+
+    with pytest.raises(PrimaryArchetypeValidationError, match="requires evidence listing IDs"):
+        build_primary_archetype_validation_report(sample, gold_set, declaration)
+
+
+def test_supported_label_can_still_be_insufficient_evidence() -> None:
+    sample = _sample()
+    gold_set = _gold_set(sample)
+    reviews = list(_reviews(gold_set))
+    reviews[0] = reviews[0].model_copy(
+        update={
+            "disposition": PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE,
+            "evidence_listing_ids": (),
+        }
+    )
+    declaration = PrimaryArchetypeValidationDeclaration(
+        review_id="primary-review:supported-insufficient",
+        reviewer_id="reviewer:a",
+        gold_set_id=gold_set.gold_set_id,
+        gold_set_content_hash=gold_set.gold_set_content_hash,
+        reviewed_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
+        reviews=tuple(reviews),
+    )
+
+    report = build_primary_archetype_validation_report(sample, gold_set, declaration)
+
+    assert report.entries[0].support_count > 0
+    assert (
+        report.entries[0].disposition
+        is PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE
+    )
+
+
 def test_review_evidence_must_match_adjudicated_archetype() -> None:
     sample = _sample()
     gold_set = _gold_set(sample)
@@ -271,6 +317,19 @@ def test_review_evidence_must_match_adjudicated_archetype() -> None:
         build_primary_archetype_validation_report(sample, gold_set, declaration)
 
 
+@pytest.mark.parametrize(
+    "special_state",
+    [PrimaryGameplayArchetype.OTHER, PrimaryGameplayArchetype.UNKNOWN],
+)
+def test_special_states_cannot_be_review_rows(special_state: PrimaryGameplayArchetype) -> None:
+    with pytest.raises(ValidationError, match="diagnostics"):
+        PrimaryArchetypeLabelReview(
+            archetype=special_state,
+            disposition=PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE,
+            rationale="Special states are diagnostics only.",
+        )
+
+
 def test_declaration_requires_every_modeled_archetype_in_registry_order() -> None:
     sample = _sample()
     gold_set = _gold_set(sample)
@@ -285,6 +344,38 @@ def test_declaration_requires_every_modeled_archetype_in_registry_order() -> Non
             reviewed_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
             reviews=reviews[:-1],
         )
+
+    with pytest.raises(ValidationError, match="every modeled archetype"):
+        PrimaryArchetypeValidationDeclaration(
+            review_id="primary-review:wrong-order",
+            reviewer_id="reviewer:a",
+            gold_set_id=gold_set.gold_set_id,
+            gold_set_content_hash=gold_set.gold_set_content_hash,
+            reviewed_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
+            reviews=tuple(reversed(reviews)),
+        )
+
+
+def test_declaration_must_bind_exact_gold_set() -> None:
+    sample = _sample()
+    gold_set = _gold_set(sample)
+    declaration = _declaration(gold_set).model_copy(
+        update={"gold_set_content_hash": "0" * 64}
+    )
+
+    with pytest.raises(PrimaryArchetypeValidationError, match="gold-set hash does not match"):
+        build_primary_archetype_validation_report(sample, gold_set, declaration)
+
+
+def test_build_revalidates_declaration_model_copy() -> None:
+    sample = _sample()
+    gold_set = _gold_set(sample)
+    declaration = _declaration(gold_set).model_copy(
+        update={"reviews": _reviews(gold_set)[:-1]}
+    )
+
+    with pytest.raises(ValidationError, match="every modeled archetype"):
+        build_primary_archetype_validation_report(sample, gold_set, declaration)
 
 
 def test_persisted_validation_report_rebuild_detects_tamper() -> None:

@@ -165,6 +165,13 @@ class SQLiteProbeRunStore:
                     raise RuntimeError("contiguous probe page history is missing its previous page")
                 if not previous.has_next_page:
                     raise ValueError("cannot append after source reported has_next_page=false")
+                if (
+                    previous.response_next_page_id is None
+                    or previous.response_rtx_reqid is None
+                ):
+                    raise ValueError(
+                        "cannot append after source omitted required continuation tokens"
+                    )
                 if previous.response_next_page_id != page.request_page_id:
                     raise ValueError("probe page_id does not continue previous page cursor")
                 if previous.response_rtx_reqid != page.request_rtx_reqid:

@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 from pydantic import BaseModel
 
-from yandex_analytics_reaper.taxonomy_execution_cli import _emit_report, build_parser
+import yandex_analytics_reaper.taxonomy_execution_cli as taxonomy_cli
+from yandex_analytics_reaper.taxonomy import TaxonomyAnnotationBatch
+from yandex_analytics_reaper.taxonomy_execution_cli import (
+    _emit_report,
+    _load_model,
+    build_parser,
+)
 
 
 class _ExampleReport(BaseModel):
@@ -82,6 +88,35 @@ def test_taxonomy_execution_cli_parses_agreement_analysis() -> None:
     assert args.gold_set == "gold.json"
     assert args.batches == ["annotator-a.json", "annotator-b.json"]
     assert args.report is None
+
+
+def test_taxonomy_execution_main_dispatches_selected_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, str] = {}
+
+    def fake_handler(args: object) -> None:
+        observed["command"] = getattr(args, "command")
+        observed["sample"] = getattr(args, "sample")
+        observed["batch"] = getattr(args, "batch")
+
+    monkeypatch.setattr(taxonomy_cli, "_validate_annotation_batch", fake_handler)
+
+    taxonomy_cli.main(["validate-annotation-batch", "sample.json", "batch.json"])
+
+    assert observed == {
+        "command": "validate-annotation-batch",
+        "sample": "sample.json",
+        "batch": "batch.json",
+    }
+
+
+def test_load_model_fails_closed_on_invalid_artifact(tmp_path: Path) -> None:
+    artifact = tmp_path / "invalid.json"
+    artifact.write_text("{}", encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="cannot load TaxonomyAnnotationBatch"):
+        _load_model(str(artifact), TaxonomyAnnotationBatch)
 
 
 def test_emit_report_writes_new_file_and_never_overwrites(tmp_path: Path) -> None:

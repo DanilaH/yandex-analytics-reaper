@@ -438,6 +438,38 @@ The v1 set is a provisional search-derived candidate peer set. It does not auto-
 
 General normalized `search_results` persistence remains separate future work; the current v1 comparable construction replays the immutable raw search probe pages directly. `totalGamesCount` remains a per-search supply observation, not competitor count, and must not be summed across query variants as if the result sets were disjoint.
 
+## Collection cadence plans
+
+`collection-cadence-v1` requires a real pre-collection declaration distinct from the later evidence bindings. The operational plan tables are:
+
+```text
+collection_cadence_plans
+  plan_id
+  spec_version
+  frozen_at
+  content_hash
+  query_family_id
+  query_family_version
+
+collection_cadence_plan_listings
+  plan_id
+  ordinal
+  listing_id
+
+collection_cadence_plan_checkpoints
+  plan_id
+  ordinal
+  checkpoint_at
+```
+
+`plan_id` identifies one immutable declaration. The ordered listing cohort, exact query-family version, and ordered checkpoint schedule determine the plan content hash. Repeating identical content is idempotent; conflicting content under an existing `plan_id` is rejected.
+
+`frozen_at` is generated from the SQLite UTC clock when the plan is first inserted. It is not supplied by the later evidence manifest. The plan must be created before the protocol deadline, and all listing/query-family references must already exist. Reads validate contiguous ordinals and recompute the content hash before returning a stored plan.
+
+The later `CollectionCadenceManifest` stores no independent cohort/freeze declaration. It references `plan_id` and supplies actual feed/search run bindings for the already-frozen checkpoint timestamps. The analyzer requires the evidence schedule to equal the stored plan schedule exactly.
+
+This separation prevents future run IDs from being fictional pre-collection inputs while still making cohort/window predeclaration auditable.
+
 ## Taxonomy
 
 ```text

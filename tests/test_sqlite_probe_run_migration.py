@@ -37,7 +37,7 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 5
+        assert version[0] == 6
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -45,6 +45,12 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
             ).fetchall()
         }
         assert {"probe_contexts", "probe_runs", "probe_pages"} <= tables
+
+        context_columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(probe_contexts)").fetchall()
+        }
+        assert "session_instance_id" in context_columns
 
         run_columns = {
             str(row[1])

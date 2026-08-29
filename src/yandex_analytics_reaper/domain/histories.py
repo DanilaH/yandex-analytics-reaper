@@ -8,13 +8,11 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, field_validator, mode
 
 class ListingStatus(StrEnum):
     PUBLISHED = "published"
-    UNKNOWN = "unknown"
 
 
 class ListingStatusReason(StrEnum):
     OBSERVED_IN_CATALOGUE_METADATA = "observed_in_catalogue_metadata"
     OBSERVED_ON_GAME_PAGE = "observed_on_game_page"
-    REQUESTED_BUT_NOT_RETURNED = "requested_but_not_returned"
 
 
 class ListingUpdateObservation(BaseModel):
@@ -56,15 +54,6 @@ class ListingStatusObservation(BaseModel):
     @classmethod
     def require_listing_id(cls, value: str) -> str:
         return _require_exact_non_blank(value, "platform_listing_id")
-
-    @model_validator(mode="after")
-    def validate_status_reason(self) -> Self:
-        if self.reason is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED:
-            if self.status is not ListingStatus.UNKNOWN:
-                raise ValueError("requested-but-not-returned status must remain unknown")
-        elif self.status is not ListingStatus.PUBLISHED:
-            raise ValueError("directly observed listing presence must be published")
-        return self
 
 
 class ListingMediaObservation(BaseModel):

@@ -44,7 +44,13 @@ def test_report_refuses_recommendation_until_sample_is_sufficient() -> None:
     report = evaluate_feed_depth_trials(
         [
             _trial("run-1", base, depth_1=9, depth_3=10, depth_5=10),
-            _trial("run-2", base + timedelta(hours=1), depth_1=9, depth_3=10, depth_5=10),
+            _trial(
+                "run-2",
+                base + timedelta(hours=1),
+                depth_1=9,
+                depth_3=10,
+                depth_5=10,
+            ),
         ]
     )
 
@@ -96,10 +102,11 @@ def test_policy_skips_failed_shallower_candidate_and_can_choose_three_pages() ->
     assert report.recommended_depth == 3
 
 
-def _persist_ten_page_trial(
+def _persist_feed_trial(
     tmp_path: Path,
     *,
     page_size: int = 20,
+    page_count: int = 10,
 ) -> tuple[str, FilesystemRawSnapshotStore, SQLiteProbeRunStore]:
     raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
     probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
@@ -114,8 +121,8 @@ def _persist_ten_page_trial(
         started_at=started,
     )
 
-    for index in range(10):
-        has_next = index < 9
+    for index in range(page_count):
+        has_next = index < page_count - 1
         next_page_id = f"page-{index + 1}" if has_next else None
         next_rtx = f"req-{index + 1}" if has_next else None
         payload = {
@@ -181,7 +188,7 @@ def _persist_ten_page_trial(
 
 
 def test_replay_builds_prefix_rankings_and_excludes_sponsored_cards(tmp_path: Path) -> None:
-    run_id, raw_store, probe_store = _persist_ten_page_trial(tmp_path)
+    run_id, raw_store, probe_store = _persist_feed_trial(tmp_path)
     experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
 
     trial = experiment.load_trial(run_id)
@@ -193,9 +200,39 @@ def test_replay_builds_prefix_rankings_and_excludes_sponsored_cards(tmp_path: Pa
     assert all(app_id < 900 for app_id in trial.organic_rankings[10])
 
 
+def test_source_exhaustion_saturates_deeper_candidate_rankings(tmp_path: Path) -> None:
+    run_id, raw_store, probe_store = _persist_feed_trial(tmp_path, page_count=2)
+    experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
+
+    trial = experiment.load_trial(run_id)
+
+    assert trial.organic_rankings[1] == (100,)
+    assert trial.organic_rankings[3] == (100, 101)
+    assert trial.organic_rankings[5] == (100, 101)
+    assert trial.organic_rankings[10] == (100, 101)
+
+
 def test_replay_rejects_trial_with_wrong_page_size(tmp_path: Path) -> None:
-    run_id, raw_store, probe_store = _persist_ten_page_trial(tmp_path, page_size=10)
+    run_id, raw_store, probe_store = _persist_feed_trial(tmp_path, page_size=10)
     experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
 
     with pytest.raises(FeedDepthEligibilityError, match="games_count=20"):
         experiment.load_trial(run_id)
+
+
+def test_broken_raw_trial_is_reported_as_rejected_instead_of_aborting(tmp_path: Path) -> None:
+    run_id, raw_store, probe_store = _persist_feed_trial(tmp_path)
+    record = probe_store.get_run(run_id)
+    assert record is not None
+    first_page = record.pages[0]
+    metadata = raw_store.get_metadata(record.run.source_id, first_page.raw_snapshot_id)
+    (raw_store.root / metadata.content_path).write_bytes(b"tampered")
+
+    report = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store).analyze([run_id])
+
+    assert report.eligible_run_ids == ()
+    assert len(report.rejected_trials) == 1
+    assert report.rejected_trials[0].run_id == run_id
+    assert "raw replay failed" in report.rejected_trials[0].reason
+    assert report.sample_sufficient is False
+    assert report.recommended_depth is None

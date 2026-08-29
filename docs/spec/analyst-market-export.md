@@ -94,6 +94,8 @@ source_object_paths
 
 This is redundant by design with search-exposure rows. A membership artifact should remain independently inspectable without requiring a join merely to discover which exact query/run/raw evidence admitted the member.
 
+Only organic search evidence can admit a comparable-set member. A sponsored search card may be exported as an exposure, but it is not converted into peer membership.
+
 ## Search supply
 
 Search `totalGamesCount` is exported per query/run/page as a **query-supply observation**.
@@ -106,13 +108,26 @@ safe to sum across query variants
 proof that every returned game is a gameplay comparable
 ```
 
-When the source omits `totalGamesCount`, the row remains present and records `missing_reason = source_missing`. Missing supply is not represented as zero.
+When the source omits `totalGamesCount`, the row remains present and records `missing_reason = source_missing`. Missing supply is not represented as zero and does not claim an observed `source_field_path`.
 
 ## Feed and search exposure
 
-Exposure evidence is intentionally separate from game metrics.
+Exposure evidence is intentionally separate from game metrics and from comparable membership.
 
-Search exposure rows represent organic membership evidence from the frozen search-derived comparable set and preserve exact query/run/page/raw/source-object provenance.
+Organic search exposure rows come from the exact membership evidence retained by the frozen search-derived comparable set. Sponsored search cards are replayed from the same frozen raw search pages and exported separately as `sponsored_search`; they do not become comparable members.
+
+Search exposure rows preserve:
+
+```text
+set_id / set_version
+platform_listing_id
+query_text
+probe_run_id
+page_index
+raw_snapshot_id
+source_object_path
+organic_search | sponsored_search
+```
 
 Feed exposure rows replay only feed runs frozen into the analyst snapshot and preserve:
 
@@ -126,7 +141,7 @@ organic_feed | sponsored_feed
 row / column when observed
 ```
 
-Sponsored feed cards are not converted into organic evidence.
+Sponsored feed/search cards are never converted into organic evidence.
 
 ## JSON and CSV artifacts
 

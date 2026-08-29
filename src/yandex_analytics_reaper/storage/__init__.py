@@ -1,6 +1,14 @@
 from .comparable_sets import ComparableSetStore, SQLiteComparableSetStore
 from .identity import IdentityStore, SQLiteIdentityStore
 from .lineage import LineageRecord, LineageStore, SQLiteLineageStore
+from .listing_histories import (
+    ListingHistoryStore,
+    ListingHistoryWrite,
+    PersistedListingMedia,
+    PersistedListingStatus,
+    PersistedListingUpdate,
+    SQLiteListingHistoryStore,
+)
 from .metrics import MetricStore, MetricWrite, PersistedMetricObservation, SQLiteMetricStore
 from .probes import ProbeRunRecord, ProbeRunStore, SQLiteProbeRunStore
 from .query_families import QueryFamilyStore, SQLiteQueryFamilyStore
@@ -12,8 +20,13 @@ __all__ = [
     "IdentityStore",
     "LineageRecord",
     "LineageStore",
+    "ListingHistoryStore",
+    "ListingHistoryWrite",
     "MetricStore",
     "MetricWrite",
+    "PersistedListingMedia",
+    "PersistedListingStatus",
+    "PersistedListingUpdate",
     "PersistedMetricObservation",
     "ProbeRunRecord",
     "ProbeRunStore",
@@ -22,6 +35,7 @@ __all__ = [
     "SQLiteComparableSetStore",
     "SQLiteIdentityStore",
     "SQLiteLineageStore",
+    "SQLiteListingHistoryStore",
     "SQLiteMetricStore",
     "SQLiteProbeRunStore",
     "SQLiteQueryFamilyStore",

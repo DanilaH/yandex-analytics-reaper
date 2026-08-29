@@ -110,3 +110,11 @@ class ProbePage(BaseModel):
             return None
         stripped = value.strip()
         return stripped or None
+
+    @model_validator(mode="after")
+    def validate_first_page_cursor(self) -> Self:
+        if self.page_index == 0 and (
+            self.request_page_id is not None or self.request_rtx_reqid is not None
+        ):
+            raise ValueError("first probe page cannot carry pagination request tokens")
+        return self

@@ -10,7 +10,12 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from yandex_analytics_reaper.domain import GameMetricName, ProbeKind, ProbeRunStatus
+from yandex_analytics_reaper.domain import (
+    GameMetricName,
+    ListingStateObservation,
+    ProbeKind,
+    ProbeRunStatus,
+)
 from yandex_analytics_reaper.evidence import FieldLineage
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
 from yandex_analytics_reaper.storage import (
@@ -31,7 +36,28 @@ ANALYST_MARKET_EXPORT_SPEC_VERSION: Literal["analyst-market-export-v1"] = (
     "analyst-market-export-v1"
 )
 _MISSING_NOT_OBSERVED: Literal["not_observed"] = "not_observed"
+_SEARCH_SUPPLY_SOURCE_MISSING: Literal["source_missing"] = "source_missing"
 _YANDEX_LISTING_PREFIX = "yandex_games:"
+
+type StateFieldName = Literal[
+    "title",
+    "developer_id",
+    "developer_name",
+    "first_published_at",
+    "app_version",
+    "published_at",
+    "languages",
+    "supported_platforms",
+    "orientation",
+    "cloud_save",
+    "leaderboards",
+    "purchases_enabled",
+    "has_products",
+    "rewarded_ads",
+    "fullscreen_ads",
+    "sticky_ads",
+]
+type StateFieldValue = str | bool | datetime | tuple[str, ...] | None
 
 
 class AnalystExportError(ValueError):
@@ -78,6 +104,7 @@ class AnalystListingRow(BaseModel):
     title: AnalystResolvedValue
     developer_id: AnalystResolvedValue
     developer_name: AnalystResolvedValue
+    first_published_at: AnalystResolvedValue
     app_version: AnalystResolvedValue
     published_at: AnalystResolvedValue
     languages: AnalystResolvedValue
@@ -116,7 +143,18 @@ class AnalystSearchSupplyObservation(BaseModel):
     probe_run_id: str
     page_index: int = Field(ge=0)
     raw_snapshot_id: str
-    total_games_count: int | None
+    source_field_path: Literal["$.totalGamesCount"] = "$.totalGamesCount"
+    total_games_count: int | None = None
+    missing_reason: Literal["source_missing"] | None = None
+
+    @model_validator(mode="after")
+    def validate_supply_value(self) -> Self:
+        if self.total_games_count is None:
+            if self.missing_reason != _SEARCH_SUPPLY_SOURCE_MISSING:
+                raise ValueError("missing totalGamesCount requires source_missing")
+        elif self.missing_reason is not None:
+            raise ValueError("observed totalGamesCount cannot have a missing reason")
+        return self
 
 
 class AnalystSearchExposure(BaseModel):
@@ -140,7 +178,7 @@ class AnalystFeedExposure(BaseModel):
     probe_run_id: str
     page_index: int = Field(ge=0)
     raw_snapshot_id: str
-    source_object_path: str | None
+    source_object_path: str
     exposure_kind: Literal["organic_feed", "sponsored_feed"]
     row: int | None
     column: int | None
@@ -155,6 +193,10 @@ class AnalystComparableMembership(BaseModel):
     platform_listing_id: str
     query_family_id: str
     query_family_version: int = Field(ge=1)
+    source_queries: tuple[str, ...] = Field(min_length=1)
+    probe_run_ids: tuple[str, ...] = Field(min_length=1)
+    raw_snapshot_ids: tuple[str, ...] = Field(min_length=1)
+    source_object_paths: tuple[str, ...] = Field(min_length=1)
 
 
 class AnalystMarketExportPayload(BaseModel):
@@ -275,26 +317,6 @@ class AnalystMarketExporter:
         rich_raw_ids: set[str],
     ) -> AnalystListingRow:
         external_app_id = _external_app_id(listing_id)
-        state_fields = {
-            field: _resolve_state_value(states, field, rich_raw_ids)
-            for field in (
-                "title",
-                "developer_id",
-                "developer_name",
-                "app_version",
-                "published_at",
-                "languages",
-                "supported_platforms",
-                "orientation",
-                "cloud_save",
-                "leaderboards",
-                "purchases_enabled",
-                "has_products",
-                "rewarded_ads",
-                "fullscreen_ads",
-                "sticky_ads",
-            )
-        }
         metrics = {
             metric_name: self._resolve_metric(listing_id, metric_name, rich_raw_ids)
             for metric_name in (
@@ -309,21 +331,34 @@ class AnalystMarketExporter:
             external_app_id=external_app_id,
             canonical_url=f"https://yandex.ru/games/app/{external_app_id}",
             comparable_set_ids=set_ids,
-            title=state_fields["title"],
-            developer_id=state_fields["developer_id"],
-            developer_name=state_fields["developer_name"],
-            app_version=state_fields["app_version"],
-            published_at=state_fields["published_at"],
-            languages=state_fields["languages"],
-            supported_platforms=state_fields["supported_platforms"],
-            orientation=state_fields["orientation"],
-            cloud_save=state_fields["cloud_save"],
-            leaderboards=state_fields["leaderboards"],
-            purchases_enabled=state_fields["purchases_enabled"],
-            has_products=state_fields["has_products"],
-            rewarded_ads=state_fields["rewarded_ads"],
-            fullscreen_ads=state_fields["fullscreen_ads"],
-            sticky_ads=state_fields["sticky_ads"],
+            title=_resolve_state_value(states, "title", rich_raw_ids),
+            developer_id=_resolve_state_value(states, "developer_id", rich_raw_ids),
+            developer_name=_resolve_state_value(states, "developer_name", rich_raw_ids),
+            first_published_at=_resolve_state_value(
+                states,
+                "first_published_at",
+                rich_raw_ids,
+            ),
+            app_version=_resolve_state_value(states, "app_version", rich_raw_ids),
+            published_at=_resolve_state_value(states, "published_at", rich_raw_ids),
+            languages=_resolve_state_value(states, "languages", rich_raw_ids),
+            supported_platforms=_resolve_state_value(
+                states,
+                "supported_platforms",
+                rich_raw_ids,
+            ),
+            orientation=_resolve_state_value(states, "orientation", rich_raw_ids),
+            cloud_save=_resolve_state_value(states, "cloud_save", rich_raw_ids),
+            leaderboards=_resolve_state_value(states, "leaderboards", rich_raw_ids),
+            purchases_enabled=_resolve_state_value(
+                states,
+                "purchases_enabled",
+                rich_raw_ids,
+            ),
+            has_products=_resolve_state_value(states, "has_products", rich_raw_ids),
+            rewarded_ads=_resolve_state_value(states, "rewarded_ads", rich_raw_ids),
+            fullscreen_ads=_resolve_state_value(states, "fullscreen_ads", rich_raw_ids),
+            sticky_ads=_resolve_state_value(states, "sticky_ads", rich_raw_ids),
             yandex_games_rating=metrics[GameMetricName.YANDEX_GAMES_RATING],
             player_rating=metrics[GameMetricName.PLAYER_RATING],
             rating_count=metrics[GameMetricName.RATING_COUNT],
@@ -338,9 +373,8 @@ class AnalystMarketExporter:
         scoped: list[tuple[PersistedMetricObservation, tuple[FieldLineage, ...]]] = []
         for observation in self.metric_store.metric_history(listing_id, metric_name):
             lineage = self.lineage_store.for_observation(observation.observation_id)
-            relevant = tuple(item for item in lineage if item.raw_snapshot_id in rich_raw_ids)
-            if relevant:
-                scoped.append((observation, relevant))
+            if lineage and all(item.raw_snapshot_id in rich_raw_ids for item in lineage):
+                scoped.append((observation, lineage))
         if not scoped:
             return _missing()
         observation, lineage = scoped[-1]
@@ -365,10 +399,9 @@ class AnalystMarketExporter:
         for listing_id in listing_ids:
             for update in self.history_store.update_history(listing_id):
                 lineage = self.lineage_store.for_observation(update.observation_id)
-                relevant = tuple(
-                    item for item in lineage if item.raw_snapshot_id in rich_raw_ids
-                )
-                if not relevant:
+                if not lineage or not all(
+                    item.raw_snapshot_id in rich_raw_ids for item in lineage
+                ):
                     continue
                 rows.append(
                     AnalystUpdateObservation(
@@ -382,10 +415,10 @@ class AnalystMarketExporter:
                             else _iso(update.observation.source_published_at)
                         ),
                         raw_snapshot_ids=_ordered_unique(
-                            item.raw_snapshot_id for item in relevant
+                            item.raw_snapshot_id for item in lineage
                         ),
                         source_field_paths=_ordered_unique(
-                            item.source_field_path for item in relevant
+                            item.source_field_path for item in lineage
                         ),
                     )
                 )
@@ -427,6 +460,15 @@ class AnalystMarketExporter:
                 )
             query_by_run = {item.probe_run_id: item.query_text for item in comparable.runs}
             for member in comparable.members:
+                member_evidence = tuple(
+                    item
+                    for item in comparable.evidence
+                    if item.platform_listing_id == member.platform_listing_id
+                )
+                if not member_evidence:
+                    raise AnalystExportError(
+                        f"comparable member has no source evidence: {member.platform_listing_id}"
+                    )
                 memberships.append(
                     AnalystComparableMembership(
                         set_id=comparable.set_id,
@@ -435,6 +477,18 @@ class AnalystMarketExporter:
                         platform_listing_id=member.platform_listing_id,
                         query_family_id=comparable.query_family_id,
                         query_family_version=comparable.query_family_version,
+                        source_queries=_ordered_unique(
+                            query_by_run[item.probe_run_id] for item in member_evidence
+                        ),
+                        probe_run_ids=_ordered_unique(
+                            item.probe_run_id for item in member_evidence
+                        ),
+                        raw_snapshot_ids=_ordered_unique(
+                            item.raw_snapshot_id for item in member_evidence
+                        ),
+                        source_object_paths=_ordered_unique(
+                            item.source_object_path for item in member_evidence
+                        ),
                     )
                 )
             for evidence in comparable.evidence:
@@ -466,6 +520,11 @@ class AnalystMarketExporter:
                             page_index=page.page_index,
                             raw_snapshot_id=page.raw_snapshot_id,
                             total_games_count=parsed.total_games_count,
+                            missing_reason=(
+                                _SEARCH_SUPPLY_SOURCE_MISSING
+                                if parsed.total_games_count is None
+                                else None
+                            ),
                         )
                     )
         return tuple(memberships), tuple(exposures), tuple(supplies)
@@ -495,6 +554,10 @@ class AnalystMarketExporter:
                 body = self.raw_store.get_body(record.run.source_id, page.raw_snapshot_id)
                 parsed = parser.parse(body)
                 for game in parsed.games:
+                    if game.source_object_path is None:
+                        raise AnalystExportError(
+                            f"feed item {game.app_id} is missing its raw source object path"
+                        )
                     rows.append(
                         AnalystFeedExposure(
                             platform_listing_id=f"yandex_games:{game.app_id}",
@@ -540,12 +603,12 @@ def write_analyst_export_csv(report: AnalystMarketExportReport, directory: Path)
 
 def _resolve_state_value(
     states: Sequence[PersistedListingState],
-    field: str,
+    field: StateFieldName,
     rich_raw_ids: set[str],
 ) -> AnalystResolvedValue:
     target = f"listing_state_observations.{field}"
     for state in reversed(states):
-        value = getattr(state.observation, field)
+        value = _state_field_value(state.observation, field)
         if value is None:
             continue
         lineage = tuple(
@@ -555,8 +618,9 @@ def _resolve_state_value(
         )
         if not lineage:
             continue
+        exported: str | int | float | bool | tuple[str, ...]
         if isinstance(value, datetime):
-            exported: str | int | float | bool | tuple[str, ...] = _iso(value)
+            exported = _iso(value)
         else:
             exported = value
         return AnalystResolvedValue(
@@ -571,6 +635,43 @@ def _resolve_state_value(
             ),
         )
     return _missing()
+
+
+def _state_field_value(
+    observation: ListingStateObservation,
+    field: StateFieldName,
+) -> StateFieldValue:
+    if field == "title":
+        return observation.title
+    if field == "developer_id":
+        return observation.developer_id
+    if field == "developer_name":
+        return observation.developer_name
+    if field == "first_published_at":
+        return observation.first_published_at
+    if field == "app_version":
+        return observation.app_version
+    if field == "published_at":
+        return observation.published_at
+    if field == "languages":
+        return observation.languages
+    if field == "supported_platforms":
+        return observation.supported_platforms
+    if field == "orientation":
+        return observation.orientation
+    if field == "cloud_save":
+        return observation.cloud_save
+    if field == "leaderboards":
+        return observation.leaderboards
+    if field == "purchases_enabled":
+        return observation.purchases_enabled
+    if field == "has_products":
+        return observation.has_products
+    if field == "rewarded_ads":
+        return observation.rewarded_ads
+    if field == "fullscreen_ads":
+        return observation.fullscreen_ads
+    return observation.sticky_ads
 
 
 def _evidence_reference(
@@ -653,6 +754,7 @@ def _write_listings_csv(report: AnalystMarketExportReport, path: Path) -> None:
         "title",
         "developer_id",
         "developer_name",
+        "first_published_at",
         "app_version",
         "published_at",
         "languages",

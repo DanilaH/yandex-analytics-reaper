@@ -43,6 +43,7 @@ src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
+  ingestion/      application-owned collection/run orchestration
   normalizers/    source DTO → stable domain observation boundary
   schema_drift/   versioned raw-shape profiling/contracts/drift events
   sources/        source capability contracts
@@ -80,9 +81,27 @@ RawSnapshotMetadata + exact body
 Raw shape + drift events
   ↓ parser(version)
 Source DTO + exact source object path where applicable
+  ├→ contextual probe-page/run linkage for paginated feed/search surfaces
   ↓ normalizer(version)
 Domain Observation + FieldLineage
 ```
+
+For paginated Yandex feed/search collection, the application `ingestion` layer owns the complete run lifecycle:
+
+```text
+collect page
+→ persist raw
+→ reject non-2xx
+→ persist schema analysis
+→ stop on breaking drift
+→ parse source DTO
+→ validate raw request/context/cursor identity
+→ append ProbePage to ProbeRun
+→ follow exact continuation tokens
+→ persist COMPLETED / PARTIAL / FAILED terminal state
+```
+
+The CLI delegates this lifecycle to the ingestion runner; it must not duplicate pagination or terminal-state business logic. A failed/partial run keeps the raw snapshot ID that caused the terminal condition when a response was actually received. If failure occurs before any response exists, terminal raw provenance remains absent rather than being invented.
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
 
@@ -187,10 +206,13 @@ metric observation/evidence envelopes
 normalizer name/version used for persisted metrics
 field-level observation lineage
 versioned schema observations / field profiles / drift events
+probe contexts
+logical paginated probe runs
+ordered probe pages + cursor-chain/raw-snapshot linkage
 ```
 
-Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
+Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 
-Probe runs and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric/lineage/schema persistence.
+Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

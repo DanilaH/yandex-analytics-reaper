@@ -2,7 +2,7 @@
 
 This document is the operator-facing path for building reproducible current-market inputs from already implemented Yandex evidence primitives.
 
-It is **not** a claim that `START ANALYSIS` has been reached yet. The current commands cover query-family persistence, provisional search-derived comparable-set construction, and immutable analyst-snapshot binding. Analyst-readable export/feature work and the real pilot still remain in `ROADMAP.md`.
+It is **not** a claim that `START ANALYSIS` has been reached yet. The current commands cover query-family persistence, provisional search-derived comparable-set construction, immutable analyst-snapshot binding, and snapshot-scoped analyst-readable market export. Transparent derived features and the real pilot still remain in `ROADMAP.md`.
 
 ## CLI split
 
@@ -122,7 +122,7 @@ yandex-reaper probe-games 123 456 789 --output data/raw
 yandex-reaper probe-page 123 --output data/raw
 ```
 
-Record the returned raw snapshot IDs. Full peer coverage is useful but is not required to create a snapshot: later analytical exports must expose actual metadata coverage/missingness instead of treating missing listings as zeros.
+Record the returned raw snapshot IDs. Full peer coverage is useful but is not required to create a snapshot: later analytical exports expose actual metadata coverage/missingness instead of treating missing listings as zeros.
 
 Feed evidence is optional for a snapshot. If a particular analysis uses current feed exposure, collect one or more explicit feed runs under the same effective context as the comparable-set search runs and record their run IDs.
 
@@ -188,7 +188,51 @@ snapshot created_at is not earlier than any evidence it binds
 
 The report stores the effective `ProbeContext`, explicit search/feed page limits, exact comparable/query-family/run bindings, exact rich raw snapshot identities/content hashes, parser versions, relevant listing IDs, and a deterministic report content hash.
 
-The report does **not** require 100% rich-metadata coverage. That is deliberate: coverage is analytical evidence and must be reported by the export/feature layer rather than silently repaired or used as a reason to discard an otherwise reproducible market snapshot.
+The report does **not** require 100% rich-metadata coverage. That is deliberate: coverage is analytical evidence and is reported by the export/feature layer rather than silently repaired or used as a reason to discard an otherwise reproducible market snapshot.
+
+## 6. Export analyst-readable market evidence
+
+Build a deterministic JSON export from the frozen snapshot report:
+
+```bash
+yandex-reaper-analyst export-snapshot \
+  data/analysis/pilot-merge-vs-obby-v1.json \
+  --report data/analysis/pilot-merge-vs-obby-market-v1.json \
+  --csv-dir data/analysis/pilot-merge-vs-obby-market-v1-csv \
+  --output data/raw
+```
+
+Both the JSON report and optional CSV directory are create-only. Choose new paths for a new export instead of overwriting an archived analytical artifact.
+
+The JSON export preserves:
+
+```text
+all comparable members, including listings with missing rich metadata
+snapshot-scoped title/developer/basic metadata
+firstPublished separately from game-page publishedTime/update metadata
+gqRating / player rating / ratingCount when observed
+explicit not_observed missingness
+per-field normalized observation + raw/source-field evidence
+comparable membership with exact query/run/raw/source-object provenance
+per-query/page totalGamesCount query-supply observations
+organic search exposures
+organic and sponsored feed exposures as separate rows
+```
+
+A newer normalized observation already present in `market.sqlite3` does not replace a value in an older frozen snapshot export. The exporter only accepts normalized values whose lineage is contained in the rich raw snapshots frozen by that analyst snapshot.
+
+The optional CSV directory contains:
+
+```text
+listings.csv
+comparable_memberships.csv
+update_observations.csv
+search_supply.csv
+search_exposures.csv
+feed_exposures.csv
+```
+
+Use the JSON artifact when exact evidence references matter. The CSV files are convenience tables for manual inspection and spreadsheet-style exploration.
 
 ## Interpretation boundary
 
@@ -204,4 +248,6 @@ call draft taxonomy output validated
 infer unavailable competitor DAU, retention, playtime, CTR, revenue, or ARPDAU
 ```
 
-The next M1 work reads a frozen analyst snapshot into analyst-readable market exports and transparent comparable-market features.
+`totalGamesCount` in `analyst-market-export-v1` remains a query-supply observation. If Yandex omits it, the export records `source_missing`; it does not convert missing supply to zero.
+
+The next M1 work computes only transparent comparable-market features from this frozen evidence boundary, then runs the real analyst pilot required by `START ANALYSIS`.

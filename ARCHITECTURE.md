@@ -89,19 +89,21 @@ Current mechanics:
 clean_anonymous
 → fresh client/cookie jar per logical run
 → no local state reused
+→ session_instance_id = null
 
 persistent_anonymous
 → source-specific local cookie jar loaded before the run
 → same anonymous profile updated after the run
-→ effective context contains only cookie-state fingerprint + profile age
+→ one stable non-secret session_instance_id per local profile instance
+→ effective context contains session instance ID + cookie-state fingerprint + profile age
 
 authenticated_test
 → fail closed until an explicit credential provider is introduced
 ```
 
-Persistent cookie files are **local runtime state**, not operational market persistence. They may contain raw cookie values because those values are required to reuse the anonymous HTTP profile. They must stay outside raw-snapshot metadata and SQLite analytical/operational tables and must never be committed. The operational context stores only the session profile, a one-way SHA-256 state fingerprint, and profile age.
+Persistent cookie files are **local runtime state**, not operational market persistence. They may contain raw cookie values because those values are required to reuse the anonymous HTTP profile. They must stay outside raw-snapshot metadata and SQLite analytical/operational tables and must never be committed. The operational context stores the session profile, stable non-secret session instance ID, one-way SHA-256 state fingerprint, and profile age.
 
-The cookie fingerprint describes state loaded at run start. This makes runs distinguishable without pretending that a hash is a user identity or an authentication credential.
+`session_instance_id` identifies one local persistent profile cohort only. It is randomly generated, is not a Yandex user identity or credential, survives ordinary cookie churn, and changes when that local persistent profile is explicitly reset. The cookie fingerprint separately describes the state loaded at run start.
 
 ## Raw-first ingestion
 
@@ -174,7 +176,7 @@ Schema monitoring observes source shape; it does **not** repair source changes o
 
 For JSON surfaces the current flow profiles normalized JSON paths, exact value types, parent/present counts, missingness ratios, root type, parse failures, and explicit source contracts. Each persisted analysis is versioned by analyzer + contract and is bound to the raw snapshot's exact SHA-256 content identity.
 
-Temporal comparisons occur only inside a source-defined `comparison_scope_id`. Yandex scope construction keeps relevant request context while excluding volatile pagination-token values and volatile cookie-state/profile-age provenance, so desktop/mobile, session-profile classes, different search queries, and unrelated `get_games` cohorts keep meaningful boundaries without fragmenting baselines on normal cookie churn. Baselines are strictly earlier by `retrieved_at`; equal timestamps are not artificially ordered by snapshot IDs.
+Temporal comparisons occur only inside a source-defined `comparison_scope_id`. Yandex scope construction keeps relevant request context while excluding volatile pagination-token values and volatile cookie-state/profile-age provenance, so desktop/mobile, session-profile classes, different persistent session instances, different search queries, and unrelated `get_games` cohorts keep meaningful boundaries without fragmenting baselines on normal cookie churn. A stable `session_instance_id` remains part of the comparison boundary; an explicit persistent-profile reset therefore starts a new baseline. Baselines are strictly earlier by `retrieved_at`; equal timestamps are not artificially ordered by snapshot IDs.
 
 Breaking contract drift stops semantic interpretation **after raw persistence**. Informational/warning drift is recorded without blocking the probe. Parser failures are separate breaking events.
 
@@ -272,7 +274,7 @@ logical paginated probe runs
 ordered probe pages + cursor-chain/raw-snapshot linkage
 ```
 
-Probe contexts store session provenance, not secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
+Probe contexts store safe session provenance, including the stable non-secret persistent-profile instance ID, but never secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
 
 Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 

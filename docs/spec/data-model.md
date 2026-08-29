@@ -252,6 +252,7 @@ probe_contexts
   country_observed
   collector_region
   session_profile
+  session_instance_id
   cookie_state_hash
   profile_age_days
 ```
@@ -260,11 +261,13 @@ Session provenance semantics:
 
 ```text
 clean_anonymous
+→ session_instance_id = null
 → cookie_state_hash = null
 → profile_age_days = 0
 → no cookie state is reused
 
 persistent_anonymous
+→ session_instance_id = stable non-secret identifier for one local profile instance
 → cookie_state_hash = one-way fingerprint of the cookie jar loaded at run start
 → profile_age_days = whole days since the local anonymous profile was created
 → the raw cookie jar remains local runtime state and is never stored in this table
@@ -274,7 +277,9 @@ authenticated_test
 → current collector does not create this context by silently falling back to anonymous
 ```
 
-`cookie_state_hash` is provenance, not a credential or user identity. Raw cookie/token values are forbidden in `probe_contexts`, raw snapshot metadata, and analytical tables. Persistent cookie material lives only in the local ignored runtime session directory needed to reproduce that anonymous HTTP profile.
+`session_instance_id` is cohort provenance, not a Yandex account/user identity or credential. It remains stable while the same local persistent profile evolves and changes after an explicit profile reset, preventing pre/post-reset runs from being silently grouped as one persistent cohort. Legacy persisted `probe_contexts` migrate with this field as `null`; newly collected persistent runs receive a non-null instance ID from the session manager.
+
+`cookie_state_hash` is state provenance, not a credential or user identity. Raw cookie/token values are forbidden in `probe_contexts`, raw snapshot metadata, and analytical tables. Persistent cookie material lives only in the local ignored runtime session directory needed to reproduce that anonymous HTTP profile.
 
 `probe_runs` stores one logical paginated feed/search observation:
 
@@ -440,7 +445,7 @@ schema_drift_events
 
 `content_hash` binds an analysis to the exact immutable raw body. The same raw snapshot can have multiple analyses when the analyzer or explicit contract changes; historical analyses are not rewritten.
 
-Temporal change detection is scoped by `comparison_scope_id`. A source adapter owns the definition of comparable request context. For Yandex this prevents different devices, search queries, unrelated `get_games` cohorts, and first-vs-paginated feed observations from becoming false baselines for one another. Volatile pagination token values are not themselves part of the comparison identity.
+Temporal change detection is scoped by `comparison_scope_id`. A source adapter owns the definition of comparable request context. For Yandex this prevents different devices, search queries, unrelated `get_games` cohorts, first-vs-paginated feed observations, and different persistent session instances from becoming false baselines for one another. Volatile pagination token values, cookie-state fingerprints, and profile age are not themselves part of the comparison identity; a stable persistent `session_instance_id` remains a boundary.
 
 A temporal baseline must be strictly earlier by `retrieved_at`. Equal timestamps are not given a synthetic causal order by snapshot ID, and an out-of-order historical backfill never compares against a future observation.
 

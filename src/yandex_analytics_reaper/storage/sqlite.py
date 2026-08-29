@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -220,6 +220,9 @@ CREATE TABLE IF NOT EXISTS probe_pages (
 
 CREATE INDEX IF NOT EXISTS idx_probe_pages_snapshot
 ON probe_pages (source_id, raw_snapshot_id, run_id, page_index);
+""",
+    6: """
+ALTER TABLE probe_contexts ADD COLUMN session_instance_id TEXT;
 """,
 }
 

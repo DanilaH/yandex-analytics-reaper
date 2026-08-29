@@ -17,6 +17,7 @@ platform
 country_observed
 collector_region
 session_profile
+session_instance_id
 cookie_state_hash
 profile_age
 request parameters
@@ -33,12 +34,14 @@ clean_anonymous
 → a fresh HTTP client and cookie jar for every logical probe run
 → no auth
 → no cookie/profile state reused from an earlier run
+→ session_instance_id = null
 → cookie_state_hash = null
 → profile_age_days = 0
 
 persistent_anonymous
 → one explicit local anonymous profile is loaded before the run
 → its cookie jar is reused and updated across runs
+→ session_instance_id = stable non-secret ID for that local persistent profile instance
 → cookie_state_hash = SHA-256 fingerprint of the cookie state loaded at run start
 → profile_age_days = whole days since that local profile was created
 
@@ -50,9 +53,11 @@ authenticated_test
 
 The persistent anonymous cookie jar is local runtime state, not market evidence. Raw cookie values may exist only in the local session-state file needed to reproduce the anonymous profile. They must never be copied into raw-snapshot request metadata, SQLite probe context, logs, or analytical tables.
 
+`session_instance_id` is a randomly generated non-secret cohort identifier. It identifies one local persistent profile instance without identifying a Yandex user or exposing cookie material. Cookie churn does not change it. An explicit profile reset creates a new instance ID, so runs before and after the reset cannot be silently treated as the same persistent cohort. Legacy local persistent metadata created before this field existed is assigned an instance ID on its first successful open/save under the new format.
+
 `cookie_state_hash` is provenance for distinguishing anonymous states; it is not an authentication token and must never be used to reconstruct cookie values. The fingerprint describes the state **loaded at the start of the run**. Cookies learned during the run are persisted locally for the next persistent run, so the next run receives the next fingerprint.
 
-`cookie_state_hash` and `profile_age_days` participate in `ProbeContext` identity because they describe the actual observation state, but they are intentionally excluded from schema-drift comparison scope so normal cookie churn does not fragment schema baselines. `session_profile` remains part of schema scope because anonymous vs future authenticated surfaces may legitimately differ in shape. This scope-semantics change requires a new schema-analyzer version.
+`session_instance_id`, `cookie_state_hash`, and `profile_age_days` participate in `ProbeContext` identity because they describe the actual observation state. For schema-drift comparison, cookie hash and profile age are intentionally excluded so normal cookie churn does not fragment schema baselines. `session_profile` and the stable `session_instance_id` remain comparison boundaries; an explicit persistent-profile reset therefore starts a fresh schema baseline rather than silently joining the old cohort.
 
 Persistent state is saved when the prepared session closes, including after a partial/failed probe when possible. A local state-save failure must not replace the original collection/parser failure; the original error remains primary and the state error is attached as secondary diagnostic context.
 
@@ -167,6 +172,7 @@ recommendation feed
 ru
 desktop / desktop_other
 clean_anonymous
+session_instance_id = null
 requested page size = 20
 candidate maximum depths = 1 / 3 / 5 / 10
 ```

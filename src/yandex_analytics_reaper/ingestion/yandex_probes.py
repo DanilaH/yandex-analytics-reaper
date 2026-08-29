@@ -250,23 +250,29 @@ class YandexPaginatedProbeRunner:
 
 def _validate_effective_session_context(context: ProbeContext) -> None:
     if context.session_profile is SessionProfile.CLEAN_ANONYMOUS:
-        if context.cookie_state_hash is not None or context.profile_age_days != 0:
+        if (
+            context.session_instance_id is not None
+            or context.cookie_state_hash is not None
+            or context.profile_age_days != 0
+        ):
             raise ValueError(
                 "clean_anonymous probe requires a fresh effective context "
-                "with no cookie fingerprint and profile_age_days=0"
+                "with no session instance, no cookie fingerprint and profile_age_days=0"
             )
         return
 
     if context.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
         fingerprint = context.cookie_state_hash
         if (
-            fingerprint is None
+            context.session_instance_id is None
+            or fingerprint is None
             or len(fingerprint) != 64
             or any(character not in "0123456789abcdef" for character in fingerprint)
             or context.profile_age_days is None
         ):
             raise ValueError(
-                "persistent_anonymous probe requires effective cookie fingerprint and profile age"
+                "persistent_anonymous probe requires session instance ID, "
+                "effective cookie fingerprint and profile age"
             )
         return
 

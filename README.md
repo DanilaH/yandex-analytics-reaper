@@ -39,7 +39,7 @@ Implemented:
 - field-level metric lineage from exact parser source path back to raw snapshot identity;
 - versioned schema-drift monitoring for Yandex JSON surfaces with field/type/missingness contracts, scoped temporal comparisons, parser-failure records, and raw-content identity checks;
 - logical paginated feed/search probe runs with deterministic context identity, ordered page/cursor linkage, terminal status, and raw error provenance;
-- explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with safe cookie-state fingerprint/profile-age provenance;
+- explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with stable non-secret persistent-profile instance IDs plus safe cookie-state fingerprint/profile-age provenance;
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
@@ -153,7 +153,7 @@ Game page / `__playPageData__`:
 yandex-reaper probe-page 438560 --output data/raw
 ```
 
-For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run. `persistent_anonymous` stores and reuses one local anonymous cookie jar under the runtime `sessions/` directory. Raw cookie values stay only in that local session-state file; raw snapshots and SQLite probe contexts receive only the session profile, a SHA-256 cookie-state fingerprint, and profile age. Do not commit or share the runtime session directory.
+For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run. `persistent_anonymous` stores and reuses one local anonymous cookie jar under the runtime `sessions/` directory. Raw cookie values stay only in that local session-state file; raw snapshots and SQLite probe contexts receive the session profile, a stable non-secret local profile-instance ID, a SHA-256 cookie-state fingerprint, and profile age. The instance ID stays stable across ordinary cookie churn and changes after an explicit local profile reset; it is not a Yandex user/account identifier. Do not commit or share the runtime session directory.
 
 `authenticated_test` is intentionally fail-closed until an explicit credential provider exists; selecting it does not silently run an anonymous probe.
 

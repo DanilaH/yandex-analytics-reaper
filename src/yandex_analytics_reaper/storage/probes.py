@@ -326,9 +326,10 @@ class SQLiteProbeRunStore:
                 country_observed,
                 collector_region,
                 session_profile,
+                session_instance_id,
                 cookie_state_hash,
                 profile_age_days
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 context_id,
@@ -338,6 +339,7 @@ class SQLiteProbeRunStore:
                 context.country_observed,
                 context.collector_region,
                 context.session_profile.value,
+                context.session_instance_id,
                 context.cookie_state_hash,
                 context.profile_age_days,
             ),
@@ -364,6 +366,7 @@ class SQLiteProbeRunStore:
             country_observed=_optional_str(row["country_observed"]),
             collector_region=_optional_str(row["collector_region"]),
             session_profile=SessionProfile(str(row["session_profile"])),
+            session_instance_id=_optional_str(row["session_instance_id"]),
             cookie_state_hash=_optional_str(row["cookie_state_hash"]),
             profile_age_days=(
                 None if row["profile_age_days"] is None else int(row["profile_age_days"])
@@ -422,8 +425,11 @@ class SQLiteProbeRunStore:
 
 
 def _context_id(context: ProbeContext) -> str:
+    identity = context.model_dump(mode="json")
+    if identity.get("session_instance_id") is None:
+        identity.pop("session_instance_id", None)
     encoded = json.dumps(
-        context.model_dump(mode="json"),
+        identity,
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=False,

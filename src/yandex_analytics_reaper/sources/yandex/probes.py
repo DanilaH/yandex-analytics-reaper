@@ -28,7 +28,7 @@ def probe_page_from_yandex(
         raise ValueError(f"unsupported paginated Yandex request_key: {metadata.request_key}")
 
     raw_context = metadata.request_context.get("probe_context")
-    if raw_context != context.model_dump(mode="json"):
+    if not _probe_context_matches(raw_context, context):
         raise ValueError("raw probe page context does not match probe run context")
 
     if metadata.request_key == "catalogue.search":
@@ -51,6 +51,15 @@ def probe_page_from_yandex(
         response_rtx_reqid=page_info.rtx_reqid,
         has_next_page=page_info.has_next_page,
     )
+
+
+def _probe_context_matches(raw_context: object, context: ProbeContext) -> bool:
+    if not isinstance(raw_context, Mapping):
+        return False
+    expected = context.model_dump(mode="json")
+    if expected.get("session_instance_id") is None and "session_instance_id" not in raw_context:
+        expected.pop("session_instance_id", None)
+    return dict(raw_context) == expected
 
 
 def _optional_token(value: object) -> str | None:

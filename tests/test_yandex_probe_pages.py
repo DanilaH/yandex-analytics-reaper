@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from yandex_analytics_reaper.domain import ProbeContext, ProbeKind, ProbeRun
+from yandex_analytics_reaper.domain import ProbeContext, ProbeKind, ProbeRun, SessionProfile
 from yandex_analytics_reaper.sources.yandex.parsers import PageInfo
 from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
 from yandex_analytics_reaper.storage import RawSnapshotMetadata
@@ -83,6 +83,69 @@ def test_factory_preserves_request_and_response_pagination_tokens() -> None:
     assert page.response_next_page_id == "page-2"
     assert page.response_rtx_reqid == "req-2"
     assert page.has_next_page is True
+
+
+def test_factory_accepts_legacy_raw_context_without_nullable_session_instance() -> None:
+    run, context = _run()
+    metadata = _metadata(run, context)
+    raw_probe_context = dict(metadata.request_context["probe_context"])
+    raw_probe_context.pop("session_instance_id")
+    legacy = metadata.model_copy(
+        update={
+            "request_context": {
+                **metadata.request_context,
+                "probe_context": raw_probe_context,
+            }
+        }
+    )
+
+    page = probe_page_from_yandex(
+        run=run,
+        context=context,
+        metadata=legacy,
+        page_index=0,
+        page_info=PageInfo(),
+    )
+
+    assert page.run_id == run.id
+
+
+def test_factory_does_not_treat_missing_instance_as_persistent_instance() -> None:
+    context = ProbeContext(
+        session_profile=SessionProfile.PERSISTENT_ANONYMOUS,
+        session_instance_id="session:0123456789abcdef0123456789abcdef",
+        cookie_state_hash="a" * 64,
+        profile_age_days=0,
+    )
+    run = ProbeRun(
+        id="probe:persistent",
+        source_id="yandex_public",
+        request_key="catalogue.feed",
+        kind=ProbeKind.RECOMMENDATION_FEED,
+        context_id="probe-context:persistent",
+        requested_page_limit=1,
+        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
+    )
+    metadata = _metadata(run, context)
+    raw_probe_context = dict(metadata.request_context["probe_context"])
+    raw_probe_context.pop("session_instance_id")
+    legacy_shaped = metadata.model_copy(
+        update={
+            "request_context": {
+                **metadata.request_context,
+                "probe_context": raw_probe_context,
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="context does not match"):
+        probe_page_from_yandex(
+            run=run,
+            context=context,
+            metadata=legacy_shaped,
+            page_index=0,
+            page_info=PageInfo(),
+        )
 
 
 def test_factory_rejects_context_or_search_query_mismatch() -> None:

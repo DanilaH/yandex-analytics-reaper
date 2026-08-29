@@ -144,21 +144,24 @@ class SQLiteQueryFamilyStore:
         if not member_rows:
             raise RuntimeError("stored query-family version has no members")
 
-        return QueryFamilyVersion(
-            family_id=str(row["family_id"]),
-            version=int(row["version"]),
-            label=str(row["label"]),
-            source_id=str(row["source_id"]),
-            language=str(row["language"]),
-            created_at=_parse_timestamp(str(row["created_at"])),
-            members=tuple(
-                QueryFamilyMember(
-                    query_text=str(member["query_text"]),
-                    kind=QueryVariantKind(str(member["variant_kind"])),
-                )
-                for member in member_rows
-            ),
-        )
+        try:
+            return QueryFamilyVersion(
+                family_id=str(row["family_id"]),
+                version=int(row["version"]),
+                label=str(row["label"]),
+                source_id=str(row["source_id"]),
+                language=str(row["language"]),
+                created_at=_parse_timestamp(str(row["created_at"])),
+                members=tuple(
+                    QueryFamilyMember(
+                        query_text=str(member["query_text"]),
+                        kind=QueryVariantKind(str(member["variant_kind"])),
+                    )
+                    for member in member_rows
+                ),
+            )
+        except ValueError as exc:
+            raise RuntimeError("stored query-family version is invalid") from exc
 
 
 def _identity(family_id: str, version: int) -> tuple[str, int]:

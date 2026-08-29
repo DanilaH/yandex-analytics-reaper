@@ -11,13 +11,17 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .gold_set import (
     ANNOTATION_CONTRACT_V1_CONTENT_HASH,
+    GOLD_SET_SPEC_VERSION,
     TaxonomyAnnotationConfidence,
     TaxonomyGoldSetReport,
     TaxonomyManualLabel,
     validate_taxonomy_gold_set_report,
 )
 from .models import PrimaryGameplayArchetype
-from .sampling import TaxonomyDiversitySampleReport
+from .sampling import (
+    SPEC_VERSION as TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
+    TaxonomyDiversitySampleReport,
+)
 
 PRIMARY_ARCHETYPE_VALIDATION_SPEC_VERSION: Literal[
     "taxonomy-primary-archetype-validation-v1"
@@ -26,8 +30,10 @@ PRIMARY_ARCHETYPE_VALIDATION_CONTRACT_VERSION: Literal[
     "primary-archetype-review-v1"
 ] = "primary-archetype-review-v1"
 PRIMARY_ARCHETYPE_VALIDATION_CONTRACT_V1_CONTENT_HASH = (
-    "6cd79128d565e4673dc61e76612587cd0ad849eafa3ab4e37468e3bc51c72576"
+    "83d983d0062d61a6fb434b9b18debc536aba712b7a31ee584fdb7268f8f93d57"
 )
+_REVIEWED_LABEL_COUNT_MIN = 100
+_REVIEWED_LABEL_COUNT_MAX = 200
 _MODELED_PRIMARY_ARCHETYPES = tuple(
     archetype
     for archetype in PrimaryGameplayArchetype
@@ -37,17 +43,22 @@ _SPECIAL_PRIMARY_STATES = (
     PrimaryGameplayArchetype.OTHER,
     PrimaryGameplayArchetype.UNKNOWN,
 )
-_REVIEW_FIELDS = (
-    "archetype",
-    "disposition",
-    "evidence_listing_ids",
-    "rationale",
-)
 _VALIDATION_RULES = (
+    "gold_set_revalidated_against_exact_sample_before_review",
+    "declaration_binds_exact_gold_set_id_and_content_hash",
+    "validation_identifiers_nonblank_trimmed",
+    "reviewed_at_timezone_aware_canonicalized_to_utc",
     "every_modeled_archetype_reviewed_once_in_registry_order",
+    "other_unknown_are_diagnostic_only_not_review_rows",
+    "evidence_listing_ids_nonblank_trimmed_unique",
+    "rationale_nonblank_trimmed",
     "evidence_listing_ids_must_match_adjudicated_archetype",
     "zero_support_forces_insufficient_evidence",
     "non_insufficient_disposition_requires_evidence",
+    "insufficient_evidence_may_be_used_with_supported_labels",
+    "support_counts_and_rates_are_diagnostic_not_automatic_validation",
+    "revision_candidates_exclude_keep_and_insufficient_evidence",
+    "agreement_confusion_analysis_is_out_of_scope",
 )
 
 
@@ -117,7 +128,9 @@ class PrimaryArchetypeValidationDeclaration(BaseModel):
     @classmethod
     def validate_identifier(cls, value: str) -> str:
         if not value or value != value.strip():
-            raise ValueError("primary-archetype validation identifiers must be nonblank and trimmed")
+            raise ValueError(
+                "primary-archetype validation identifiers must be nonblank and trimmed"
+            )
         return value
 
     @field_validator("gold_set_content_hash")
@@ -192,7 +205,7 @@ class PrimaryArchetypeValidationReport(BaseModel):
     sample_content_hash: str
     gold_set_id: str
     gold_set_content_hash: str
-    total_labels: int = Field(ge=100, le=200)
+    total_labels: int = Field(ge=_REVIEWED_LABEL_COUNT_MIN, le=_REVIEWED_LABEL_COUNT_MAX)
     modeled_label_count: int = Field(ge=0)
     unknown_count: int = Field(ge=0)
     unknown_rate: float = Field(ge=0.0, le=1.0)
@@ -241,7 +254,9 @@ class PrimaryArchetypeValidationReport(BaseModel):
         if self.annotation_contract_content_hash != ANNOTATION_CONTRACT_V1_CONTENT_HASH:
             raise ValueError("validation report annotation contract hash does not match v1")
         if tuple(entry.archetype for entry in self.entries) != _MODELED_PRIMARY_ARCHETYPES:
-            raise ValueError("validation report entries must follow modeled archetype registry order")
+            raise ValueError(
+                "validation report entries must follow modeled archetype registry order"
+            )
         if self.modeled_label_count + self.unknown_count + self.other_count != self.total_labels:
             raise ValueError("validation report label counts must sum to total_labels")
         if (
@@ -370,13 +385,25 @@ def validate_primary_archetype_validation_report(
 
 def primary_archetype_validation_contract_content_hash() -> str:
     payload = {
+        "spec_version": PRIMARY_ARCHETYPE_VALIDATION_SPEC_VERSION,
         "validation_contract_version": PRIMARY_ARCHETYPE_VALIDATION_CONTRACT_VERSION,
+        "sample_spec_version": TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
+        "gold_set_spec_version": GOLD_SET_SPEC_VERSION,
         "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
         "modeled_primary_archetypes": [item.value for item in _MODELED_PRIMARY_ARCHETYPES],
         "special_primary_states": [item.value for item in _SPECIAL_PRIMARY_STATES],
         "dispositions": [item.value for item in PrimaryArchetypeReviewDisposition],
-        "review_fields": list(_REVIEW_FIELDS),
+        "reviewed_label_count_bounds": {
+            "min": _REVIEWED_LABEL_COUNT_MIN,
+            "max": _REVIEWED_LABEL_COUNT_MAX,
+        },
+        "declaration_fields": list(PrimaryArchetypeValidationDeclaration.model_fields),
+        "review_fields": list(PrimaryArchetypeLabelReview.model_fields),
+        "entry_fields": list(PrimaryArchetypeValidationEntry.model_fields),
+        "report_fields": list(PrimaryArchetypeValidationReport.model_fields),
         "rules": list(_VALIDATION_RULES),
+        "datetime_canonicalization": "timezone-aware-to-utc-isoformat",
+        "content_hash_canonicalization": "json-sort-keys-compact-utf8-ensure-ascii-false",
     }
     return _content_hash(payload)
 

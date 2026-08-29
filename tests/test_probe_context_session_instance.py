@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -35,6 +37,31 @@ def test_persistent_session_instance_round_trips_through_probe_context_store(
     assert record is not None
     assert record.context == context
     assert record.context.session_instance_id == context.session_instance_id
+
+
+def test_nullable_session_instance_preserves_pre_upgrade_context_identity(tmp_path: Path) -> None:
+    store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    context = ProbeContext(language="ru", device_type="desktop")
+    legacy_identity = context.model_dump(mode="json")
+    legacy_identity.pop("session_instance_id")
+    encoded = json.dumps(
+        legacy_identity,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode()
+    expected_context_id = "probe-context:" + hashlib.sha256(encoded).hexdigest()[:32]
+
+    run = store.create_run(
+        source_id="yandex_public",
+        request_key="catalogue.feed",
+        kind=ProbeKind.RECOMMENDATION_FEED,
+        context=context,
+        requested_page_limit=1,
+        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
+    )
+
+    assert run.context_id == expected_context_id
 
 
 def test_session_instance_changes_probe_context_identity(tmp_path: Path) -> None:

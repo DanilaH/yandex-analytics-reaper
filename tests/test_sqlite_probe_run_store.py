@@ -144,6 +144,21 @@ def test_next_page_must_continue_previous_cursor_and_rtx_token(tmp_path: Path) -
         store.append_page(wrong_rtx)
 
 
+def test_next_page_rejects_missing_previous_continuation_tokens(tmp_path: Path) -> None:
+    store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    run_id, started = _start(store)
+    first = _page(run_id, 0, started + timedelta(seconds=1)).model_copy(
+        update={"response_next_page_id": None}
+    )
+    second = _page(run_id, 1, started + timedelta(seconds=2)).model_copy(
+        update={"request_page_id": None}
+    )
+
+    store.append_page(first)
+    with pytest.raises(ValueError, match="omitted required continuation tokens"):
+        store.append_page(second)
+
+
 def test_cannot_append_after_source_exhaustion_or_with_backwards_time(tmp_path: Path) -> None:
     store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
     exhausted_id, exhausted_started = _start(store)

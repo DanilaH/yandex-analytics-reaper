@@ -30,7 +30,7 @@ Phase 1 is complete when this foundation lands on `main`.
 - [x] introduce explicit source DTO → normalizer boundary
 - [x] normalized listing/developer persistence
 - [x] normalized metric persistence
-- [ ] observation + field-level lineage persistence
+- [x] observation + field-level lineage persistence
 - [ ] schema-drift registry with field/type/missingness checks
 - [ ] probe-run/page grouping
 - [ ] define `clean_anonymous` / persistent session semantics

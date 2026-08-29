@@ -71,7 +71,7 @@ task
 → fix
 → re-review
 → repeat until no blocking findings
-→ full CI
+→ full quality checks / CI when runnable
 → final GitHub diff review
 → merge
 → update roadmap/current status
@@ -80,7 +80,9 @@ task
 
 Rules:
 
-- Never merge red CI.
+- A real Ruff, mypy, pytest, build, or application test failure is a merge blocker.
+- A CI infrastructure failure that occurs before quality steps execute (for example no runner allocation / zero executed steps) is **not** itself a merge blocker. Confirm that the workflow/config was not changed into a broken state, record the infrastructure limitation, run the strongest available local/focused substitutes, perform the final GitHub diff review, and continue.
+- Never classify an unknown CI failure as infrastructure-only merely to merge. The evidence must show that quality steps did not execute or that the failure is external to the code under review.
 - Never make CI green by weakening Ruff, mypy, tests, or other quality gates unless the rule itself is independently shown to be wrong and the rationale is documented.
 - Passing tests do not replace independent review.
 - Review the actual GitHub diff before merge, not only a local working copy.

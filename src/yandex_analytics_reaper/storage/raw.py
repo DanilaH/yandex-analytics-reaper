@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,8 @@ SENSITIVE_KEYS = {
     "csrf-token",
     "x-csrf-token",
 }
+_SAFE_SOURCE_ID = re.compile(r"^[A-Za-z0-9_.-]+$")
+_SNAPSHOT_ID = re.compile(r"^(\d{8})T\d{12}Z-[0-9a-f]{10}$")
 
 
 class RawSnapshotMetadata(BaseModel):
@@ -86,16 +89,23 @@ def _schema_hash(body: bytes, content_type: str | None) -> str | None:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _validate_source_id(source_id: str) -> str:
+    if _SAFE_SOURCE_ID.fullmatch(source_id) is None:
+        raise ValueError("source_id must contain only letters, digits, '.', '_' or '-'")
+    return source_id
+
+
 class FilesystemRawSnapshotStore:
-    """Append-only raw response store. Existing snapshots are never overwritten."""
+    """Append-only raw response store with deterministic metadata lookup."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
 
     def persist(self, response: CollectedResponse) -> RawSnapshotMetadata:
+        source_id = _validate_source_id(response.source_id)
         retrieved = response.retrieved_at.astimezone(UTC)
         snapshot_id = f"{retrieved:%Y%m%dT%H%M%S%fZ}-{uuid4().hex[:10]}"
-        folder = self.root / response.source_id / f"{retrieved:%Y/%m/%d}" / snapshot_id
+        folder = self.root / source_id / f"{retrieved:%Y/%m/%d}" / snapshot_id
         folder.mkdir(parents=True, exist_ok=False)
 
         content_type = response.headers.get("content-type")
@@ -109,7 +119,7 @@ class FilesystemRawSnapshotStore:
 
         metadata = RawSnapshotMetadata(
             id=snapshot_id,
-            source_id=response.source_id,
+            source_id=source_id,
             retrieved_at=retrieved,
             request_key=response.request_key,
             method=response.method,
@@ -124,6 +134,40 @@ class FilesystemRawSnapshotStore:
         )
         metadata_path.write_text(metadata.model_dump_json(indent=2), encoding="utf-8")
         return metadata
+
+    def get_metadata(self, source_id: str, snapshot_id: str) -> RawSnapshotMetadata:
+        """Resolve a snapshot ID back to its immutable metadata without a database index."""
+
+        source_id = _validate_source_id(source_id)
+        date = self._snapshot_date(snapshot_id)
+        metadata_path = (
+            self.root
+            / source_id
+            / f"{date.year:04d}"
+            / f"{date.month:02d}"
+            / f"{date.day:02d}"
+            / snapshot_id
+            / "metadata.json"
+        )
+        if not metadata_path.is_file():
+            raise FileNotFoundError(f"raw snapshot metadata not found: {source_id}/{snapshot_id}")
+
+        metadata = RawSnapshotMetadata.model_validate_json(
+            metadata_path.read_text(encoding="utf-8")
+        )
+        if metadata.id != snapshot_id or metadata.source_id != source_id:
+            raise ValueError("raw snapshot metadata identity does not match requested snapshot")
+        return metadata
+
+    @staticmethod
+    def _snapshot_date(snapshot_id: str) -> datetime:
+        match = _SNAPSHOT_ID.fullmatch(snapshot_id)
+        if match is None:
+            raise ValueError("snapshot_id does not match the expected generated format")
+        try:
+            return datetime.strptime(match.group(1), "%Y%m%d").replace(tzinfo=UTC)
+        except ValueError as exc:
+            raise ValueError("snapshot_id contains an invalid UTC date") from exc
 
     @staticmethod
     def _suffix(content_type: str | None) -> str:

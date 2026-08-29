@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Self
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 class Provenance(StrEnum):
@@ -64,6 +65,40 @@ class Uncertainty(BaseModel):
     point: float | None = None
     upper: float | None = None
     confidence_level: float | None = None
+
+
+class FieldLineage(BaseModel):
+    """One raw source field → persisted target field transformation."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    raw_snapshot_id: str
+    source_field_path: str
+    target_field_path: str
+    transformation_name: str
+    transformation_version: str
+
+    @field_validator(
+        "raw_snapshot_id",
+        "source_field_path",
+        "target_field_path",
+        "transformation_name",
+        "transformation_version",
+    )
+    @classmethod
+    def require_non_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("lineage fields cannot be blank")
+        return stripped
+
+    @model_validator(mode="after")
+    def validate_paths(self) -> Self:
+        if not self.source_field_path.startswith("$"):
+            raise ValueError("source_field_path must start with '$'")
+        if "." not in self.target_field_path:
+            raise ValueError("target_field_path must identify a persisted table field")
+        return self
 
 
 class EvidenceEnvelope(BaseModel):

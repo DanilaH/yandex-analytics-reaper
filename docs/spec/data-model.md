@@ -82,7 +82,7 @@ Do not assume developer names/ownership are eternally static.
 
 ## Raw snapshots
 
-`raw_snapshots` stores source facts before interpretation:
+Raw source facts are stored on the filesystem before interpretation. `RawSnapshotMetadata` contains:
 
 ```text
 id
@@ -98,6 +98,8 @@ schema_fingerprint
 ```
 
 No parser/normalizer version belongs in the raw snapshot record.
+
+Snapshot IDs encode the UTC collection date and can be resolved deterministically by `(source_id, raw_snapshot_id)` back to immutable metadata and stored body. The operational SQLite store therefore does not need to duplicate raw snapshot bytes merely to support lineage.
 
 ## Parse runs
 
@@ -115,6 +117,16 @@ parse_runs
 
 Parser output is a source-specific DTO. It is not a domain observation.
 
+Where a source returns repeated game objects in alternative shapes, the parser preserves the **exact raw object path** on the DTO. Example Yandex paths:
+
+```text
+$.feed[0].widgets[2].data
+$.feed[1].items[3]
+$.games[7]
+```
+
+The normalizer must not reconstruct or guess this path later.
+
 ## Normalization
 
 Use a technical observation envelope as the lineage anchor rather than duplicating every typed value inside a generic JSON payload.
@@ -131,7 +143,13 @@ normalized_observations
   normalizer_version
 ```
 
-The envelope is already persisted for numeric metric observations. A persisted metric requires `retrieved_at`; all stored temporal values must be timezone-aware, and `available_at` cannot be later than `retrieved_at`.
+The envelope is persisted for numeric metric observations. A persisted metric requires `retrieved_at`; all stored temporal values must be timezone-aware and satisfy:
+
+```text
+observed_at <= available_at <= retrieved_at
+```
+
+when `available_at` is known.
 
 Typed tables reference `normalized_observations.id`.
 
@@ -146,7 +164,7 @@ search_results
 
 ## Field-level lineage
 
-One domain observation can use multiple raw/source inputs.
+`FieldLineage` is an evidence-layer model produced by normalizers and persisted by storage. One domain observation may use multiple raw/source inputs.
 
 ```text
 observation_lineage
@@ -161,13 +179,18 @@ observation_lineage
 Example:
 
 ```text
-$.gameData.gqRating
+$.games[1].gqRating
+→ YandexGameNormalizer.yandex_games_rating@2
 → game_metric_observations.value_numeric
 ```
 
-A decision-relevant dossier value must be traceable through derived feature → domain observation → lineage → raw snapshot.
+For Yandex feed/get-games card metrics, source object paths come from the parser, so the lineage distinguishes `feed[].widgets[].data`, `feed[].items[]`, and `games[]` instead of guessing the response shape. For HTML game pages, embedded-script locators are explicit (for example `$.__playPageData__.gameData.gqRating`) rather than pretending the HTML document itself has a JSON root.
 
-Metric envelopes currently preserve coarse `lineage_refs` so source references are not discarded before this table exists. Those refs do **not** satisfy the field-level lineage requirement; explicit lineage persistence is the next Phase 2 task.
+Metric row + field-level lineage are written in the same SQLite transaction. Duplicate/conflicting source→target transformation records are errors and roll back the associated metric write.
+
+A decision-relevant dossier value must eventually be traceable through derived feature → domain observation → lineage → raw snapshot metadata/body.
+
+Legacy/coarse `EvidenceEnvelope.lineage_refs` may remain for non-field references, but they are not a substitute for `observation_lineage` when field-level provenance is available.
 
 ## Game metrics
 
@@ -190,7 +213,7 @@ uncertainty
 missing_reason
 ```
 
-The current metric writer supports finite numeric observed values. Boolean values are rejected at the domain boundary rather than being coerced to `0/1`.
+The current metric writer supports finite numeric observed values. Boolean values and numeric-looking strings are rejected at the domain boundary rather than being coerced.
 
 Metric observation identity is deterministic from source/listing/metric/time-window/retrieval/normalizer metadata. Rewriting the exact same observation is idempotent; supplying conflicting evidence/value for that same observation is an error rather than an overwrite. Metric batches are transactional.
 

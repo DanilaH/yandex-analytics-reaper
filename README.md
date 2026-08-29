@@ -31,11 +31,12 @@ Market Prior
 Implemented:
 
 - source capability contracts;
-- immutable filesystem raw-snapshot store;
+- immutable filesystem raw-snapshot store with deterministic snapshot lookup;
 - platform-neutral domain primitives;
 - explicit source DTO → domain normalizer boundary;
 - SQLite operational persistence for normalized listing/developer identities and developer-assignment history;
 - normalized numeric metric persistence with observation/evidence envelopes and versioned normalizer metadata;
+- field-level metric lineage from exact parser source path back to raw snapshot identity;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -48,8 +49,8 @@ Implemented:
 
 Not implemented yet:
 
-- field-level lineage persistence;
-- scheduled collection;
+- schema-drift registry;
+- production scheduled collection/probe-run grouping;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
 - external trend connectors;
@@ -99,7 +100,7 @@ mypy src
 pytest
 ```
 
-All three are merge gates. A red CI run is not considered merge-ready.
+All three remain required quality checks. GitHub-hosted CI is currently treated as infrastructure-only when it fails before allocating a runner; development/review continues with local/focused checks where available.
 
 ## Manual Yandex probes
 

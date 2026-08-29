@@ -4,13 +4,15 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
 from yandex_analytics_reaper.storage.raw import FilesystemRawSnapshotStore
 
 
-def _response() -> CollectedResponse:
+def _response(*, source_id: str = "fixture") -> CollectedResponse:
     return CollectedResponse(
-        source_id="fixture",
+        source_id=source_id,
         request_key="test.json",
         method="GET",
         url="https://example.test/data",
@@ -44,6 +46,39 @@ def test_raw_store_persists_exact_body_and_redacts_metadata(tmp_path: Path) -> N
     assert saved["method"] == "GET"
     assert saved["url"] == "https://example.test/data"
     assert metadata.schema_hash is not None
+
+
+def test_raw_store_resolves_persisted_metadata_by_source_and_snapshot_id(tmp_path: Path) -> None:
+    store = FilesystemRawSnapshotStore(tmp_path)
+    metadata = store.persist(_response())
+
+    resolved = store.get_metadata(metadata.source_id, metadata.id)
+
+    assert resolved == metadata
+    assert (tmp_path / resolved.content_path).read_bytes() == _response().body
+
+
+def test_raw_store_rejects_invalid_or_missing_snapshot_identity(tmp_path: Path) -> None:
+    store = FilesystemRawSnapshotStore(tmp_path)
+
+    with pytest.raises(ValueError, match="expected generated format"):
+        store.get_metadata("fixture", "bad-id")
+
+    with pytest.raises(FileNotFoundError, match="not found"):
+        store.get_metadata("fixture", "20260828T120000000000Z-0000000000")
+
+
+def test_raw_store_rejects_unsafe_path_components(tmp_path: Path) -> None:
+    store = FilesystemRawSnapshotStore(tmp_path)
+
+    with pytest.raises(ValueError, match="source_id"):
+        store.persist(_response(source_id="../escape"))
+
+    with pytest.raises(ValueError, match="source_id"):
+        store.get_metadata("../escape", "20260828T120000000000Z-0000000000")
+
+    with pytest.raises(ValueError, match="expected generated format"):
+        store.get_metadata("fixture", "20260828T120000000000Z-../../escape")
 
 
 def test_raw_store_is_append_only(tmp_path: Path) -> None:

@@ -42,7 +42,7 @@ The parser answers **what the source said**. The normalizer answers **what that 
 src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
   domain/         platform-neutral entities and observations
-  evidence/       evidence semantics and uncertainty
+  evidence/       evidence semantics, uncertainty, field lineage
   normalizers/    source DTO → stable domain observation boundary
   sources/        source capability contracts
     yandex/        Yandex client + source DTO parsers
@@ -76,27 +76,41 @@ CollectedResponse
   ↓ persist
 RawSnapshotMetadata + exact body
   ↓ parser(version)
-Source DTO
+Source DTO + exact source object path where applicable
   ↓ normalizer(version)
-Domain Observation
+Domain Observation + FieldLineage
 ```
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser and normalizer versions so historical data can be reparsed/reinterpreted after implementation changes.
 
+The filesystem raw store supports deterministic metadata lookup by `(source_id, raw_snapshot_id)`, so a lineage record can be resolved back to immutable snapshot metadata and the exact stored body without a separate raw-snapshot database index.
+
 ## Lineage
 
-Decision-relevant values must eventually be reconstructable through:
+Decision-relevant values are reconstructable through:
 
 ```text
 candidate evidence
 → derived feature
 → domain observation
-→ normalization lineage
-→ source DTO/raw field
-→ raw snapshot
+→ field-level normalization lineage
+→ exact source field path
+→ raw snapshot metadata/body
 ```
 
-The current metric persistence stores an observation/evidence envelope and any existing coarse `lineage_refs`, but **field-level normalization lineage is not implemented yet**. The next Phase 2 task replaces that coarse bridge with explicit many-to-many field-level lineage records.
+`FieldLineage` belongs to the evidence layer, not storage. Normalizers create lineage because they own source-field interpretation; storage only persists it.
+
+For Yandex card/detail metrics, parsers preserve the exact raw object path, for example:
+
+```text
+$.feed[0].widgets[2].data
+$.feed[1].items[3]
+$.games[7]
+```
+
+The normalizer appends the exact metric field (for example `.gqRating`) rather than guessing which response shape produced the DTO.
+
+Metric persistence and its lineage write share one SQLite transaction. A lineage conflict therefore rolls back the associated metric write instead of leaving partially traceable evidence.
 
 ## Identity
 
@@ -137,7 +151,7 @@ search discovery
 rich game metadata
 ```
 
-Collectors return raw responses. Parsers own Yandex response-shape interpretation. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations.
+Collectors return raw responses. Parsers own Yandex response-shape interpretation and preserve exact source object paths needed for lineage. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations plus field-level lineage.
 
 ## Persistence boundary
 
@@ -156,10 +170,11 @@ listing ↔ developer observation history
 normalized numeric metric observations
 metric observation/evidence envelopes
 normalizer name/version used for persisted metrics
+field-level observation lineage
 ```
 
 Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. A persisted metric requires an existing listing identity and explicit retrieval-time evidence.
 
-Field-level lineage, probe runs, and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric persistence.
+Probe runs and other historical state are added by their explicit Phase 2 roadmap tasks rather than being hidden inside metric/lineage persistence.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

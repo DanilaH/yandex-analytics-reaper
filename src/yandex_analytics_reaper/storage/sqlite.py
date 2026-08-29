@@ -371,12 +371,11 @@ CREATE TABLE IF NOT EXISTS listing_status_observations (
         REFERENCES platform_listings(id) ON DELETE CASCADE,
     status TEXT NOT NULL,
     status_reason TEXT NOT NULL,
-    CHECK (status IN ('published', 'unknown')),
+    CHECK (status = 'published'),
     CHECK (
         status_reason IN (
             'observed_in_catalogue_metadata',
-            'observed_on_game_page',
-            'requested_but_not_returned'
+            'observed_on_game_page'
         )
     )
 );
@@ -390,7 +389,8 @@ CREATE TABLE IF NOT EXISTS listing_media_observations (
     platform_listing_id TEXT NOT NULL
         REFERENCES platform_listings(id) ON DELETE CASCADE,
     manifest_hash TEXT NOT NULL,
-    CHECK (length(manifest_hash) = 64)
+    CHECK (length(manifest_hash) = 64),
+    CHECK (manifest_hash NOT GLOB '*[^0-9a-f]*')
 );
 
 CREATE INDEX IF NOT EXISTS idx_listing_media_history

@@ -28,20 +28,14 @@ class ListingUpdateObservation(BaseModel):
     @field_validator("platform_listing_id")
     @classmethod
     def require_listing_id(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("platform_listing_id cannot be blank")
-        return stripped
+        return _require_exact_non_blank(value, "platform_listing_id")
 
     @field_validator("app_version")
     @classmethod
     def validate_app_version(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("app_version cannot be blank when provided")
-        return stripped
+        return _require_exact_non_blank(value, "app_version")
 
     @model_validator(mode="after")
     def require_update_field(self) -> Self:
@@ -61,10 +55,7 @@ class ListingStatusObservation(BaseModel):
     @field_validator("platform_listing_id")
     @classmethod
     def require_listing_id(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("platform_listing_id cannot be blank")
-        return stripped
+        return _require_exact_non_blank(value, "platform_listing_id")
 
     @model_validator(mode="after")
     def validate_status_reason(self) -> Self:
@@ -86,14 +77,21 @@ class ListingMediaObservation(BaseModel):
     @field_validator("platform_listing_id")
     @classmethod
     def require_listing_id(cls, value: str) -> str:
-        stripped = value.strip()
-        if not stripped:
-            raise ValueError("platform_listing_id cannot be blank")
-        return stripped
+        return _require_exact_non_blank(value, "platform_listing_id")
 
     @field_validator("manifest_hash")
     @classmethod
     def validate_manifest_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        if len(value) != 64 or any(
+            character not in "0123456789abcdef" for character in value
+        ):
             raise ValueError("manifest_hash must be a lowercase SHA-256 hex digest")
         return value
+
+
+def _require_exact_non_blank(value: str, field: str) -> str:
+    if not value:
+        raise ValueError(f"{field} cannot be blank")
+    if value != value.strip():
+        raise ValueError(f"{field} must already be trimmed")
+    return value

@@ -13,6 +13,7 @@ from .export import (
     AnalystListingRow,
     AnalystMarketExportReport,
     AnalystResolvedValue,
+    AnalystSearchSupplyObservation,
     validate_analyst_market_export,
 )
 from .snapshot import (
@@ -129,7 +130,7 @@ class AnalystQuerySupplyPage(BaseModel):
     page_index: int = Field(ge=0)
     raw_snapshot_id: str
     source_field_path: Literal["$.totalGamesCount"] | None = None
-    total_games_count: int | None = None
+    total_games_count: int | None = Field(default=None, ge=0)
     missing_reason: Literal["source_missing"] | None = None
 
     @model_validator(mode="after")
@@ -336,7 +337,8 @@ class AnalystMarketFeaturesReport(AnalystMarketFeaturesPayload):
     @field_validator("snapshot_content_hash", "market_export_content_hash", "content_hash")
     @classmethod
     def validate_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        invalid = any(character not in "0123456789abcdef" for character in value)
+        if len(value) != 64 or invalid:
             raise ValueError("feature hashes must be lowercase SHA-256 hex digests")
         return value
 
@@ -400,6 +402,27 @@ def _validate_input_pair(
     expected_raw_ids = tuple(item.raw_snapshot_id for item in snapshot.rich_metadata)
     if market_export.rich_metadata_raw_snapshot_ids != expected_raw_ids:
         raise AnalystFeatureError("market export rich-metadata bindings do not match snapshot")
+    _validate_export_set_scope(snapshot, market_export)
+
+
+def _validate_export_set_scope(
+    snapshot: AnalystSnapshotReport,
+    market_export: AnalystMarketExportReport,
+) -> None:
+    expected = {(item.set_id, item.version) for item in snapshot.comparable_sets}
+    membership_keys = {
+        (item.set_id, item.set_version) for item in market_export.comparable_memberships
+    }
+    supply_keys = {(item.set_id, item.set_version) for item in market_export.search_supply}
+    exposure_keys = {
+        (item.set_id, item.set_version) for item in market_export.search_exposures
+    }
+    if membership_keys != expected:
+        raise AnalystFeatureError("market export comparable membership scope changed")
+    if supply_keys != expected:
+        raise AnalystFeatureError("market export query-supply scope changed")
+    if exposure_keys != expected:
+        raise AnalystFeatureError("market export search-exposure scope changed")
 
 
 def _listing_rows_by_id(
@@ -497,25 +520,24 @@ def _query_supply(
         for item in market_export.search_supply
         if item.set_id == binding.set_id and item.set_version == binding.version
     )
-    rows_by_run: dict[str, list[object]] = {}
+    rows_by_run: dict[str, list[AnalystSearchSupplyObservation]] = {}
     for item in rows:
         rows_by_run.setdefault(item.probe_run_id, []).append(item)
     if set(rows_by_run) != set(binding.search_run_ids):
         raise AnalystFeatureError(f"query-supply runs changed for {binding.set_id}")
     summaries: list[AnalystQuerySupplySummary] = []
     for run_id in binding.search_run_ids:
-        run_rows = rows_by_run[run_id]
-        typed_rows = sorted(run_rows, key=lambda item: item.page_index)  # type: ignore[attr-defined]
-        query_texts = {item.query_text for item in typed_rows}  # type: ignore[attr-defined]
+        typed_rows = sorted(rows_by_run[run_id], key=lambda item: item.page_index)
+        query_texts = {item.query_text for item in typed_rows}
         if len(query_texts) != 1:
             raise AnalystFeatureError(f"query text changed inside search run {run_id}")
         pages = tuple(
             AnalystQuerySupplyPage(
-                page_index=item.page_index,  # type: ignore[attr-defined]
-                raw_snapshot_id=item.raw_snapshot_id,  # type: ignore[attr-defined]
-                source_field_path=item.source_field_path,  # type: ignore[attr-defined]
-                total_games_count=item.total_games_count,  # type: ignore[attr-defined]
-                missing_reason=item.missing_reason,  # type: ignore[attr-defined]
+                page_index=item.page_index,
+                raw_snapshot_id=item.raw_snapshot_id,
+                source_field_path=item.source_field_path,
+                total_games_count=item.total_games_count,
+                missing_reason=item.missing_reason,
             )
             for item in typed_rows
         )
@@ -635,16 +657,21 @@ def _organic_exposure(
     binding: AnalystComparableSetBinding,
     member_ids: set[str],
 ) -> AnalystOrganicExposureSummary:
-    search_rows = tuple(
+    set_search_rows = tuple(
         item
         for item in market_export.search_exposures
-        if item.set_id == binding.set_id
-        and item.set_version == binding.version
-        and item.exposure_kind == "organic_search"
+        if item.set_id == binding.set_id and item.set_version == binding.version
+    )
+    if any(item.probe_run_id not in binding.search_run_ids for item in set_search_rows):
+        raise AnalystFeatureError(f"search exposure run escaped {binding.set_id} binding")
+    search_rows = tuple(
+        item for item in set_search_rows if item.exposure_kind == "organic_search"
     )
     if any(item.platform_listing_id not in member_ids for item in search_rows):
         raise AnalystFeatureError(f"organic search exposure escaped {binding.set_id} membership")
     search_exposed = {item.platform_listing_id for item in search_rows}
+    if search_exposed != member_ids:
+        raise AnalystFeatureError(f"organic search evidence no longer covers {binding.set_id}")
     search = _exposure_summary(
         member_count=len(member_ids),
         evidence_available=True,

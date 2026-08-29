@@ -138,6 +138,7 @@ class SchemaProfile(BaseModel):
     source_id: str
     request_key: str
     retrieved_at: AwareDatetime
+    content_hash: str
     schema_hash: str | None = None
     status: SchemaProfileStatus
     root_type: JsonValueType | None = None
@@ -151,6 +152,18 @@ class SchemaProfile(BaseModel):
         if not stripped:
             raise ValueError("schema profile identity fields cannot be blank")
         return stripped
+
+    @field_validator("content_hash")
+    @classmethod
+    def validate_content_hash(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if len(normalized) != 64:
+            raise ValueError("content_hash must be a SHA-256 hex digest")
+        try:
+            int(normalized, 16)
+        except ValueError as exc:
+            raise ValueError("content_hash must be a SHA-256 hex digest") from exc
+        return normalized
 
     @model_validator(mode="after")
     def validate_status_payload(self) -> Self:

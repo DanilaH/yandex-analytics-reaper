@@ -50,14 +50,13 @@ class SessionProfile(StrEnum):
 class ProbeContext(BaseModel):
     """Context that may affect catalog/search/exposure observations."""
 
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, extra="forbid")
 
     language: str = "ru"
     device_type: str = "desktop"
     platform: str = "desktop_other"
     country_observed: str | None = None
     collector_region: str | None = None
-    authenticated_state: bool = False
     session_profile: SessionProfile = SessionProfile.CLEAN_ANONYMOUS
     cookie_state_hash: str | None = None
     profile_age_days: int | None = None

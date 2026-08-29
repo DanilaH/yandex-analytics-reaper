@@ -26,16 +26,18 @@ Market Prior
 
 ## Current scope
 
-**Phase 1 — Foundation** is the implemented repository baseline. **Phase 2 — Yandex market state** is the next implementation phase.
+**Phase 1 — Foundation** is complete. **Phase 2 — Yandex market state** is in progress.
 
-Foundation includes:
+Implemented:
 
 - source capability contracts;
 - immutable filesystem raw-snapshot store;
 - platform-neutral domain primitives;
+- explicit source DTO → domain normalizer boundary;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
+- Yandex game metadata normalizers;
 - manual CLI probes that persist raw responses before parsing;
 - fixture/unit tests;
 - Ruff, strict mypy, pytest, and GitHub Actions quality gates;
@@ -43,7 +45,6 @@ Foundation includes:
 
 Not implemented yet:
 
-- source DTO → domain normalizers;
 - normalized/database persistence and lineage persistence;
 - scheduled collection;
 - validated taxonomy classifier;

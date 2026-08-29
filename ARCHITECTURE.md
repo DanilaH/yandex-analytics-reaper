@@ -41,6 +41,7 @@ src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics and uncertainty
+  normalizers/    source DTO → stable domain observation boundary
   sources/        source capability contracts
     yandex/        Yandex client + source DTO parsers
   storage/        immutable raw storage
@@ -48,7 +49,7 @@ src/yandex_analytics_reaper/
   cli.py          explicit local probes/debug interface
 ```
 
-Normalizer/persistence packages are introduced in Phase 2 when normalized market-state storage begins.
+Normalized persistence packages are introduced later in Phase 2 when normalized market-state storage begins.
 
 ## Source capability architecture
 
@@ -136,7 +137,7 @@ search discovery
 rich game metadata
 ```
 
-Collectors return raw responses. Parsers own Yandex response-shape interpretation. Phase 2 normalizers convert parsed Yandex DTOs into stable domain observations.
+Collectors return raw responses. Parsers own Yandex response-shape interpretation. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations.
 
 ## Persistence boundary
 

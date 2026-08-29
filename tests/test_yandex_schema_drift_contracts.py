@@ -92,13 +92,15 @@ def test_get_games_scope_normalizes_app_id_order() -> None:
 
 
 def test_search_scope_separates_query_and_probe_context() -> None:
+    desktop_probe_context: dict[str, object] = {
+        "language": "ru",
+        "device_type": "desktop",
+        "platform": "desktop_other",
+        "session_profile": "clean_anonymous",
+    }
+    mobile_probe_context = {**desktop_probe_context, "device_type": "mobile"}
     base_context: dict[str, object] = {
-        "probe_context": {
-            "language": "ru",
-            "device_type": "desktop",
-            "platform": "desktop_other",
-            "session_profile": "clean_anonymous",
-        },
+        "probe_context": desktop_probe_context,
         "query": "merge",
         "params": {"query": "merge", "lang": "ru"},
     }
@@ -120,10 +122,7 @@ def test_search_scope_separates_query_and_probe_context() -> None:
         request_key="catalogue.search",
         request_context={
             **base_context,
-            "probe_context": {
-                **base_context["probe_context"],  # type: ignore[dict-item]
-                "device_type": "mobile",
-            },
+            "probe_context": mobile_probe_context,
         },
         suffix="mobile",
     )

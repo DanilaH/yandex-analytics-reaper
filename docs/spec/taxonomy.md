@@ -197,6 +197,8 @@ idle_return
 liveops_events
 ```
 
+`none` is exclusive: it means no modeled meta system is present and cannot be combined with another `meta_systems` label in the same classification.
+
 ### Tones v1
 
 ```text

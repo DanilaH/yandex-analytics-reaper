@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -175,15 +176,24 @@ def test_late_manifest_cannot_supply_fake_freeze_or_cohort_fields() -> None:
         )
 
 
-def test_plan_store_roundtrip_validates_content_hash(tmp_path: Path) -> None:
+def test_plan_store_roundtrip_fails_closed_on_content_hash_tamper(tmp_path: Path) -> None:
     database_path = tmp_path / "market.sqlite3"
     now = datetime.now(UTC)
     _prepare_cohort(database_path, now - timedelta(days=1))
     stored = CollectionCadencePlanFreezer(database_path).freeze(
         _declaration(now + timedelta(days=1))
     )
+    store = SQLiteCollectionCadencePlanStore(database_path)
+    assert store.get(stored.plan_id) == stored
 
-    assert SQLiteCollectionCadencePlanStore(database_path).get(stored.plan_id) == stored
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "UPDATE collection_cadence_plans SET content_hash = ? WHERE plan_id = ?",
+            ("0" * 64, stored.plan_id),
+        )
+
+    with pytest.raises(RuntimeError, match="content hash is invalid"):
+        store.get(stored.plan_id)
 
 
 def test_cadence_numeric_state_preserves_large_integer_identity() -> None:

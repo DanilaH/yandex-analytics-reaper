@@ -31,11 +31,11 @@ from yandex_analytics_reaper.storage import (
 
 from .collection_cadence import (
     ANALYZER_VERSION,
+    CadenceStateSignal,
+    CollectionCadenceReport,
     MIN_LISTING_SERIES,
     MIN_REFERENCE_DAYS,
     SPEC_VERSION,
-    CadenceStateSignal,
-    CollectionCadenceReport,
     StateReferencePoint,
 )
 from .collection_cadence_evidence import (

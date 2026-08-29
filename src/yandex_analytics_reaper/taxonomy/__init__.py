@@ -8,10 +8,12 @@ from .models import (
 )
 from .registries import (
     DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+    TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
     ControlledLabelDimension,
     TaxonomyLabelRegistry,
     TaxonomyLabelRegistryBundle,
     get_taxonomy_label_registry,
+    taxonomy_label_registry_content_hash,
 )
 
 __all__ = [
@@ -23,7 +25,9 @@ __all__ = [
     "PrimaryGameplayArchetype",
     "SessionModel",
     "SocialMode",
+    "TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH",
     "TaxonomyLabelRegistry",
     "TaxonomyLabelRegistryBundle",
     "get_taxonomy_label_registry",
+    "taxonomy_label_registry_content_hash",
 ]

@@ -59,4 +59,4 @@ class ProbeContext(BaseModel):
     collector_region: str | None = None
     session_profile: SessionProfile = SessionProfile.CLEAN_ANONYMOUS
     cookie_state_hash: str | None = None
-    profile_age_days: int | None = None
+    profile_age_days: int | None = Field(default=None, ge=0)

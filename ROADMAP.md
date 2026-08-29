@@ -63,6 +63,8 @@ Phase 1 is complete when this foundation lands on `main`.
   - [x] freeze manual annotation/adjudication contracts and merge sample-bound validation/gold-set tooling
   - [ ] execute real manual annotation/adjudication against the completed real sample and record the gold-set identity/hash
 - [ ] validate primary gameplay-archetype labels
+  - [x] freeze primary-archetype validation/review protocol and merge gold-set-bound tooling
+  - [ ] execute the review against the completed real gold set and record the validation artifact/hash
 - [ ] confusion analysis / agreement analysis
 - [ ] revise taxonomy
 - [ ] freeze first validated taxonomy version

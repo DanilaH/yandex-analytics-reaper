@@ -19,8 +19,9 @@ from .models import (
     NormalizedMetricObservation,
 )
 
-_NORMALIZER_VERSION = "2"
+_NORMALIZER_VERSION = "3"
 _TARGET_METRIC_VALUE = "game_metric_observations.value_numeric"
+_TARGET_STATE_PREFIX = "listing_state_observations"
 
 
 class YandexGameNormalizer:
@@ -45,6 +46,7 @@ class YandexGameNormalizer:
             listing=listing,
             developer=developer,
             listing_state=state,
+            listing_state_lineage=_card_state_lineage(card, state, context),
             metrics=metrics,
             context=context,
         )
@@ -86,6 +88,7 @@ class YandexGameNormalizer:
             listing=listing,
             developer=developer,
             listing_state=state,
+            listing_state_lineage=_details_state_lineage(details, state, context),
             metrics=metrics,
             context=context,
         )
@@ -108,9 +111,7 @@ class YandexGameNormalizer:
                     metric_name=GameMetricName.YANDEX_GAMES_RATING,
                     value=page.yandex_rating,
                     context=context,
-                    source_field_path=(
-                        "$.__playPageData__.gameData.gqRating"
-                    ),
+                    source_field_path="$.__playPageData__.gameData.gqRating",
                 ),
             )
 
@@ -130,6 +131,7 @@ class YandexGameNormalizer:
             listing=listing,
             developer=None,
             listing_state=state,
+            listing_state_lineage=_play_page_state_lineage(page, context),
             metrics=metrics,
             context=context,
         )
@@ -209,23 +211,130 @@ def _metric(
             value=value,
         ),
         lineage=(
-            FieldLineage(
-                raw_snapshot_id=context.raw_snapshot_id,
-                source_field_path=source_field_path,
-                target_field_path=_TARGET_METRIC_VALUE,
-                transformation_name=transformation_name,
-                transformation_version=_NORMALIZER_VERSION,
+            _lineage(
+                context,
+                source_field_path,
+                _TARGET_METRIC_VALUE,
+                transformation_name,
             ),
         ),
     )
 
 
+def _card_state_lineage(
+    card: GameCard,
+    state: ListingStateObservation,
+    context: NormalizationContext,
+) -> tuple[FieldLineage, ...]:
+    base = _source_object_path(card)
+    fields: list[tuple[str, str]] = [
+        (f"{base}.appID", "platform_listing_id"),
+    ]
+    if state.title is not None:
+        fields.append((f"{base}.title", "title"))
+    if state.developer_id is not None:
+        fields.append((f"{base}.developer.id", "developer_id"))
+    return _state_lineage(context, fields)
+
+
+def _details_state_lineage(
+    details: GameDetails,
+    state: ListingStateObservation,
+    context: NormalizationContext,
+) -> tuple[FieldLineage, ...]:
+    base = _source_object_path(details)
+    fields = list(_card_state_lineage(details, state, context))
+    mapping = (
+        (state.languages, f"{base}.features.languages", "languages"),
+        (
+            state.supported_platforms,
+            f"{base}.features.platforms",
+            "supported_platforms",
+        ),
+        (state.orientation, f"{base}.features.orientation", "orientation"),
+        (state.cloud_save, f"{base}.features.cloud_save", "cloud_save"),
+        (state.leaderboards, f"{base}.extraFeatures.leaderboards", "leaderboards"),
+        (
+            state.purchases_enabled,
+            f"{base}.extraFeatures.purchases",
+            "purchases_enabled",
+        ),
+        (state.has_products, f"{base}.extraFeatures.hasProducts", "has_products"),
+    )
+    fields.extend(
+        _state_lineage(context, [(source, target)])
+        for value, source, target in mapping
+        if value is not None
+    )
+    flattened: list[FieldLineage] = []
+    for item in fields:
+        if isinstance(item, FieldLineage):
+            flattened.append(item)
+        else:
+            flattened.extend(item)
+    return tuple(flattened)
+
+
+def _play_page_state_lineage(
+    page: PlayPageData,
+    context: NormalizationContext,
+) -> tuple[FieldLineage, ...]:
+    base = "$.__playPageData__.gameData"
+    fields: list[tuple[str, str]] = [(f"{base}.appID", "platform_listing_id")]
+    mapping = (
+        (page.app_version, f"{base}.appVersion", "app_version"),
+        (page.published_time, f"{base}.publishedTime", "published_at"),
+        (page.leaderboards, f"{base}.extraFeatures.leaderboards", "leaderboards"),
+        (page.purchases_enabled, f"{base}.extraFeatures.purchases", "purchases_enabled"),
+        (page.has_products, f"{base}.extraFeatures.hasProducts", "has_products"),
+        (page.rewarded_ads, f"{base}.advUsedBlocks.rewarded", "rewarded_ads"),
+        (page.fullscreen_ads, f"{base}.advUsedBlocks.fullscreen", "fullscreen_ads"),
+        (page.sticky_ads, f"{base}.settings.adv.sticky", "sticky_ads"),
+    )
+    fields.extend((source, target) for value, source, target in mapping if value is not None)
+    return _state_lineage(context, fields)
+
+
+def _state_lineage(
+    context: NormalizationContext,
+    fields: list[tuple[str, str]],
+) -> tuple[FieldLineage, ...]:
+    return tuple(
+        _lineage(
+            context,
+            source,
+            f"{_TARGET_STATE_PREFIX}.{target}",
+            f"YandexGameNormalizer.listing_state.{target}",
+        )
+        for source, target in fields
+    )
+
+
+def _lineage(
+    context: NormalizationContext,
+    source_field_path: str,
+    target_field_path: str,
+    transformation_name: str,
+) -> FieldLineage:
+    return FieldLineage(
+        raw_snapshot_id=context.raw_snapshot_id,
+        source_field_path=source_field_path,
+        target_field_path=target_field_path,
+        transformation_name=transformation_name,
+        transformation_version=_NORMALIZER_VERSION,
+    )
+
+
 def _source_field(card: GameCard, field: str) -> str:
+    return f"{_source_object_path(card)}.{field}"
+
+
+def _source_object_path(card: GameCard) -> str:
     if card.source_object_path is None:
         raise ValueError(
             f"source DTO for app {card.app_id} is missing source_object_path required for lineage"
         )
-    return f"{card.source_object_path}.{field}"
+    return card.source_object_path
 
 
 def _listing_id(app_id: int) -> str:

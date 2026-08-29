@@ -24,6 +24,7 @@ comparable-set.md
 analyst-snapshot.md
 listing-state-observations.md
 analyst-market-export.md
+analyst-market-features.md
 listing-histories.md
 historical-backtesting.md
 data-model.md

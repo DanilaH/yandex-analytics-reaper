@@ -8,11 +8,14 @@ from typing import Literal
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from yandex_analytics_reaper.analyst import (
+    AnalystMarketExportReport,
     AnalystMarketExporter,
+    AnalystMarketFeatureBuilder,
     AnalystSnapshotBuilder,
     AnalystSnapshotDeclaration,
     AnalystSnapshotReport,
     validate_analyst_market_export,
+    validate_analyst_market_features,
     write_analyst_export_csv,
 )
 from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
@@ -180,6 +183,20 @@ def _export_snapshot(args: argparse.Namespace) -> None:
     print(f"analyst_export={export.snapshot_id} content_hash={export.content_hash}")
 
 
+def _build_market_features(args: argparse.Namespace) -> None:
+    try:
+        snapshot = AnalystSnapshotReport.model_validate_json(_read_text(args.snapshot_report))
+        market_export = AnalystMarketExportReport.model_validate_json(
+            _read_text(args.market_export)
+        )
+        report = AnalystMarketFeatureBuilder().build(snapshot, market_export)
+        report = validate_analyst_market_features(report)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    _write_report(args.report, report.model_dump_json(indent=2))
+    print(f"analyst_features={report.snapshot_id} content_hash={report.content_hash}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-analyst",
@@ -239,6 +256,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
     )
     export.set_defaults(handler=_export_snapshot)
+
+    features = sub.add_parser(
+        "build-market-features",
+        help="Build analyst-market-features-v1 from frozen snapshot/export JSON files.",
+    )
+    features.add_argument("snapshot_report", help="Path to an AnalystSnapshotReport JSON file.")
+    features.add_argument("market_export", help="Path to an AnalystMarketExportReport JSON file.")
+    features.add_argument("--report", required=True, help="Create-only feature report JSON path.")
+    features.set_defaults(handler=_build_market_features)
     return parser
 
 

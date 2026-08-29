@@ -69,7 +69,7 @@ Rules:
 
 - `target_size` must be between 100 and 200;
 - default target is 150;
-- default known-developer cap is 2;
+- `max_per_developer` is frozen to exactly 2 in v1 and cannot be tuned after viewing the pool;
 - run IDs are explicit and unique;
 - the organic unique candidate pool must contain at least `target_size` listings.
 
@@ -96,7 +96,7 @@ Candidates are then selected greedily. At every step, eligible candidates are or
 
 Inverse-frequency token weight is exactly `1 / pool_frequency(token)`.
 
-The known-developer cap is enforced during selection. If the cap prevents reaching the requested target, the sampler fails closed and the input pool must be broadened rather than silently relaxing the rule.
+The known-developer cap is 2 and is enforced during selection. If the cap prevents reaching the requested target, the sampler fails closed and the input pool must be broadened rather than silently relaxing the rule or changing the cap under the same protocol version.
 
 Candidates without known developer identity are not all collapsed into one fake developer.
 

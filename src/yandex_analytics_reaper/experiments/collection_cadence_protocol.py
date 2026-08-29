@@ -7,7 +7,14 @@ from math import isfinite
 from pathlib import Path
 from typing import Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
 from yandex_analytics_reaper.domain import GameMetricName
 from yandex_analytics_reaper.storage import (
@@ -15,6 +22,7 @@ from yandex_analytics_reaper.storage import (
     PersistedListingMedia,
     PersistedListingUpdate,
     PersistedMetricObservation,
+    SQLiteIdentityStore,
     SQLiteLineageStore,
     SQLiteListingHistoryStore,
     SQLiteMetricStore,
@@ -230,6 +238,7 @@ class CollectionCadenceExperiment:
         raw_store: FilesystemRawSnapshotStore,
         database_path: Path,
     ) -> None:
+        self.identity_store = SQLiteIdentityStore(database_path)
         self.metric_store = SQLiteMetricStore(database_path)
         self.history_store = SQLiteListingHistoryStore(database_path)
         self.lineage_store = SQLiteLineageStore(database_path)
@@ -251,10 +260,25 @@ class CollectionCadenceExperiment:
             raise CollectionCadenceEvidenceError(
                 "cadence query-family version does not exist in operational storage"
             )
-        if family.created_at.astimezone(UTC) > manifest.frozen_at.astimezone(UTC):
+        frozen_at = manifest.frozen_at.astimezone(UTC)
+        if family.created_at.astimezone(UTC) > frozen_at:
             raise CollectionCadenceEvidenceError(
                 "cadence query-family version must exist no later than manifest frozen_at"
             )
+        for listing_id in manifest.listing_ids:
+            listing = self.identity_store.get_listing(listing_id)
+            if listing is None:
+                raise CollectionCadenceEvidenceError(
+                    f"cadence listing cohort member does not exist: {listing_id}"
+                )
+            if listing.first_seen_at is None:
+                raise CollectionCadenceEvidenceError(
+                    f"cadence listing cohort member has no first_seen_at: {listing_id}"
+                )
+            if listing.first_seen_at.astimezone(UTC) > frozen_at:
+                raise CollectionCadenceEvidenceError(
+                    f"cadence listing cohort member was first seen after frozen_at: {listing_id}"
+                )
 
         evidence_manifest = manifest.evidence_manifest()
         try:

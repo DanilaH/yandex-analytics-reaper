@@ -23,7 +23,7 @@ from .models import (
 )
 from .profiler import profile_json_snapshot
 
-ANALYZER_VERSION = "2"
+ANALYZER_VERSION = "3"
 _MISSINGNESS_DELTA_THRESHOLD = 0.25
 _MIN_MISSINGNESS_SAMPLE = 4
 

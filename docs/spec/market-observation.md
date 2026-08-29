@@ -195,7 +195,11 @@ Daily observations are a finite-resolution **reference series**, not ground trut
 1 / 2 / 3 / 7 days
 ```
 
-The empirical manifest must be frozen before the reference window. It declares one fixed listing cohort, one exact persisted query-family version, and explicit daily feed/search run bindings. A valid report requires at least 28 consecutive UTC dates, neighboring checkpoints 22–26 elapsed hours apart, and observation/run timing inside the frozen two-hour checkpoint window.
+Predeclaration and evidence binding are deliberately separate. Before day 1, an immutable SQLite cadence plan freezes the listing cohort, exact persisted query-family version, and 28+ planned checkpoint timestamps. Its `frozen_at` comes from the SQLite UTC clock and must be at least two hours before the first checkpoint. Future ProbeRun IDs are **not** part of that plan because they do not exist yet.
+
+After collection, a separate evidence manifest binds actual daily feed/search run IDs to the stored `plan_id`. The submitted checkpoint timestamps must exactly match the frozen plan schedule; the late manifest cannot override the cohort, query family, freeze time, or reference window.
+
+A valid window uses consecutive UTC dates, neighboring checkpoints 22–26 elapsed hours apart, one two-hour UTC clock-time band, and observation/run timing inside each checkpoint's two-hour eligibility window.
 
 Cadence is chosen separately for:
 

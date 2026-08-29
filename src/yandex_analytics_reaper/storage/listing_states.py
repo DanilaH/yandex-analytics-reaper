@@ -37,13 +37,22 @@ class ListingStateWrite(BaseModel):
         if self.evidence.retrieved_at is None:
             raise ValueError("persisted listing-state evidence requires retrieved_at")
         _require_aware(self.evidence.retrieved_at, "evidence.retrieved_at")
+        if self.evidence.observed_at > self.evidence.retrieved_at:
+            raise ValueError("observed_at cannot be later than retrieved_at")
         if self.evidence.available_at is not None:
             _require_aware(self.evidence.available_at, "evidence.available_at")
+            if self.evidence.available_at < self.evidence.observed_at:
+                raise ValueError("available_at cannot be earlier than observed_at")
+            if self.evidence.available_at > self.evidence.retrieved_at:
+                raise ValueError("available_at cannot be later than retrieved_at")
         if self.evidence.period_start is not None or self.evidence.period_end is not None:
             raise ValueError("listing-state evidence does not accept metric periods")
         if not self.normalizer_name.strip() or not self.normalizer_version.strip():
             raise ValueError("normalizer name/version cannot be blank")
-        if any(item.transformation_version != self.normalizer_version for item in self.lineage):
+        if any(
+            item.transformation_version != self.normalizer_version
+            for item in self.lineage
+        ):
             raise ValueError("listing-state lineage version must match normalizer version")
         if any(
             not item.transformation_name.startswith(f"{self.normalizer_name}.")
@@ -148,8 +157,11 @@ class SQLiteListingStateStore:
         placeholders = ", ".join("?" for _ in raw_ids)
         query = (
             _SELECT
-            + " JOIN observation_lineage AS l ON l.normalized_observation_id = n.id"
-            + f" WHERE l.raw_snapshot_id IN ({placeholders})"
+            + " WHERE EXISTS ("
+            + "SELECT 1 FROM observation_lineage AS l "
+            + "WHERE l.normalized_observation_id = n.id "
+            + f"AND l.raw_snapshot_id IN ({placeholders})"
+            + ")"
         )
         params: list[object] = list(raw_ids)
         if listing_ids is not None:
@@ -159,7 +171,7 @@ class SQLiteListingStateStore:
             listing_placeholders = ", ".join("?" for _ in listing_values)
             query += f" AND s.platform_listing_id IN ({listing_placeholders})"
             params.extend(listing_values)
-        query += " GROUP BY n.id ORDER BY n.observed_at, n.retrieved_at, n.id"
+        query += " ORDER BY n.observed_at, n.retrieved_at, n.id"
         with self.database.connect() as connection:
             rows = connection.execute(query, params).fetchall()
             return tuple(self._row_to_persisted(connection, row) for row in rows)
@@ -243,6 +255,8 @@ class SQLiteListingStateStore:
         connection: sqlite3.Connection,
         row: sqlite3.Row,
     ) -> PersistedListingState:
+        if str(row["observation_type"]) != "listing_state":
+            raise RuntimeError("stored listing-state observation_type is invalid")
         lineage_rows = connection.execute(
             """
             SELECT raw_snapshot_id, source_field_path, target_field_path,
@@ -263,6 +277,8 @@ class SQLiteListingStateStore:
             )
             for item in lineage_rows
         )
+        if not lineage:
+            raise RuntimeError("stored listing-state observation is missing field lineage")
         return PersistedListingState(
             observation_id=str(row["id"]),
             observation=ListingStateObservation(
@@ -307,8 +323,8 @@ class SQLiteListingStateStore:
 
 _SELECT = """
 SELECT
-    n.id, n.source_id, n.observed_at, n.available_at, n.retrieved_at,
-    n.normalizer_name, n.normalizer_version,
+    n.id, n.source_id, n.observation_type, n.observed_at, n.available_at,
+    n.retrieved_at, n.normalizer_name, n.normalizer_version,
     s.platform_listing_id, s.title, s.developer_id, s.app_version, s.published_at,
     s.languages_json, s.supported_platforms_json, s.orientation, s.cloud_save,
     s.leaderboards, s.purchases_enabled, s.has_products, s.rewarded_ads,
@@ -339,10 +355,13 @@ def _persisted_from_write(
     observation_id: str,
     write: ListingStateWrite,
 ) -> PersistedListingState:
+    evidence = write.evidence.model_copy(
+        update={"lineage_refs": tuple(sorted(set(write.evidence.lineage_refs)))}
+    )
     return PersistedListingState(
         observation_id=observation_id,
         observation=write.observation,
-        evidence=write.evidence,
+        evidence=evidence,
         normalizer_name=write.normalizer_name,
         normalizer_version=write.normalizer_version,
         lineage=tuple(
@@ -428,7 +447,11 @@ def _parse_json_tuple(value: object) -> tuple[str, ...] | None:
 def _json_or_none(value: BaseModel | None) -> str | None:
     if value is None:
         return None
-    return json.dumps(value.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))
+    return json.dumps(
+        value.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _parse_json(value: object) -> object | None:

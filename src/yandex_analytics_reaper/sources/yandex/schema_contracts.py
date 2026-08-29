@@ -153,7 +153,11 @@ def _normalized_context(request_key: str, context: Mapping[str, object]) -> obje
     if request_key in {"catalogue.feed", "catalogue.search"}:
         params = normalized.get("params")
         if isinstance(params, dict):
-            page_kind = "paged" if any(key in params for key in _VOLATILE_PAGINATION_KEYS) else "first"
+            page_kind = (
+                "paged"
+                if any(key in params for key in _VOLATILE_PAGINATION_KEYS)
+                else "first"
+            )
             normalized["params"] = {
                 key: value
                 for key, value in params.items()
@@ -181,4 +185,4 @@ def _canonical_value(value: object) -> object:
         return [_canonical_value(child) for child in value]
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    return repr(value)
+    raise TypeError(f"unsupported request-context value for schema scope: {type(value).__name__}")

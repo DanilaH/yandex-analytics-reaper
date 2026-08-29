@@ -11,6 +11,7 @@ evidence-model.md
 taxonomy.md
 production-assessment.md
 market-observation.md
+feed-depth-experiment.md
 historical-backtesting.md
 data-model.md
 decision-policy.md

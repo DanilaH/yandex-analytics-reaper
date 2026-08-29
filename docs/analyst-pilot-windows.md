@@ -211,14 +211,17 @@ This is an offline file-to-file derivation. No network or SQLite access is used.
 yandex-reaper-analyst verify-pilot "$ANALYSIS/snapshot.json" "$ANALYSIS/market-export.json" "$ANALYSIS/market-features.json" --report "$ANALYSIS/pilot-verification.json" --output $RAW
 ```
 
+`verify-pilot` deliberately reopens the adjacent `data/market.sqlite3`. It rebuilds the market export from the frozen snapshot, persisted normalized observations/lineage, and immutable raw evidence before it accepts the supplied export JSON.
+
 A successful verifier run proves that:
 
 ```text
 there are at least two distinct query families
 snapshot/export/features form one exact hash chain
-features reproduce exactly from the frozen snapshot/export
-available numeric aggregates reproduce from listing-level values
-aggregate contributions retain observation/raw/source-field provenance
+market export reproduces from snapshot + market.sqlite3 + raw evidence
+features reproduce exactly from the verified snapshot/export
+one representative aggregate per niche reproduces from listing-level values
+representative contributions retain observation/raw/source-field provenance
 all referenced raw bodies still exist and pass content-hash replay
 search/feed/rich raw request-key ownership is consistent
 normalized listing evidence does not escape the frozen rich-metadata set

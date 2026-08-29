@@ -38,6 +38,27 @@ ANALYST_MARKET_EXPORT_SPEC_VERSION: Literal["analyst-market-export-v1"] = (
 _MISSING_NOT_OBSERVED: Literal["not_observed"] = "not_observed"
 _SEARCH_SUPPLY_SOURCE_MISSING: Literal["source_missing"] = "source_missing"
 _YANDEX_LISTING_PREFIX = "yandex_games:"
+_LISTING_RESOLVED_FIELD_NAMES = (
+    "title",
+    "developer_id",
+    "developer_name",
+    "first_published_at",
+    "app_version",
+    "published_at",
+    "languages",
+    "supported_platforms",
+    "orientation",
+    "cloud_save",
+    "leaderboards",
+    "purchases_enabled",
+    "has_products",
+    "rewarded_ads",
+    "fullscreen_ads",
+    "sticky_ads",
+    "yandex_games_rating",
+    "player_rating",
+    "rating_count",
+)
 
 type StateFieldName = Literal[
     "title",
@@ -143,7 +164,7 @@ class AnalystSearchSupplyObservation(BaseModel):
     probe_run_id: str
     page_index: int = Field(ge=0)
     raw_snapshot_id: str
-    source_field_path: Literal["$.totalGamesCount"] = "$.totalGamesCount"
+    source_field_path: Literal["$.totalGamesCount"] | None = None
     total_games_count: int | None = None
     missing_reason: Literal["source_missing"] | None = None
 
@@ -152,8 +173,13 @@ class AnalystSearchSupplyObservation(BaseModel):
         if self.total_games_count is None:
             if self.missing_reason != _SEARCH_SUPPLY_SOURCE_MISSING:
                 raise ValueError("missing totalGamesCount requires source_missing")
-        elif self.missing_reason is not None:
-            raise ValueError("observed totalGamesCount cannot have a missing reason")
+            if self.source_field_path is not None:
+                raise ValueError("missing totalGamesCount cannot claim an observed source path")
+        else:
+            if self.missing_reason is not None:
+                raise ValueError("observed totalGamesCount cannot have a missing reason")
+            if self.source_field_path != "$.totalGamesCount":
+                raise ValueError("observed totalGamesCount requires its exact source path")
         return self
 
 
@@ -168,7 +194,7 @@ class AnalystSearchExposure(BaseModel):
     page_index: int = Field(ge=0)
     raw_snapshot_id: str
     source_object_path: str
-    exposure_kind: Literal["organic_search"] = "organic_search"
+    exposure_kind: Literal["organic_search", "sponsored_search"]
 
 
 class AnalystFeedExposure(BaseModel):
@@ -223,7 +249,10 @@ class AnalystMarketExportReport(AnalystMarketExportPayload):
     @field_validator("snapshot_content_hash", "content_hash")
     @classmethod
     def validate_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        invalid_character = any(
+            character not in "0123456789abcdef" for character in value
+        )
+        if len(value) != 64 or invalid_character:
             raise ValueError("export hashes must be lowercase SHA-256 hex digests")
         return value
 
@@ -502,6 +531,7 @@ class AnalystMarketExporter:
                         page_index=evidence.page_index,
                         raw_snapshot_id=evidence.raw_snapshot_id,
                         source_object_path=evidence.source_object_path,
+                        exposure_kind="organic_search",
                     )
                 )
             for run in comparable.runs:
@@ -519,6 +549,11 @@ class AnalystMarketExporter:
                             probe_run_id=run.probe_run_id,
                             page_index=page.page_index,
                             raw_snapshot_id=page.raw_snapshot_id,
+                            source_field_path=(
+                                "$.totalGamesCount"
+                                if parsed.total_games_count is not None
+                                else None
+                            ),
                             total_games_count=parsed.total_games_count,
                             missing_reason=(
                                 _SEARCH_SUPPLY_SOURCE_MISSING
@@ -527,6 +562,26 @@ class AnalystMarketExporter:
                             ),
                         )
                     )
+                    for game in parsed.games:
+                        if not game.sponsored:
+                            continue
+                        if game.source_object_path is None:
+                            raise AnalystExportError(
+                                f"search item {game.app_id} is missing its raw source object path"
+                            )
+                        exposures.append(
+                            AnalystSearchExposure(
+                                set_id=comparable.set_id,
+                                set_version=comparable.version,
+                                platform_listing_id=f"yandex_games:{game.app_id}",
+                                query_text=run.query_text,
+                                probe_run_id=run.probe_run_id,
+                                page_index=page.page_index,
+                                raw_snapshot_id=page.raw_snapshot_id,
+                                source_object_path=game.source_object_path,
+                                exposure_kind="sponsored_search",
+                            )
+                        )
         return tuple(memberships), tuple(exposures), tuple(supplies)
 
     def _feed_rows(
@@ -594,7 +649,10 @@ def write_analyst_export_csv(report: AnalystMarketExportReport, directory: Path)
     except FileExistsError as exc:
         raise AnalystExportError(f"CSV export directory already exists: {directory}") from exc
     _write_listings_csv(report, directory / "listings.csv")
-    _write_models_csv(report.comparable_memberships, directory / "comparable_memberships.csv")
+    _write_models_csv(
+        report.comparable_memberships,
+        directory / "comparable_memberships.csv",
+    )
     _write_models_csv(report.update_observations, directory / "update_observations.csv")
     _write_models_csv(report.search_supply, directory / "search_supply.csv")
     _write_models_csv(report.search_exposures, directory / "search_exposures.csv")
@@ -745,39 +803,46 @@ def _payload_hash(payload: AnalystMarketExportPayload) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _listing_resolved_values(
+    row: AnalystListingRow,
+) -> dict[str, AnalystResolvedValue]:
+    return {
+        "title": row.title,
+        "developer_id": row.developer_id,
+        "developer_name": row.developer_name,
+        "first_published_at": row.first_published_at,
+        "app_version": row.app_version,
+        "published_at": row.published_at,
+        "languages": row.languages,
+        "supported_platforms": row.supported_platforms,
+        "orientation": row.orientation,
+        "cloud_save": row.cloud_save,
+        "leaderboards": row.leaderboards,
+        "purchases_enabled": row.purchases_enabled,
+        "has_products": row.has_products,
+        "rewarded_ads": row.rewarded_ads,
+        "fullscreen_ads": row.fullscreen_ads,
+        "sticky_ads": row.sticky_ads,
+        "yandex_games_rating": row.yandex_games_rating,
+        "player_rating": row.player_rating,
+        "rating_count": row.rating_count,
+    }
+
+
 def _write_listings_csv(report: AnalystMarketExportReport, path: Path) -> None:
     fieldnames = [
         "platform_listing_id",
         "external_app_id",
         "canonical_url",
         "comparable_set_ids",
-        "title",
-        "developer_id",
-        "developer_name",
-        "first_published_at",
-        "app_version",
-        "published_at",
-        "languages",
-        "supported_platforms",
-        "orientation",
-        "cloud_save",
-        "leaderboards",
-        "purchases_enabled",
-        "has_products",
-        "rewarded_ads",
-        "fullscreen_ads",
-        "sticky_ads",
-        "yandex_games_rating",
-        "player_rating",
-        "rating_count",
+        *_LISTING_RESOLVED_FIELD_NAMES,
         "missing_fields",
     ]
     with path.open("x", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
         for row in report.listings:
-            resolved_names = fieldnames[4:-1]
-            resolved = {name: getattr(row, name) for name in resolved_names}
+            resolved = _listing_resolved_values(row)
             writer.writerow(
                 {
                     "platform_listing_id": row.platform_listing_id,
@@ -811,5 +876,10 @@ def _write_models_csv(rows: Sequence[BaseModel], path: Path) -> None:
 
 def _csv_value(value: object) -> object:
     if isinstance(value, (list, tuple, dict)):
-        return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        return json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     return value

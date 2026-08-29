@@ -45,8 +45,38 @@ def test_v4_database_migrates_to_probe_run_schema_without_identity_loss(
             ).fetchall()
         }
         assert {"probe_contexts", "probe_runs", "probe_pages"} <= tables
+
+        run_columns = {
+            str(row[1])
+            for row in connection.execute("PRAGMA table_info(probe_runs)").fetchall()
+        }
+        assert "error_raw_snapshot_id" in run_columns
+
         page_columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(probe_pages)").fetchall()
         }
         assert {"source_id", "raw_snapshot_id"} <= page_columns
+
+        indexes = connection.execute("PRAGMA index_list(probe_pages)").fetchall()
+        unique_column_sets: set[tuple[str, ...]] = set()
+        index_columns: dict[str, tuple[str, ...]] = {}
+        for index in indexes:
+            index_name = str(index[1])
+            columns = tuple(
+                str(row[2])
+                for row in connection.execute(
+                    f"PRAGMA index_info('{index_name}')"
+                ).fetchall()
+            )
+            index_columns[index_name] = columns
+            if bool(index[2]):
+                unique_column_sets.add(columns)
+
+        assert ("source_id", "raw_snapshot_id") in unique_column_sets
+        assert index_columns["idx_probe_pages_snapshot"] == (
+            "source_id",
+            "raw_snapshot_id",
+            "run_id",
+            "page_index",
+        )

@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS probe_runs (
     completed_at TEXT,
     status TEXT NOT NULL,
     error TEXT,
+    error_raw_snapshot_id TEXT,
     CHECK (requested_page_limit >= 1)
 );
 

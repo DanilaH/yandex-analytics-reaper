@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Literal, Self
 
@@ -17,10 +17,21 @@ from .registries import (
 )
 from .sampling import TaxonomyDiversitySampleReport
 
-ANNOTATION_SPEC_VERSION = "taxonomy-manual-annotation-v1"
-GOLD_SET_SPEC_VERSION = "taxonomy-gold-set-v1"
-ANNOTATION_CONTRACT_VERSION = "phase3-draft-v1"
+ANNOTATION_SPEC_VERSION: Literal["taxonomy-manual-annotation-v1"] = (
+    "taxonomy-manual-annotation-v1"
+)
+GOLD_SET_SPEC_VERSION: Literal["taxonomy-gold-set-v1"] = "taxonomy-gold-set-v1"
+ANNOTATION_CONTRACT_VERSION: Literal["phase3-draft-v1"] = "phase3-draft-v1"
+ANNOTATION_CONTRACT_V1_CONTENT_HASH = (
+    "5ca971d9cec8a9282ec23388049fb68d3e78a030a335c32bdf92d908f388e8b3"
+)
 LABEL_REGISTRY_VERSION: Literal[1] = 1
+_CONTROLLED_DIMENSIONS = (
+    ControlledLabelDimension.MECHANICS,
+    ControlledLabelDimension.OBJECTIVES,
+    ControlledLabelDimension.META_SYSTEMS,
+    ControlledLabelDimension.TONES,
+)
 
 
 class TaxonomyAnnotationConfidence(StrEnum):
@@ -111,9 +122,13 @@ class TaxonomyAnnotationBatch(BaseModel):
     @field_validator("sample_content_hash")
     @classmethod
     def validate_sample_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
-            raise ValueError("sample_content_hash must be 64 lowercase hexadecimal characters")
+        _validate_sha256(value, "sample_content_hash")
         return value
+
+    @field_validator("created_at")
+    @classmethod
+    def validate_created_at(cls, value: datetime) -> datetime:
+        return _utc_datetime(value, "created_at")
 
     @model_validator(mode="after")
     def validate_unique_members(self) -> Self:
@@ -128,6 +143,7 @@ class ValidatedTaxonomyAnnotationBatch(BaseModel):
 
     spec_version: Literal["taxonomy-manual-annotation-v1"] = ANNOTATION_SPEC_VERSION
     annotation_contract_version: Literal["phase3-draft-v1"] = ANNOTATION_CONTRACT_VERSION
+    annotation_contract_content_hash: str = ANNOTATION_CONTRACT_V1_CONTENT_HASH
     label_registry_version: Literal[1] = LABEL_REGISTRY_VERSION
     label_registry_content_hash: str = TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH
     batch_id: str
@@ -163,9 +179,13 @@ class TaxonomyGoldSetDeclaration(BaseModel):
     @field_validator("sample_content_hash")
     @classmethod
     def validate_sample_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
-            raise ValueError("sample_content_hash must be 64 lowercase hexadecimal characters")
+        _validate_sha256(value, "sample_content_hash")
         return value
+
+    @field_validator("adjudicated_at")
+    @classmethod
+    def validate_adjudicated_at(cls, value: datetime) -> datetime:
+        return _utc_datetime(value, "adjudicated_at")
 
     @field_validator("source_annotation_batch_hashes")
     @classmethod
@@ -173,12 +193,7 @@ class TaxonomyGoldSetDeclaration(BaseModel):
         if len(values) != len(set(values)):
             raise ValueError("gold set source annotation batch hashes must be unique")
         for value in values:
-            if len(value) != 64 or any(
-                character not in "0123456789abcdef" for character in value
-            ):
-                raise ValueError(
-                    "source annotation batch hashes must be 64 lowercase hexadecimal characters"
-                )
+            _validate_sha256(value, "source annotation batch hash")
         return values
 
     @model_validator(mode="after")
@@ -203,6 +218,7 @@ class TaxonomyGoldSetReport(BaseModel):
     spec_version: Literal["taxonomy-gold-set-v1"] = GOLD_SET_SPEC_VERSION
     annotation_spec_version: Literal["taxonomy-manual-annotation-v1"] = ANNOTATION_SPEC_VERSION
     annotation_contract_version: Literal["phase3-draft-v1"] = ANNOTATION_CONTRACT_VERSION
+    annotation_contract_content_hash: str = ANNOTATION_CONTRACT_V1_CONTENT_HASH
     label_registry_version: Literal[1] = LABEL_REGISTRY_VERSION
     label_registry_content_hash: str = TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH
     gold_set_id: str
@@ -223,6 +239,7 @@ def validate_taxonomy_annotation_batch(
 
     sample = TaxonomyDiversitySampleReport.model_validate(sample.model_dump(mode="python"))
     batch = TaxonomyAnnotationBatch.model_validate(batch.model_dump(mode="python"))
+    _validate_annotation_contract()
     _validate_sample_shape(sample)
     _validate_sample_binding(
         sample=sample,
@@ -234,6 +251,7 @@ def validate_taxonomy_annotation_batch(
         {
             "spec_version": batch.spec_version,
             "annotation_contract_version": batch.annotation_contract_version,
+            "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
             "label_registry_version": batch.label_registry_version,
             "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
             "batch_id": batch.batch_id,
@@ -266,6 +284,7 @@ def build_taxonomy_gold_set(
     declaration = TaxonomyGoldSetDeclaration.model_validate(
         declaration.model_dump(mode="python")
     )
+    _validate_annotation_contract()
     _validate_sample_shape(sample)
     _validate_sample_binding(
         sample=sample,
@@ -279,6 +298,9 @@ def build_taxonomy_gold_set(
     )
     if not validated:
         raise TaxonomyGoldSetError("gold set requires at least one source annotation batch")
+    batch_ids = tuple(batch.batch_id for batch in validated)
+    if len(batch_ids) != len(set(batch_ids)):
+        raise TaxonomyGoldSetError("gold set source annotation batch IDs must be unique")
     annotator_ids = tuple(batch.annotator_id for batch in validated)
     if len(annotator_ids) != len(set(annotator_ids)):
         raise TaxonomyGoldSetError("gold set source annotation batches require unique annotators")
@@ -304,6 +326,7 @@ def build_taxonomy_gold_set(
             "spec_version": declaration.spec_version,
             "annotation_spec_version": ANNOTATION_SPEC_VERSION,
             "annotation_contract_version": declaration.annotation_contract_version,
+            "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
             "label_registry_version": declaration.label_registry_version,
             "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
             "gold_set_id": declaration.gold_set_id,
@@ -327,11 +350,30 @@ def build_taxonomy_gold_set(
     )
 
 
+def taxonomy_annotation_contract_content_hash() -> str:
+    payload = {
+        "annotation_contract_version": ANNOTATION_CONTRACT_VERSION,
+        "primary_archetypes": [item.value for item in PrimaryGameplayArchetype],
+        "controlled_dimensions": [item.value for item in _CONTROLLED_DIMENSIONS],
+        "label_registry_version": LABEL_REGISTRY_VERSION,
+        "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
+    }
+    return _content_hash(payload)
+
+
+def _validate_annotation_contract() -> None:
+    if taxonomy_annotation_contract_content_hash() != ANNOTATION_CONTRACT_V1_CONTENT_HASH:
+        raise TaxonomyGoldSetError(
+            "taxonomy annotation contract changed without a new contract version/content identity"
+        )
+
+
 def _validate_sample_shape(sample: TaxonomyDiversitySampleReport) -> None:
     if not 100 <= len(sample.selected) <= 200:
         raise TaxonomyGoldSetError("manual gold-set tooling requires a real 100–200 member sample")
     if len(sample.selected) != sample.target_size:
         raise TaxonomyGoldSetError("taxonomy sample selected membership does not match target_size")
+    _validate_sha256(sample.sample_content_hash, "taxonomy sample content hash")
     ordinals = tuple(member.ordinal for member in sample.selected)
     if ordinals != tuple(range(len(sample.selected))):
         raise TaxonomyGoldSetError("taxonomy sample member ordinals are not contiguous from zero")
@@ -354,6 +396,17 @@ def _validate_sample_binding(
         )
 
 
+def _utc_datetime(value: datetime, field_name: str) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value.astimezone(UTC)
+
+
+def _validate_sha256(value: str, field_name: str) -> None:
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError(f"{field_name} must be 64 lowercase hexadecimal characters")
+
+
 def _content_hash(payload: object) -> str:
     encoded = json.dumps(
         payload,
@@ -362,3 +415,6 @@ def _content_hash(payload: object) -> str:
         ensure_ascii=False,
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+_validate_annotation_contract()

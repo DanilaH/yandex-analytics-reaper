@@ -24,10 +24,12 @@ from yandex_analytics_reaper.sources.yandex.parsers import GameDetails, PlayPage
 from yandex_analytics_reaper.storage import (
     ListingHistoryObservationWrite,
     ListingHistoryWrite,
+    ListingStateWrite,
     MetricWrite,
     RawSnapshotMetadata,
     SQLiteIdentityStore,
     SQLiteListingHistoryStore,
+    SQLiteListingStateStore,
     SQLiteMetricStore,
 )
 
@@ -40,6 +42,7 @@ class PersistedYandexNormalization(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     platform_listing_id: str
+    listing_state_observation_id: str
     metric_observation_ids: tuple[str, ...]
     history_observation_ids: tuple[str, ...]
 
@@ -49,6 +52,7 @@ class YandexNormalizationPersistence:
 
     def __init__(self, database_path: Path) -> None:
         self.identity_store = SQLiteIdentityStore(database_path)
+        self.state_store = SQLiteListingStateStore(database_path)
         self.metric_store = SQLiteMetricStore(database_path)
         self.history_store = SQLiteListingHistoryStore(database_path)
         self.game_normalizer = YandexGameNormalizer()
@@ -83,17 +87,27 @@ class YandexNormalizationPersistence:
     ) -> PersistedYandexNormalization:
         context = normalized.context
         evidence = _evidence(context)
+        normalizer_name = type(self.game_normalizer).__name__
         self.identity_store.persist_listing_identity(
             normalized.listing,
             normalized.developer,
             context.observed_at,
+        )
+        state_id = self.state_store.persist(
+            ListingStateWrite(
+                observation=normalized.listing_state,
+                evidence=evidence,
+                normalizer_name=normalizer_name,
+                normalizer_version=self.game_normalizer.version,
+                lineage=normalized.listing_state_lineage,
+            )
         )
         metric_ids = self.metric_store.persist_metrics(
             tuple(
                 MetricWrite(
                     metric=item.metric,
                     evidence=evidence,
-                    normalizer_name=type(self.game_normalizer).__name__,
+                    normalizer_name=normalizer_name,
                     normalizer_version=self.game_normalizer.version,
                     lineage=item.lineage,
                 )
@@ -123,6 +137,7 @@ class YandexNormalizationPersistence:
         )
         return PersistedYandexNormalization(
             platform_listing_id=normalized.listing.id,
+            listing_state_observation_id=state_id,
             metric_observation_ids=metric_ids,
             history_observation_ids=history_ids,
         )

@@ -108,9 +108,23 @@ ranked_prefix_overlap
 
 `organic_set_jaccard` is ordinary Jaccard similarity over unique organic app IDs.
 
-`ranked_prefix_overlap` is a deterministic top-weighted prefix-overlap score with persistence `p = 0.9`. At rank `d`, calculate the overlap ratio between both prefixes through `d`, weight it by `(1-p) * p^(d-1)`, and carry the remaining `p^k` mass at the final evaluated rank `k`. This deliberately emphasizes the top of the feed and supports ranked lists whose memberships differ; do not substitute ordinary Spearman correlation over only the common items.
+For ranked-prefix overlap, let `A_d` and `B_d` be the sets contained in each ranked list through rank `d` (or the complete list when it has already ended). Let:
+
+```text
+X_d = |A_d ∩ B_d| / d
+k = max(length(A), length(B))
+p = 0.9
+
+ranked_prefix_overlap
+= Σ[d=1..k] ((1-p) * p^(d-1) * X_d)
+  + p^k * X_k
+```
+
+The denominator remains `d` when one ranked list has already ended, so an exhausted shorter list does not receive invented items. This metric deliberately emphasizes the top of the feed and supports ranked lists whose memberships differ; do not substitute ordinary Spearman correlation over only the common items.
 
 Report medians for pairwise Jaccard and ranked-prefix overlap. Also report the 25th percentile of per-trial coverage to guard against a depth that looks adequate only on average.
+
+The 25th percentile uses deterministic linear interpolation: sort the values, calculate `position = (n - 1) * 0.25`, and linearly interpolate between the floor/ceiling positions when `position` is fractional.
 
 First-page stability is the depth-1 pairwise metric and remains a diagnostic of feed volatility. It is not a separate decision threshold.
 

@@ -187,15 +187,30 @@ Session-profile stability, device/language variance, and collection cadence are 
 
 ## Collection cadence
 
-Start with daily calibration observations, measure volatility, then choose cadence based on evidence:
+The first cadence decision is governed by the frozen `collection-cadence-v1` protocol in `collection-cadence-experiment.md`.
+
+Daily observations are a finite-resolution **reference series**, not ground truth and not an event log. V1 therefore does not infer an exact source event rate. It retrospectively downsamples the same daily reference window at fixed candidates:
 
 ```text
-gqRating/ratingCount change rate
-feed/search churn
-version/update frequency
+1 / 2 / 3 / 7 days
 ```
 
-Possible cadence: daily, several times/week, weekly, or event-driven.
+The empirical manifest must be frozen before the reference window. It declares one fixed listing cohort, one exact persisted query-family version, and explicit daily feed/search run bindings. A valid report requires at least 28 consecutive UTC dates, neighboring checkpoints 22–26 elapsed hours apart, and observation/run timing inside the frozen two-hour checkpoint window.
+
+Cadence is chosen separately for:
+
+```text
+catalogue_metadata
+game_page
+recommendation_feed at depths 1 / 3 / 5 / 10
+search at depths 1 / 3 / 5 / 10 across the frozen query family
+```
+
+Normalized state points retain exact observation IDs, field lineage, and raw snapshot IDs. Feed/search rankings are rebuilt by replaying immutable raw bodies and verifying persisted `ProbePage` linkage. Sponsored cards do not participate in ranking cadence metrics.
+
+`event-driven` is not a v1 candidate because no proven Yandex push/subscription capability currently replaces polling. It must not be selected from snapshot volatility alone.
+
+The empirical cadence result is still pending. Until the required real daily window is complete, no production cadence/default may be inferred from synthetic tests or the protocol thresholds.
 
 ## Search discovery and competitor sets
 

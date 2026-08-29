@@ -107,7 +107,7 @@ def test_get_games_parser_v4_preserves_missing_vs_empty_media() -> None:
     assert parsed.games[1].media == {}
 
 
-def test_history_normalizer_keeps_status_conservative_and_media_canonical() -> None:
+def test_history_normalizer_keeps_presence_direct_and_media_canonical() -> None:
     observed_at = datetime(2026, 8, 29, 10, 0, tzinfo=UTC)
     context = _context(observed_at)
     parser = YandexGetGamesParser()
@@ -121,24 +121,19 @@ def test_history_normalizer_keeps_status_conservative_and_media_canonical() -> N
 
     first_history = normalizer.normalize_details(first, context)
     second_history = normalizer.normalize_details(second, context)
-    missing = normalizer.normalize_missing_catalogue_app(1, context)
 
     assert first_history.status is not None
     assert first_history.status.observation.status is ListingStatus.PUBLISHED
+    assert (
+        first_history.status.observation.reason
+        is ListingStatusReason.OBSERVED_IN_CATALOGUE_METADATA
+    )
     assert first_history.media is not None
     assert second_history.media is not None
     assert (
         first_history.media.observation.manifest_hash
         == second_history.media.observation.manifest_hash
     )
-    assert missing.status is not None
-    assert missing.status.observation.status is ListingStatus.UNKNOWN
-    assert (
-        missing.status.observation.reason
-        is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED
-    )
-    assert missing.update is None
-    assert missing.media is None
 
 
 def test_empty_media_manifest_is_observed_but_missing_media_is_not() -> None:
@@ -190,6 +185,10 @@ def test_play_page_history_persists_idempotently_with_lineage_and_as_of(
     assert updates[0].observation.app_version == "1.2.3"
     assert len(statuses) == 1
     assert statuses[0].observation.status is ListingStatus.PUBLISHED
+    assert (
+        statuses[0].observation.reason
+        is ListingStatusReason.OBSERVED_ON_GAME_PAGE
+    )
     assert store.update_history(
         "yandex_games:1",
         as_of=observed_at - timedelta(microseconds=1),
@@ -206,43 +205,35 @@ def test_play_page_history_persists_idempotently_with_lineage_and_as_of(
     assert status_lineage[0].source_field_path == "$.__playPageData__.gameData.appID"
 
 
-def test_catalogue_media_and_unknown_status_round_trip(tmp_path: Path) -> None:
+def test_catalogue_media_and_presence_status_round_trip(tmp_path: Path) -> None:
     path = tmp_path / "market.sqlite3"
-    first_at = datetime(2026, 8, 29, 11, 30, tzinfo=UTC)
-    _persist_listing(path, first_at)
+    observed_at = datetime(2026, 8, 29, 11, 30, tzinfo=UTC)
+    _persist_listing(path, observed_at)
     parser = YandexGetGamesParser()
     normalizer = YandexListingHistoryNormalizer()
     details = parser.parse(
         json.dumps({"games": [{"appID": 1, "media": {"cover": "one"}}]}).encode()
     ).games[0]
-    first_context = _context(first_at, "raw:catalogue-present")
-    first_histories = normalizer.normalize_details(details, first_context)
+    context = _context(observed_at, "raw:catalogue-present")
+    histories = normalizer.normalize_details(details, context)
     store = SQLiteListingHistoryStore(path)
 
-    first_ids = store.persist(_write(first_histories, first_context))
+    persisted_ids = store.persist(_write(histories, context))
 
-    assert len(first_ids) == 2
+    assert len(persisted_ids) == 2
     media = store.media_history("yandex_games:1")
     statuses = store.status_history("yandex_games:1")
     assert len(media) == 1
     assert len(statuses) == 1
     assert statuses[0].observation.status is ListingStatus.PUBLISHED
-
-    second_at = first_at + timedelta(minutes=1)
-    second_context = _context(second_at, "raw:catalogue-missing")
-    missing_histories = normalizer.normalize_missing_catalogue_app(1, second_context)
-    store.persist(_write(missing_histories, second_context))
-
-    statuses = store.status_history("yandex_games:1")
-    assert [item.observation.status for item in statuses] == [
-        ListingStatus.PUBLISHED,
-        ListingStatus.UNKNOWN,
-    ]
     assert (
-        statuses[-1].observation.reason
-        is ListingStatusReason.REQUESTED_BUT_NOT_RETURNED
+        statuses[0].observation.reason
+        is ListingStatusReason.OBSERVED_IN_CATALOGUE_METADATA
     )
-    assert store.status_history("yandex_games:1", as_of=first_at) == statuses[:1]
+    assert store.status_history(
+        "yandex_games:1",
+        as_of=observed_at - timedelta(microseconds=1),
+    ) == ()
 
 
 def test_conflicting_value_or_evidence_under_same_history_identity_is_rejected(

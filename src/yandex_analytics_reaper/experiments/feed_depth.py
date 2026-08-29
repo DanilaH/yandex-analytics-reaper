@@ -159,7 +159,14 @@ class FeedDepthExperiment:
         rankings: dict[int, tuple[int, ...]] = {}
 
         for page in record.pages:
-            metadata = self.raw_store.get_metadata(run.source_id, page.raw_snapshot_id)
+            try:
+                metadata = self.raw_store.get_metadata(run.source_id, page.raw_snapshot_id)
+                body = self.raw_store.get_body(run.source_id, page.raw_snapshot_id)
+            except (OSError, ValueError) as exc:
+                raise FeedDepthEligibilityError(
+                    f"raw replay failed for probe page {page.page_index}: {exc}"
+                ) from exc
+
             if metadata.request_key != "catalogue.feed":
                 raise FeedDepthEligibilityError("feed-depth raw page is not a catalogue.feed response")
             if not 200 <= metadata.http_status < 300:
@@ -169,7 +176,6 @@ class FeedDepthExperiment:
                     f"feed-depth-v1 requires games_count={PAGE_SIZE} on every raw page"
                 )
 
-            body = self.raw_store.get_body(run.source_id, page.raw_snapshot_id)
             try:
                 parsed = parser.parse(body)
             except ValueError as exc:
@@ -186,6 +192,9 @@ class FeedDepthExperiment:
             depth = page.page_index + 1
             if depth in CANDIDATE_DEPTHS:
                 rankings[depth] = tuple(ranked)
+
+        if not rankings.get(10):
+            raise FeedDepthEligibilityError("feed-depth trial requires at least one organic game")
 
         return FeedDepthTrialObservation(
             run_id=run.id,
@@ -230,6 +239,9 @@ def evaluate_feed_depth_trials(
     submitted = tuple(submitted_run_ids) if submitted_run_ids is not None else tuple(
         trial.run_id for trial in eligible
     )
+    if len(set(submitted)) != len(submitted):
+        raise ValueError("submitted feed-depth run IDs must be unique")
+
     metrics = tuple(_metrics_for_depth(eligible, depth) for depth in CANDIDATE_DEPTHS)
     span_hours = _sample_span_hours(eligible)
     hour_buckets = _distinct_hour_buckets(eligible)

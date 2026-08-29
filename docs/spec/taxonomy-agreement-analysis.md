@@ -1,6 +1,6 @@
 # Primary Archetype Agreement / Confusion Analysis
 
-Status: **supporting tooling**. The Phase 3 roadmap item `confusion analysis / agreement analysis` remains incomplete until this protocol is executed against real independent annotation batches over the completed real taxonomy sample.
+Status: **supporting tooling for the primary-archetype portion** of the Phase 3 `confusion analysis / agreement analysis` gate. Real primary execution remains pending, and primary analysis alone cannot complete the broader gate: controlled-dimension agreement is owned by `taxonomy-controlled-agreement.md`, while the `theme canonicalization >= 95%` requirement still needs its own protocol.
 
 ## Purpose
 
@@ -11,6 +11,8 @@ This is deliberately separate from `taxonomy-primary-archetype-validation-v1`:
 - primary validation is a manual schema/boundary review over adjudicated gold labels;
 - agreement analysis uses the pre-adjudication decisions from genuinely independent annotators;
 - adjudication must never be compared with itself and reported as human agreement.
+
+It also deliberately does **not** measure multi-label agreement for `mechanics`, `objectives`, `meta_systems`, or `tones`; those require exact-set semantics rather than single-class confusion semantics and are covered by `taxonomy-controlled-dimension-agreement-v1`.
 
 ## Evidence boundary
 
@@ -195,12 +197,14 @@ Persisted revalidation rebuilds the report from the exact sample, gold set, and 
 
 ## Real execution gate
 
-Do **not** mark `confusion analysis / agreement analysis` complete until:
+Do **not** treat the primary-archetype portion of `confusion analysis / agreement analysis` as executed until:
 
 1. the real 100–200-game sample exists;
 2. at least two genuinely independent real annotation batches cover that exact sample under the frozen annotation contract;
 3. the real adjudicated gold set binds those exact batches;
 4. `taxonomy-primary-agreement-v1` is executed against those artifacts;
-5. the real agreement/confusion report and content hash are recorded and reviewed.
+5. the real primary agreement/confusion report and content hash are recorded and reviewed.
+
+The broader Phase 3 agreement gate additionally requires controlled-dimension agreement and the separately unresolved theme-canonicalization validation required by `taxonomy.md`.
 
 Do not generate fake annotators, compare a gold set with itself, or use synthetic fixture agreement as evidence for taxonomy revision/freeze.

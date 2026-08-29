@@ -93,3 +93,18 @@ def test_cli_parses_collection_cadence_manifest() -> None:
     assert args.command == "analyze-collection-cadence"
     assert args.manifest == "cadence-evidence.json"
     assert args.output == "data/raw"
+
+
+def test_cli_parses_taxonomy_sampling_manifest() -> None:
+    args = build_parser().parse_args(
+        [
+            "sample-taxonomy-games",
+            "taxonomy-sample.json",
+            "--output",
+            "data/raw",
+        ]
+    )
+
+    assert args.command == "sample-taxonomy-games"
+    assert args.manifest == "taxonomy-sample.json"
+    assert args.output == "data/raw"

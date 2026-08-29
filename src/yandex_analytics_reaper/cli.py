@@ -39,6 +39,10 @@ from yandex_analytics_reaper.storage import (
     RawSnapshotMetadata,
     SQLiteProbeRunStore,
 )
+from yandex_analytics_reaper.taxonomy import (
+    TaxonomySampleManifest,
+    YandexTaxonomyDiversitySampler,
+)
 
 
 def _context(args: argparse.Namespace) -> ProbeContext:
@@ -331,6 +335,28 @@ def _analyze_collection_cadence(args: argparse.Namespace) -> None:
     print(report.model_dump_json(indent=2))
 
 
+def _sample_taxonomy_games(args: argparse.Namespace) -> None:
+    store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "collect feed/search probe runs before taxonomy sampling"
+        )
+    manifest_path = Path(args.manifest)
+    try:
+        manifest = TaxonomySampleManifest.model_validate_json(
+            manifest_path.read_text(encoding="utf-8")
+        )
+        report = YandexTaxonomyDiversitySampler(
+            raw_store=store,
+            probe_store=SQLiteProbeRunStore(database_path),
+        ).analyze(manifest)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print(report.model_dump_json(indent=2))
+
+
 def _probe_games(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
@@ -490,6 +516,20 @@ def build_parser() -> argparse.ArgumentParser:
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
     )
     cadence.set_defaults(handler=_analyze_collection_cadence)
+
+    taxonomy_sample = sub.add_parser(
+        "sample-taxonomy-games",
+        help="Replay explicit feed/search runs into a deterministic taxonomy diversity sample.",
+    )
+    taxonomy_sample.add_argument(
+        "manifest",
+        help="Path to a taxonomy-diversity-sample-v1 JSON manifest.",
+    )
+    taxonomy_sample.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    taxonomy_sample.set_defaults(handler=_sample_taxonomy_games)
 
     games = sub.add_parser("probe-games", help="Fetch and persist rich metadata for app IDs.")
     games.add_argument("app_ids", nargs="+", type=int)

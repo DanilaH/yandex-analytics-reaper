@@ -9,6 +9,7 @@ system-principles.md
 sources-and-capabilities.md
 evidence-model.md
 taxonomy.md
+taxonomy-sampling.md
 production-assessment.md
 market-observation.md
 feed-depth-experiment.md

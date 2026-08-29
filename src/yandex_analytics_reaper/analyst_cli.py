@@ -125,7 +125,7 @@ def _build_search_comparable_set(args: argparse.Namespace) -> None:
             created_at=declaration.created_at,
         )
         stored = SQLiteComparableSetStore(database_path).persist(comparable_set)
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
 
     print(stored.model_dump_json(indent=2))
@@ -147,7 +147,7 @@ def _build_snapshot(args: argparse.Namespace) -> None:
             raw_store=raw_store,
             database_path=database_path,
         ).build(declaration)
-    except ValueError as exc:
+    except (OSError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc
     _write_report(args.report, report.model_dump_json(indent=2))
     print(f"analyst_snapshot={report.snapshot_id} content_hash={report.content_hash}")

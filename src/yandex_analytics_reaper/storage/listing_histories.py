@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
-from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol, Self
@@ -17,7 +16,7 @@ from yandex_analytics_reaper.domain import (
     ListingStatusReason,
     ListingUpdateObservation,
 )
-from yandex_analytics_reaper.evidence import EvidenceEnvelope, FieldLineage
+from yandex_analytics_reaper.evidence import EvidenceEnvelope
 from yandex_analytics_reaper.normalizers import (
     NormalizedListingHistories,
     NormalizedListingMedia,
@@ -59,7 +58,10 @@ class ListingHistoryWrite(BaseModel):
             raise ValueError("normalizer name/version cannot be blank")
 
         observations = _history_observations(self.histories)
-        if any(item.observation.observed_at != self.evidence.observed_at for item in observations):
+        if any(
+            item.observation.observed_at != self.evidence.observed_at
+            for item in observations
+        ):
             raise ValueError("history observations and evidence observed_at must match")
         return self
 

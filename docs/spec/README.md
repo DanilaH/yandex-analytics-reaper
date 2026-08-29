@@ -22,6 +22,7 @@ collection-cadence-experiment.md
 search-query-family.md
 comparable-set.md
 analyst-snapshot.md
+listing-state-observations.md
 listing-histories.md
 historical-backtesting.md
 data-model.md

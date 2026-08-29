@@ -42,6 +42,8 @@ from .collection_cadence_evidence import (
 )
 
 _FREEZE_GUARD = timedelta(hours=2)
+_MIN_DAILY_SPACING = timedelta(hours=22)
+_MAX_DAILY_SPACING = timedelta(hours=26)
 
 
 class CollectionCadenceManifest(BaseModel):
@@ -61,12 +63,25 @@ class CollectionCadenceManifest(BaseModel):
         _EvidenceManifest.model_validate(
             self.model_dump(mode="python", exclude={"frozen_at"})
         )
-        first_checkpoint = self.checkpoints[0].checkpoint_at.astimezone(UTC)
+        checkpoint_times = [
+            checkpoint.checkpoint_at.astimezone(UTC) for checkpoint in self.checkpoints
+        ]
+        first_checkpoint = checkpoint_times[0]
         if self.frozen_at.astimezone(UTC) > first_checkpoint - _FREEZE_GUARD:
             raise ValueError(
                 "cadence manifest frozen_at must be no later than two hours before "
                 "the first checkpoint"
             )
+        for previous, current in zip(
+            checkpoint_times,
+            checkpoint_times[1:],
+            strict=False,
+        ):
+            spacing = current - previous
+            if not _MIN_DAILY_SPACING <= spacing <= _MAX_DAILY_SPACING:
+                raise ValueError(
+                    "cadence checkpoints must be spaced 22 to 26 hours apart"
+                )
         return self
 
     def evidence_manifest(self) -> _EvidenceManifest:

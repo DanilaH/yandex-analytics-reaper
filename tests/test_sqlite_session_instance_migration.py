@@ -80,7 +80,7 @@ def test_v5_probe_contexts_migrate_to_nullable_session_instance_id(tmp_path: Pat
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 11
+        assert version[0] == 12
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(probe_contexts)").fetchall()

@@ -20,6 +20,7 @@ from .export import (
     validate_analyst_market_export,
 )
 from .features import (
+    AnalystComparableSetFeatures,
     AnalystCoverage,
     AnalystMarketFeatureBuilder,
     AnalystMarketFeaturesReport,
@@ -133,7 +134,8 @@ class AnalystPilotVerificationPayload(BaseModel):
     )
     @classmethod
     def validate_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        invalid = any(character not in "0123456789abcdef" for character in value)
+        if len(value) != 64 or invalid:
             raise ValueError("pilot input hashes must be lowercase SHA-256 hex digests")
         return value
 
@@ -153,7 +155,8 @@ class AnalystPilotVerificationReport(AnalystPilotVerificationPayload):
     @field_validator("content_hash")
     @classmethod
     def validate_content_hash(cls, value: str) -> str:
-        if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        invalid = any(character not in "0123456789abcdef" for character in value)
+        if len(value) != 64 or invalid:
             raise ValueError("pilot content_hash must be a lowercase SHA-256 hex digest")
         return value
 
@@ -177,6 +180,11 @@ class AnalystPilotVerifier:
 
         if len(snapshot.comparable_sets) < 2:
             raise AnalystPilotError("real analyst pilot requires at least two comparable sets")
+        query_family_ids = {item.query_family_id for item in snapshot.comparable_sets}
+        if len(query_family_ids) < 2:
+            raise AnalystPilotError(
+                "real analyst pilot requires at least two distinct query families"
+            )
 
         recomputed_features = AnalystMarketFeatureBuilder().build(snapshot, market_export)
         if recomputed_features != market_features:
@@ -274,12 +282,9 @@ def _validate_artifact_chain(
 
 def _build_traces(
     rows: Sequence[AnalystListingRow],
-    features: object,
+    features: AnalystComparableSetFeatures,
     reference_time: datetime,
 ) -> tuple[AnalystNumericFeatureTrace, ...]:
-    from .features import AnalystComparableSetFeatures
-
-    typed_features = AnalystComparableSetFeatures.model_validate(features)
     traces: list[AnalystNumericFeatureTrace] = []
     numeric_specs: tuple[
         tuple[
@@ -292,10 +297,10 @@ def _build_traces(
         (
             "yandex_games_rating",
             lambda row: row.yandex_games_rating,
-            typed_features.yandex_games_rating,
+            features.yandex_games_rating,
         ),
-        ("player_rating", lambda row: row.player_rating, typed_features.player_rating),
-        ("rating_count", lambda row: row.rating_count, typed_features.rating_count),
+        ("player_rating", lambda row: row.player_rating, features.player_rating),
+        ("rating_count", lambda row: row.rating_count, features.rating_count),
     )
     for feature_name, selector, distribution in numeric_specs:
         trace = _trace_numeric_feature(rows, feature_name, selector, distribution)
@@ -304,7 +309,7 @@ def _build_traces(
 
     release_trace = _trace_release_feature(
         rows,
-        typed_features.first_published.age_days,
+        features.first_published.age_days,
         reference_time,
     )
     if release_trace is not None:
@@ -456,6 +461,8 @@ def _referenced_raw_snapshot_ids(
     market_export: AnalystMarketExportReport,
 ) -> tuple[str, ...]:
     raw_ids: set[str] = {item.raw_snapshot_id for item in snapshot.rich_metadata}
+    for feed_run in snapshot.feed_runs:
+        raw_ids.update(feed_run.raw_snapshot_ids)
     for membership in market_export.comparable_memberships:
         raw_ids.update(membership.raw_snapshot_ids)
     for update in market_export.update_observations:
@@ -527,7 +534,8 @@ def _machine_detected_limitations(
     market_features: AnalystMarketFeaturesReport,
 ) -> tuple[str, ...]:
     limitations: list[str] = [
-        "collection parameters remain provisional_uncalibrated until calibration tracks finish"
+        "collection parameters remain provisional_uncalibrated until calibration tracks finish",
+        "search-derived comparable sets remain provisional candidate peer sets until taxonomy validation",
     ]
     if not snapshot.feed_runs:
         limitations.append("feed exposure was not collected for this pilot snapshot")

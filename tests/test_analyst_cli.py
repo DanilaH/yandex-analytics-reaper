@@ -123,6 +123,16 @@ def test_analyst_cli_parses_operator_commands() -> None:
     comparable = build_parser().parse_args(
         ["build-search-comparable-set", "set.json", "--output", "data/raw"]
     )
+    snapshot = build_parser().parse_args(
+        [
+            "build-snapshot",
+            "snapshot-declaration.json",
+            "--report",
+            "snapshot-report.json",
+            "--output",
+            "data/raw",
+        ]
+    )
 
     assert family.command == "persist-query-family"
     assert family.declaration == "family.json"
@@ -130,6 +140,10 @@ def test_analyst_cli_parses_operator_commands() -> None:
     assert comparable.command == "build-search-comparable-set"
     assert comparable.declaration == "set.json"
     assert comparable.output == "data/raw"
+    assert snapshot.command == "build-snapshot"
+    assert snapshot.declaration == "snapshot-declaration.json"
+    assert snapshot.report == "snapshot-report.json"
+    assert snapshot.output == "data/raw"
 
 
 def test_comparable_declaration_requires_frozen_construction_method() -> None:

@@ -53,7 +53,6 @@ __all__ = [
     "CadenceCapability",
     "CadenceCheckpointInput",
     "CadenceStateEvidencePoint",
-    "CadenceStateEvidenceSeries",
     "CadenceStateSeriesEvidence",
     "CadenceStateSignal",
     "CollectionCadenceDecisionPolicy",

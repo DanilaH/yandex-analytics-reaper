@@ -115,6 +115,50 @@ def test_pages_must_be_contiguous_and_respect_limit(tmp_path: Path) -> None:
         store.append_page(_page(run_id, 1, started + timedelta(seconds=2)))
 
 
+def test_first_page_rejects_pagination_request_tokens(tmp_path: Path) -> None:
+    store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    run_id, started = _start(store)
+    page = _page(run_id, 0, started + timedelta(seconds=1)).model_copy(
+        update={"request_page_id": "unexpected"}
+    )
+
+    with pytest.raises(ValueError, match="first probe page"):
+        store.append_page(page)
+
+
+def test_next_page_must_continue_previous_cursor_and_rtx_token(tmp_path: Path) -> None:
+    store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    run_id, started = _start(store)
+    store.append_page(_page(run_id, 0, started + timedelta(seconds=1)))
+
+    wrong_cursor = _page(run_id, 1, started + timedelta(seconds=2)).model_copy(
+        update={"request_page_id": "wrong-page"}
+    )
+    with pytest.raises(ValueError, match="page_id does not continue"):
+        store.append_page(wrong_cursor)
+
+    wrong_rtx = _page(run_id, 1, started + timedelta(seconds=2)).model_copy(
+        update={"request_rtx_reqid": "wrong-req"}
+    )
+    with pytest.raises(ValueError, match="rtx_reqid does not continue"):
+        store.append_page(wrong_rtx)
+
+
+def test_cannot_append_after_source_exhaustion_or_with_backwards_time(tmp_path: Path) -> None:
+    store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    exhausted_id, exhausted_started = _start(store)
+    store.append_page(
+        _page(exhausted_id, 0, exhausted_started + timedelta(seconds=2), has_next=False)
+    )
+    with pytest.raises(ValueError, match="has_next_page=false"):
+        store.append_page(_page(exhausted_id, 1, exhausted_started + timedelta(seconds=3)))
+
+    timed_id, timed_started = _start(store)
+    store.append_page(_page(timed_id, 0, timed_started + timedelta(seconds=2)))
+    with pytest.raises(ValueError, match="cannot move backwards"):
+        store.append_page(_page(timed_id, 1, timed_started + timedelta(seconds=1)))
+
+
 def test_one_raw_snapshot_cannot_belong_to_two_probe_runs(tmp_path: Path) -> None:
     store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
     first_id, first_started = _start(store, page_limit=1)

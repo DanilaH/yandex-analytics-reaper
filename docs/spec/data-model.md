@@ -327,16 +327,38 @@ A `completed` run must contain at least one page and either reach its requested 
 
 ## Search discovery
 
+Query-family declarations are immutable/versioned operational inputs:
+
 ```text
-query_families
-search_queries
-search_probes
+query_family_versions
+  family_id
+  version
+  label
+  source_id
+  language
+  created_at
+
+query_family_members
+  family_id
+  version
+  ordinal
+  query_text
+  variant_kind
+```
+
+`(family_id, version)` identifies one frozen declaration. Member `ordinal` preserves exact order; exact query text is unique within the version. One seed must exist at ordinal 0. An identical rewrite is idempotent, while different content under an existing family/version is a persistence conflict rather than an overwrite.
+
+Existing search `probe_runs.query_text` remains the exact request text actually sent. A later query-family execution/result-union layer must bind runs to an exact declared family/version and exact member text; it must not infer membership fuzzily.
+
+Future search-result/comparable-set persistence remains staged after the query-family model:
+
+```text
 search_results
 comparable_sets
 comparable_set_members
 ```
 
-`totalGamesCount` is stored as a search-supply observation, not competitor count.
+`totalGamesCount` is stored as a per-search supply observation, not competitor count, and must not be summed across query variants as if the result sets were disjoint.
 
 ## Taxonomy
 

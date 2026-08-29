@@ -31,7 +31,7 @@ Phase 1 is complete when this foundation lands on `main`.
 - [x] normalized listing/developer persistence
 - [x] normalized metric persistence
 - [x] observation + field-level lineage persistence
-- [ ] schema-drift registry with field/type/missingness checks
+- [x] schema-drift registry with field/type/missingness checks
 - [ ] probe-run/page grouping
 - [ ] define `clean_anonymous` / persistent session semantics
 - [ ] feed-depth stability experiment (1/3/5/10 pages) with predeclared decision rule

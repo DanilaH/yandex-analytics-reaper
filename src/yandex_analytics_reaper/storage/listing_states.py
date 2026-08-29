@@ -204,14 +204,14 @@ class SQLiteListingStateStore:
         connection.execute(
             """
             INSERT OR IGNORE INTO listing_state_observations (
-                observation_id, platform_listing_id, title, developer_id, app_version,
-                published_at, languages_json, supported_platforms_json, orientation,
-                cloud_save, leaderboards, purchases_enabled, has_products, rewarded_ads,
-                fullscreen_ads, sticky_ads, provenance, measurement_kind,
+                observation_id, platform_listing_id, title, developer_id, developer_name,
+                app_version, published_at, languages_json, supported_platforms_json,
+                orientation, cloud_save, leaderboards, purchases_enabled, has_products,
+                rewarded_ads, fullscreen_ads, sticky_ads, provenance, measurement_kind,
                 semantic_confidence, coverage_status, historical_availability,
                 revision_status, uncertainty_json, lineage_refs_json
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -219,6 +219,7 @@ class SQLiteListingStateStore:
                 state.platform_listing_id,
                 state.title,
                 state.developer_id,
+                state.developer_name,
                 state.app_version,
                 _optional_timestamp(state.published_at),
                 _json_tuple(state.languages),
@@ -286,6 +287,7 @@ class SQLiteListingStateStore:
                 observed_at=_parse_timestamp(str(row["observed_at"])),
                 title=_optional_str(row["title"]),
                 developer_id=_optional_str(row["developer_id"]),
+                developer_name=_optional_str(row["developer_name"]),
                 app_version=_optional_str(row["app_version"]),
                 published_at=_parse_optional_timestamp(row["published_at"]),
                 languages=_parse_json_tuple(row["languages_json"]),
@@ -325,9 +327,9 @@ _SELECT = """
 SELECT
     n.id, n.source_id, n.observation_type, n.observed_at, n.available_at,
     n.retrieved_at, n.normalizer_name, n.normalizer_version,
-    s.platform_listing_id, s.title, s.developer_id, s.app_version, s.published_at,
-    s.languages_json, s.supported_platforms_json, s.orientation, s.cloud_save,
-    s.leaderboards, s.purchases_enabled, s.has_products, s.rewarded_ads,
+    s.platform_listing_id, s.title, s.developer_id, s.developer_name, s.app_version,
+    s.published_at, s.languages_json, s.supported_platforms_json, s.orientation,
+    s.cloud_save, s.leaderboards, s.purchases_enabled, s.has_products, s.rewarded_ads,
     s.fullscreen_ads, s.sticky_ads, s.provenance, s.measurement_kind,
     s.semantic_confidence, s.coverage_status, s.historical_availability,
     s.revision_status, s.uncertainty_json, s.lineage_refs_json

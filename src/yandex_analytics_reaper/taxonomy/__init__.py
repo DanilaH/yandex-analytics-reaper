@@ -15,6 +15,16 @@ from .registries import (
     get_taxonomy_label_registry,
     taxonomy_label_registry_content_hash,
 )
+from .sampling import (
+    TaxonomyDiversitySampleReport,
+    TaxonomySampleCandidate,
+    TaxonomySampleEvidence,
+    TaxonomySampleManifest,
+    TaxonomySampleMember,
+    TaxonomySamplingError,
+    YandexTaxonomyDiversitySampler,
+    select_taxonomy_diversity_candidates,
+)
 
 __all__ = [
     "ControlledLabelDimension",
@@ -26,8 +36,16 @@ __all__ = [
     "SessionModel",
     "SocialMode",
     "TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH",
+    "TaxonomyDiversitySampleReport",
     "TaxonomyLabelRegistry",
     "TaxonomyLabelRegistryBundle",
+    "TaxonomySampleCandidate",
+    "TaxonomySampleEvidence",
+    "TaxonomySampleManifest",
+    "TaxonomySampleMember",
+    "TaxonomySamplingError",
+    "YandexTaxonomyDiversitySampler",
     "get_taxonomy_label_registry",
+    "select_taxonomy_diversity_candidates",
     "taxonomy_label_registry_content_hash",
 ]

@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -22,6 +23,7 @@ class SearchComparableSetDeclaration(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    construction_method: Literal["yandex_search_union_v1"]
     set_id: str
     version: int = Field(ge=1)
     query_family_id: str

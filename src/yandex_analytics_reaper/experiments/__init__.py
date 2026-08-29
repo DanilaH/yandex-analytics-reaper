@@ -15,10 +15,14 @@ from .collection_cadence import (
 from .collection_cadence_evidence import (
     CadenceCheckpointInput,
     CollectionCadenceEvidenceError,
+    RejectedCadenceSeries,
+)
+from .collection_cadence_protocol import (
+    CadenceStateEvidencePoint,
+    CadenceStateSeriesEvidence,
     CollectionCadenceExperiment,
     CollectionCadenceExperimentReport,
     CollectionCadenceManifest,
-    RejectedCadenceSeries,
 )
 from .feed_depth import (
     FeedDepthDecisionPolicy,
@@ -48,6 +52,9 @@ from .session_profile_stability import (
 __all__ = [
     "CadenceCapability",
     "CadenceCheckpointInput",
+    "CadenceStateEvidencePoint",
+    "CadenceStateEvidenceSeries",
+    "CadenceStateSeriesEvidence",
     "CadenceStateSignal",
     "CollectionCadenceDecisionPolicy",
     "CollectionCadenceEvidenceError",

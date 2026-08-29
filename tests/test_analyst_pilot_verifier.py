@@ -18,6 +18,7 @@ from yandex_analytics_reaper.analyst import (
     AnalystMarketExportPayload,
     AnalystMarketExportReport,
     AnalystMarketFeatureBuilder,
+    AnalystMarketFeaturesReport,
     AnalystResolvedValue,
     AnalystRichMetadataBinding,
     AnalystSearchExposure,
@@ -154,7 +155,7 @@ def _pilot_artifacts(
     FilesystemRawSnapshotStore,
     AnalystSnapshotReport,
     AnalystMarketExportReport,
-    object,
+    AnalystMarketFeaturesReport,
 ]:
     store = FilesystemRawSnapshotStore(root)
     search_one_id, _ = _persist_raw(
@@ -386,17 +387,19 @@ def _pilot_artifacts(
     return store, snapshot, market_export, features
 
 
-def test_pilot_verifier_replays_raw_and_traces_aggregates(tmp_path: Path) -> None:
+def test_pilot_verifier_replays_raw_and_traces_representative_medians(tmp_path: Path) -> None:
     store, snapshot, market_export, features = _pilot_artifacts(tmp_path / "raw")
 
     report = AnalystPilotVerifier(raw_store=store).build(snapshot, market_export, features)
 
     assert validate_analyst_pilot_verification(report) == report
     assert report.comparable_set_count == 2
+    assert report.query_family_ids == ("merge-family", "obby-family")
     assert report.raw_evidence.referenced_raw_snapshot_count == 4
     assert report.raw_evidence.verified_raw_snapshot_count == 4
-    assert all(len(item.traces) == 4 for item in report.comparable_sets)
-    assert all(trace.contributions for item in report.comparable_sets for trace in item.traces)
+    assert len(report.representative_traces) == 2
+    assert all(trace.feature_name == "rating_count" for trace in report.representative_traces)
+    assert all(trace.contributions for trace in report.representative_traces)
     assert any("provisional_uncalibrated" in item for item in report.machine_detected_limitations)
 
 

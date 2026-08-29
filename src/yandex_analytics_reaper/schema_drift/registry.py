@@ -397,7 +397,14 @@ def _evaluate(
         for expectation in contract.fields:
             field = current_fields.get(expectation.path)
             if field is None:
-                if expectation.required:
+                parent_path = _parent_path(expectation.path)
+                parent_observed = parent_path is not None and parent_path in current_fields
+                ratio_requires_presence = (
+                    expectation.minimum_presence_ratio is not None
+                    and expectation.minimum_presence_ratio > 0.0
+                    and parent_observed
+                )
+                if expectation.required or ratio_requires_presence:
                     add(
                         _make_event(
                             analysis_id=analysis_id,
@@ -405,6 +412,7 @@ def _evaluate(
                             kind=DriftKind.REQUIRED_FIELD_MISSING,
                             severity=DriftSeverity.BREAKING,
                             field_path=expectation.path,
+                            current_presence_ratio=(0.0 if parent_observed else None),
                             message=f"required field {expectation.path} is missing",
                         )
                     )
@@ -588,6 +596,12 @@ def _sorted_events(events: Iterable[DriftEvent]) -> tuple[DriftEvent, ...]:
             ),
         )
     )
+
+
+def _parent_path(path: str) -> str | None:
+    if path == "$" or "." not in path:
+        return None
+    return path.rsplit(".", 1)[0]
 
 
 def _field_from_row(row: sqlite3.Row) -> FieldProfile:

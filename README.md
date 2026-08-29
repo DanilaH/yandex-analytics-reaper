@@ -42,6 +42,7 @@ Implemented:
 - explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with stable non-secret persistent-profile instance IDs plus safe cookie-state fingerprint/profile-age provenance;
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
+- immutable versioned search query-family declarations with exact ordered query membership and SQLite persistence;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -56,6 +57,7 @@ Not implemented yet:
 
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - empirical session-profile classifications from the required real matched-block sample;
+- query-family execution/result union and comparable-set construction;
 - authenticated test-session credential provider;
 - production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
@@ -232,6 +234,14 @@ yandex-reaper analyze-session-profile-stability \
 ```
 
 The report replays immutable raw bodies, verifies stored page linkage and frozen request context, rejects corrupt/ineligible blocks, requires one persistent `session_instance_id` across all eligible blocks, and classifies every depth as `stable`, `material_difference`, or `inconclusive` only after the minimum sample is sufficient. Synthetic fixtures are never empirical evidence.
+
+## Search query-family model
+
+`docs/spec/search-query-family.md` owns the versioned declaration semantics. A family version freezes one source/language intent into an ordered tuple of exact outgoing query strings with one canonical seed and controlled variant kinds.
+
+SQLite persistence is immutable by `(family_id, version)`: repeating the exact same declaration is idempotent, while changing label/source/language/member text/kind/order under an existing version is rejected. Create a new version instead.
+
+This layer deliberately does not generate synonyms, execute the family, union result sets, or build comparable sets. Existing manual search probes continue to persist the exact `query_text` actually sent; later execution/comparable-set work must bind those runs to an exact declared family/version rather than infer membership fuzzily.
 
 ## Read before changing the project
 

@@ -7,6 +7,7 @@ import pytest
 
 from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
 from yandex_analytics_reaper.ingestion import (
+    PreparedYandexSession,
     SessionConfigurationError,
     SessionStateError,
     YandexSessionManager,
@@ -23,9 +24,18 @@ def _manager(tmp_path: Path, current_time: list[datetime]) -> YandexSessionManag
     )
 
 
-def _cookies(session: object) -> dict[str, str]:
-    client = session.client
-    return {cookie.name: cookie.value for cookie in client.cookies.jar}
+def _profile_dir(tmp_path: Path) -> Path:
+    return (
+        tmp_path
+        / "sessions"
+        / "yandex_public"
+        / SessionProfile.PERSISTENT_ANONYMOUS.value
+        / "default"
+    )
+
+
+def _cookies(session: PreparedYandexSession) -> dict[str, str]:
+    return {cookie.name: cookie.value for cookie in session.client.cookies.jar}
 
 
 def test_clean_anonymous_uses_fresh_cookie_jar_for_every_run(tmp_path: Path) -> None:
@@ -71,13 +81,7 @@ def test_persistent_anonymous_reuses_cookie_state_and_records_only_fingerprint(
             path="/",
         )
 
-    profile_dir = (
-        tmp_path
-        / "sessions"
-        / "yandex_public"
-        / SessionProfile.PERSISTENT_ANONYMOUS.value
-        / "default"
-    )
+    profile_dir = _profile_dir(tmp_path)
     assert (profile_dir / "cookies.txt").is_file()
     assert (profile_dir / "metadata.json").is_file()
 
@@ -93,18 +97,21 @@ def test_persistent_anonymous_reuses_cookie_state_and_records_only_fingerprint(
 def test_persistent_anonymous_fails_closed_on_incomplete_state(tmp_path: Path) -> None:
     current_time = [datetime(2026, 8, 29, 9, 0, tzinfo=UTC)]
     manager = _manager(tmp_path, current_time)
-    profile_dir = (
-        tmp_path
-        / "sessions"
-        / "yandex_public"
-        / SessionProfile.PERSISTENT_ANONYMOUS.value
-        / "default"
-    )
+    profile_dir = _profile_dir(tmp_path)
     profile_dir.mkdir(parents=True)
     (profile_dir / "metadata.json").write_text(
         '{"created_at":"2026-08-29T09:00:00Z"}',
         encoding="utf-8",
     )
+
+    with pytest.raises(SessionStateError, match="incomplete"):
+        manager.open(ProbeContext(session_profile=SessionProfile.PERSISTENT_ANONYMOUS))
+
+
+def test_persistent_anonymous_rejects_existing_empty_profile_directory(tmp_path: Path) -> None:
+    current_time = [datetime(2026, 8, 29, 9, 0, tzinfo=UTC)]
+    manager = _manager(tmp_path, current_time)
+    _profile_dir(tmp_path).mkdir(parents=True)
 
     with pytest.raises(SessionStateError, match="incomplete"):
         manager.open(ProbeContext(session_profile=SessionProfile.PERSISTENT_ANONYMOUS))

@@ -65,16 +65,31 @@ def test_cli_parses_explicit_session_profile_blocks() -> None:
     assert args.output == "data/raw"
 
 
+def test_cli_parses_collection_cadence_plan_freeze() -> None:
+    args = build_parser().parse_args(
+        [
+            "freeze-collection-cadence-plan",
+            "cadence-plan.json",
+            "--output",
+            "data/raw",
+        ]
+    )
+
+    assert args.command == "freeze-collection-cadence-plan"
+    assert args.plan == "cadence-plan.json"
+    assert args.output == "data/raw"
+
+
 def test_cli_parses_collection_cadence_manifest() -> None:
     args = build_parser().parse_args(
         [
             "analyze-collection-cadence",
-            "cadence-manifest.json",
+            "cadence-evidence.json",
             "--output",
             "data/raw",
         ]
     )
 
     assert args.command == "analyze-collection-cadence"
-    assert args.manifest == "cadence-manifest.json"
+    assert args.manifest == "cadence-evidence.json"
     assert args.output == "data/raw"

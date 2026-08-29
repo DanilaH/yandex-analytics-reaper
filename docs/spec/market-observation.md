@@ -158,35 +158,26 @@ unknown
 
 ## Feed-depth calibration
 
-Do not hardcode three pages forever.
+The first feed-depth decision is governed by the frozen `feed-depth-v1` protocol in `feed-depth-experiment.md`.
 
-Initial experiment compares:
-
-```text
-1 / 3 / 5 / 10 pages
-```
-
-across repeated times/session profiles and measures:
+Its scope is intentionally narrow:
 
 ```text
-Jaccard overlap
-unique organic-game marginal gain
-rank stability/correlation
-first-page stability
-time-of-day variance
-device/language variance
+recommendation feed
+ru
+desktop / desktop_other
+clean_anonymous
+requested page size = 20
+candidate maximum depths = 1 / 3 / 5 / 10
 ```
 
-The experiment must declare a decision rule **before** reading the final result. Example structure:
+Each eligible trial is one run requested at up to 10 pages. The candidate depths are derived from prefixes of that same run, so depth is not confounded with four separately randomized/time-shifted collections. Legitimate source exhaustion before page 10 remains valid and saturates deeper candidate prefixes at the final available page.
 
-```text
-choose the smallest depth N where
-marginal unique organic-game gain from deeper sampling is below a declared threshold
-AND
-top-ranked exposure stability no longer changes materially
-```
+Only organic cards participate in the depth decision. The analyzer replays immutable raw bodies, verifies their content hashes and stored `ProbePage` linkage, and rejects ineligible/corrupt trials rather than coercing them.
 
-Exact thresholds are part of the experiment spec, not chosen after looking at the outcome.
+The v1 decision thresholds and minimum sample requirements are declared in `feed-depth-experiment.md` and must not be changed after viewing the first empirical result. The roadmap item remains incomplete until enough real eligible trials exist and the frozen rule yields a recommendation.
+
+Session-profile stability, device/language variance, and collection cadence are separate experiments/tasks. Do not silently fold those dimensions into feed-depth-v1.
 
 ## Collection cadence
 

@@ -96,7 +96,7 @@ def _validate_source_id(source_id: str) -> str:
 
 
 class FilesystemRawSnapshotStore:
-    """Append-only raw response store with deterministic metadata lookup."""
+    """Append-only raw response store with deterministic metadata/body replay."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -158,6 +158,22 @@ class FilesystemRawSnapshotStore:
         if metadata.id != snapshot_id or metadata.source_id != source_id:
             raise ValueError("raw snapshot metadata identity does not match requested snapshot")
         return metadata
+
+    def get_body(self, source_id: str, snapshot_id: str) -> bytes:
+        """Replay the exact stored body while rechecking path and content identity."""
+
+        metadata = self.get_metadata(source_id, snapshot_id)
+        root = self.root.resolve()
+        content_path = (self.root / metadata.content_path).resolve()
+        if not content_path.is_relative_to(root):
+            raise ValueError("raw snapshot content path escapes the configured raw root")
+        if not content_path.is_file():
+            raise FileNotFoundError(f"raw snapshot body not found: {source_id}/{snapshot_id}")
+
+        body = content_path.read_bytes()
+        if hashlib.sha256(body).hexdigest() != metadata.content_hash:
+            raise ValueError("raw snapshot body hash does not match persisted metadata")
+        return body
 
     @staticmethod
     def _snapshot_date(snapshot_id: str) -> datetime:

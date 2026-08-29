@@ -7,6 +7,7 @@ from pathlib import Path
 
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
+from yandex_analytics_reaper.experiments import FeedDepthExperiment
 from yandex_analytics_reaper.ingestion import (
     ProbeCollectionError,
     SessionConfigurationError,
@@ -243,6 +244,25 @@ def _probe_search(args: argparse.Namespace) -> None:
     )
 
 
+def _analyze_feed_depth(args: argparse.Namespace) -> None:
+    store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "collect feed trials before running feed-depth analysis"
+        )
+    experiment = FeedDepthExperiment(
+        raw_store=store,
+        probe_store=SQLiteProbeRunStore(database_path),
+    )
+    try:
+        report = experiment.analyze(args.run_ids)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(report.model_dump_json(indent=2))
+
+
 def _probe_games(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
@@ -334,6 +354,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum search pages in this probe run.",
     )
     search.set_defaults(handler=_probe_search)
+
+    depth = sub.add_parser(
+        "analyze-feed-depth",
+        help="Replay explicit up-to-10-page feed runs and evaluate feed-depth-v1.",
+    )
+    depth.add_argument(
+        "run_ids",
+        nargs="+",
+        help="Probe run IDs to include in the experiment report.",
+    )
+    depth.add_argument("--output", help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.")
+    depth.set_defaults(handler=_analyze_feed_depth)
 
     games = sub.add_parser("probe-games", help="Fetch and persist rich metadata for app IDs.")
     games.add_argument("app_ids", nargs="+", type=int)

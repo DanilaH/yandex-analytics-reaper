@@ -43,6 +43,7 @@ src/yandex_analytics_reaper/
   candidates/     candidate/decision primitives
   domain/         platform-neutral entities and observations
   evidence/       evidence semantics, uncertainty, field lineage
+  experiments/    versioned replay/calibration evaluators over stored evidence
   ingestion/      application-owned collection/run/session orchestration
   normalizers/    source DTO → stable domain observation boundary
   schema_drift/   versioned raw-shape profiling/contracts/drift events
@@ -50,7 +51,7 @@ src/yandex_analytics_reaper/
     yandex/        Yandex client + source DTO parsers/contracts
   storage/        raw snapshot + normalized operational persistence
   taxonomy/       draft taxonomy schema foundations
-  cli.py          explicit local probes/debug interface
+  cli.py          explicit local probes/debug/calibration interface
 ```
 
 ## Source capability architecture
@@ -142,7 +143,30 @@ If a probe fails and persistent-session state also cannot be saved, the probe/so
 
 Raw snapshots contain request/response facts and safe request context only. They are independent of parser, schema-analyzer, and normalizer versions so historical data can be reprofiled/reparsed/reinterpreted after implementation changes.
 
-The filesystem raw store supports deterministic metadata lookup by `(source_id, raw_snapshot_id)`, so a lineage record can be resolved back to immutable snapshot metadata and the exact stored body without a separate raw-snapshot database index.
+The filesystem raw store supports deterministic metadata and exact-body replay by `(source_id, raw_snapshot_id)`. Body replay rechecks that the resolved path stays under the configured raw root and that the body still matches the persisted SHA-256 content identity.
+
+## Experiment/replay boundary
+
+Calibration experiments consume already persisted evidence; they do not own collection. The first implementation is `experiments/feed_depth.py`.
+
+```text
+explicit ProbeRun IDs
+→ load ProbeRun + ProbeContext + ordered ProbePages
+→ replay immutable raw bodies
+→ verify content hash
+→ parse with the experiment-declared parser version
+→ reconstruct ProbePage from raw request/context + parsed continuation data
+→ require reconstructed page == stored page linkage
+→ derive experiment observations
+→ apply frozen decision policy
+→ emit report
+```
+
+The experiment layer must reject or report ineligible evidence rather than repair it. It must not reinterpret a `partial`/`failed` collection as evidence for a shallower depth, and it must not silently select convenient runs from the operational store. Trial membership is explicit in the analysis invocation/report.
+
+`feed-depth-v1` is intentionally scoped to `clean_anonymous / ru / desktop / desktop_other`. Session-profile stability and other context dimensions remain separate roadmap experiments. A legitimate source exhaustion before the configured ten-page maximum is not an operational failure; candidate depths beyond exhaustion saturate at the final available ranking.
+
+Synthetic fixture tests validate the analyzer mechanics but are not empirical calibration evidence. The roadmap feed-depth item remains incomplete until the frozen minimum real-sample requirements are met and the report yields a recommendation.
 
 ## Schema drift
 
@@ -150,7 +174,7 @@ Schema monitoring observes source shape; it does **not** repair source changes o
 
 For JSON surfaces the current flow profiles normalized JSON paths, exact value types, parent/present counts, missingness ratios, root type, parse failures, and explicit source contracts. Each persisted analysis is versioned by analyzer + contract and is bound to the raw snapshot's exact SHA-256 content identity.
 
-Temporal comparisons occur only inside a source-defined `comparison_scope_id`. Yandex scope construction keeps relevant request context while excluding volatile pagination-token values, so desktop/mobile, different search queries, and unrelated `get_games` cohorts cannot create false drift against each other. Baselines are strictly earlier by `retrieved_at`; equal timestamps are not artificially ordered by snapshot IDs.
+Temporal comparisons occur only inside a source-defined `comparison_scope_id`. Yandex scope construction keeps relevant request context while excluding volatile pagination-token values and volatile cookie-state/profile-age provenance, so desktop/mobile, session-profile classes, different search queries, and unrelated `get_games` cohorts keep meaningful boundaries without fragmenting baselines on normal cookie churn. Baselines are strictly earlier by `retrieved_at`; equal timestamps are not artificially ordered by snapshot IDs.
 
 Breaking contract drift stops semantic interpretation **after raw persistence**. Informational/warning drift is recorded without blocking the probe. Parser failures are separate breaking events.
 

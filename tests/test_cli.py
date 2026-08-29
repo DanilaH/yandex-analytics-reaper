@@ -28,3 +28,12 @@ def test_cli_feed_defaults_to_single_page_and_clean_session() -> None:
     assert args.command == "probe-feed"
     assert args.pages == 1
     assert args.session_profile == "clean_anonymous"
+
+
+def test_cli_parses_explicit_feed_depth_run_ids() -> None:
+    args = build_parser().parse_args(
+        ["analyze-feed-depth", "probe:one", "probe:two", "--output", "data/raw"]
+    )
+    assert args.command == "analyze-feed-depth"
+    assert args.run_ids == ["probe:one", "probe:two"]
+    assert args.output == "data/raw"

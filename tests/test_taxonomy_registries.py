@@ -4,10 +4,10 @@ import pytest
 from pydantic import ValidationError
 
 from yandex_analytics_reaper.taxonomy import (
-    DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
-    TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
     ControlledLabelDimension,
     ControlledTaxonomyDimensions,
+    DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+    TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
     TaxonomyLabelRegistry,
     get_taxonomy_label_registry,
     taxonomy_label_registry_content_hash,

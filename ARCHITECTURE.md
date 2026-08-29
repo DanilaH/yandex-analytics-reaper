@@ -196,6 +196,32 @@ The v1 set is deliberately provisional because Phase 3 taxonomy is still draft. 
 
 The SQLite comparable-set store validates the exact persisted query-family membership, referenced search runs/context, observation interval, and probe-page raw identities before writing. Reads revalidate operational references and fail closed on provenance drift. The store does not reparse raw source bodies; source-semantic replay belongs to the builder boundary.
 
+## Listing-history normalization boundary
+
+Update/status/media history is derived from already captured Yandex metadata surfaces; it does not own collection cadence or introduce a parallel source client.
+
+```text
+catalogue.get_games raw snapshot
+→ YandexGetGamesParser@4
+→ GameDetails
+→ YandexListingHistoryNormalizer@1
+→ published catalogue-presence observation
+→ optional canonical media-manifest hash
+
+__playPageData__.gameData raw snapshot
+→ YandexPlayPageParser@1
+→ PlayPageData
+→ YandexListingHistoryNormalizer@1
+→ published game-page-presence observation
+→ optional appVersion/source_published_at observation
+```
+
+`YandexGetGamesParser@4` preserves missing/non-object `media` as `None` and a present empty object as `{}`. The distinction is source semantics and must not be collapsed by the normalizer.
+
+The history normalizer never converts a requested ID omitted from one successful `get_games` response into `deleted` or `unpublished`. For an already-known listing it may emit only the conservative `unknown / requested_but_not_returned` observation. Transport/source failure is not a listing status.
+
+Each update/status/media item has required field-level lineage. `SQLiteListingHistoryStore` writes the normalized envelope, shared history evidence, typed row, and lineage transactionally; a conflict rolls back the bundle. The store revalidates the write and requires normalizer metadata to agree with lineage transformation metadata. Point-in-time readers fail closed when a stored typed history row has the wrong observation type, missing evidence, or missing field lineage.
+
 ## Schema drift
 
 Schema monitoring observes source shape; it does **not** repair source changes or teach parsers to accept them automatically.
@@ -233,7 +259,7 @@ $.games[7]
 
 The normalizer appends the exact metric field (for example `.gqRating`) rather than guessing which response shape produced the DTO.
 
-Metric persistence and its lineage write share one SQLite transaction. A lineage conflict therefore rolls back the associated metric write instead of leaving partially traceable evidence.
+Metric persistence and its lineage write share one SQLite transaction. Listing-history envelopes/typed rows/evidence/lineage use the same atomicity rule. A lineage conflict therefore rolls back the associated semantic write instead of leaving partially traceable evidence.
 
 ## Identity
 
@@ -274,7 +300,7 @@ search discovery
 rich game metadata
 ```
 
-Collectors return raw responses. Yandex schema contracts/scopes own source-specific structural expectations and comparison boundaries. Parsers own Yandex response-shape interpretation and preserve exact source object paths needed for lineage. Yandex normalizers convert parsed source DTOs into stable domain listing-state and metric observations plus field-level lineage.
+Collectors return raw responses. Yandex schema contracts/scopes own source-specific structural expectations and comparison boundaries. Parsers own Yandex response-shape interpretation and preserve exact source object paths needed for lineage. Yandex normalizers convert parsed source DTOs into stable domain listing-state, metric, and listing-history observations plus field-level lineage.
 
 ## Persistence boundary
 
@@ -300,12 +326,13 @@ logical paginated probe runs
 ordered probe pages + cursor-chain/raw-snapshot linkage
 immutable query-family versions + ordered exact members
 immutable comparable-set versions + run/member/raw membership evidence
+append-only listing update/status/media observations + evidence
 ```
 
 Probe contexts store safe session provenance, including the stable non-secret persistent-profile instance ID, but never secret session material. Persistent raw cookie values remain solely in the local runtime session directory.
 
 Probe-page raw identity is unique by `(source_id, raw_snapshot_id)`, matching the filesystem raw-store identity boundary rather than assuming snapshot IDs are globally unique across sources.
 
-Metric writes are idempotent for the same semantic observation and reject conflicting rewrites. Query-family/comparable-set version writes are idempotent only for identical content and reject conflicting reuse of an existing version identity.
+Metric/history writes are idempotent for the same semantic observation and reject conflicting rewrites. Query-family/comparable-set version writes are idempotent only for identical content and reject conflicting reuse of an existing version identity.
 
 Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

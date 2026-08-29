@@ -10,7 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .gold_set import (
     ANNOTATION_CONTRACT_V1_CONTENT_HASH,
+    ANNOTATION_SPEC_VERSION,
     GOLD_SET_SPEC_VERSION,
+    LABEL_REGISTRY_VERSION,
     TaxonomyAnnotationBatch,
     TaxonomyAnnotationConfidence,
     TaxonomyGoldSetReport,
@@ -32,7 +34,7 @@ PRIMARY_ARCHETYPE_AGREEMENT_CONTRACT_VERSION: Literal[
     "primary-archetype-agreement-v1"
 ] = "primary-archetype-agreement-v1"
 PRIMARY_ARCHETYPE_AGREEMENT_CONTRACT_V1_CONTENT_HASH = (
-    "983a701ae530ba504d32297854afffd836462ada1b38a68706f5d166efd99349"
+    "e09af2c913058837724d51fad30a0b29e95faf7dd2d00ce91a99ccb0506e368f"
 )
 PRIMARY_ARCHETYPE_AGREEMENT_TARGET = 0.90
 _PRIMARY_ARCHETYPE_ORDER = {
@@ -40,11 +42,14 @@ _PRIMARY_ARCHETYPE_ORDER = {
 }
 _AGREEMENT_RULES = (
     "sample_and_gold_set_revalidated_before_analysis",
-    "at_least_two_genuinely_independent_source_annotation_batches_required",
+    "at_least_two_source_annotation_batches_with_unique_annotator_ids_required",
     "source_batch_ids_annotators_and_hashes_must_match_gold_set_source_refs_in_order",
     "pairwise_agreement_uses_independent_primary_archetype_assignments_only",
     "confusion_pairs_are_unordered_disagreement_pairs_not_truth_directions",
     "confusion_pair_counts_use_all_annotator_pair_comparisons",
+    "confusion_pair_rates_use_all_annotator_pair_comparisons",
+    "confusion_pair_listing_ids_are_unique_evidence_anchors",
+    "disagreement_listing_ids_follow_sample_order",
     "unanimous_listing_rate_requires_all_source_annotators_to_match",
     "low_confidence_unknown_and_other_rates_use_all_independent_assignments",
     "gold_alignment_precision_recall_are_adjudication_alignment_not_classifier_performance",
@@ -108,6 +113,8 @@ class PrimaryArchetypeConfusionPair(BaseModel):
             self.archetype_b
         ]:
             raise ValueError("confusion pairs must follow primary-archetype registry order")
+        if len(self.listing_ids) > self.comparison_count:
+            raise ValueError("confusion evidence listings cannot exceed pairwise comparisons")
         return self
 
 
@@ -288,10 +295,16 @@ class PrimaryArchetypeAgreementReport(BaseModel):
             self.total_labels - self.unanimous_listing_count
         ):
             raise ValueError("disagreement listing IDs must cover every non-unanimous listing")
+        disagreement_id_set = set(self.disagreement_listing_ids)
         if sum(pair.comparison_count for pair in self.confusion_pairs) != (
             self.pairwise_disagreement_count
         ):
             raise ValueError("confusion pair counts must cover every pairwise disagreement")
+        for pair in self.confusion_pairs:
+            if pair.comparison_rate != pair.comparison_count / self.pairwise_comparison_count:
+                raise ValueError("confusion pair rate is inconsistent with comparison count")
+            if any(listing_id not in disagreement_id_set for listing_id in pair.listing_ids):
+                raise ValueError("confusion evidence must reference non-unanimous listings")
         expected_confusion_order = tuple(
             sorted(
                 self.confusion_pairs,
@@ -310,6 +323,17 @@ class PrimaryArchetypeAgreementReport(BaseModel):
             total_assignments
         ):
             raise ValueError("class assignment counts must cover all independent assignments")
+        metrics_by_archetype = {metric.archetype: metric for metric in self.class_metrics}
+        if (
+            metrics_by_archetype[PrimaryGameplayArchetype.UNKNOWN].annotation_assignment_count
+            != self.unknown_assignment_count
+        ):
+            raise ValueError("unknown assignment count must match unknown class diagnostics")
+        if (
+            metrics_by_archetype[PrimaryGameplayArchetype.OTHER].annotation_assignment_count
+            != self.other_assignment_count
+        ):
+            raise ValueError("other assignment count must match other class diagnostics")
         for metric in self.class_metrics:
             expected_gold_comparisons = metric.gold_support_count * self.source_batch_count
             if (
@@ -372,9 +396,7 @@ def build_primary_archetype_agreement_report(
                 ids.append(sample_member.platform_listing_id)
 
     unanimous_listing_count = total_labels - len(disagreement_listing_ids)
-    unanimous_pairwise_comparisons = unanimous_listing_count * pair_count
-    non_unanimous_agreements = pairwise_agreement_count
-    pairwise_agreement_count += unanimous_pairwise_comparisons
+    pairwise_agreement_count += unanimous_listing_count * pair_count
     pairwise_disagreement_count = pairwise_comparison_count - pairwise_agreement_count
 
     all_labels = tuple(label for batch in validated for label in batch.labels)
@@ -475,7 +497,9 @@ def primary_archetype_agreement_contract_content_hash() -> str:
         "agreement_contract_version": PRIMARY_ARCHETYPE_AGREEMENT_CONTRACT_VERSION,
         "sample_spec_version": TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
         "gold_set_spec_version": GOLD_SET_SPEC_VERSION,
+        "annotation_spec_version": ANNOTATION_SPEC_VERSION,
         "annotation_contract_content_hash": ANNOTATION_CONTRACT_V1_CONTENT_HASH,
+        "label_registry_version": LABEL_REGISTRY_VERSION,
         "label_registry_content_hash": TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
         "primary_archetypes": [item.value for item in PrimaryGameplayArchetype],
         "initial_primary_agreement_target": PRIMARY_ARCHETYPE_AGREEMENT_TARGET,
@@ -526,7 +550,7 @@ def _validate_source_batches(
         raise PrimaryArchetypeAgreementError("agreement source batch IDs must be unique")
     if len(annotator_ids) != len(set(annotator_ids)):
         raise PrimaryArchetypeAgreementError(
-            "agreement requires genuinely independent source annotator identities"
+            "agreement source batches require unique annotator identities"
         )
     actual_refs = tuple(
         (batch.batch_id, batch.annotator_id, batch.annotation_batch_hash)

@@ -62,46 +62,43 @@ snapshot + market export
 
 Any difference fails closed.
 
-## Aggregate traces
+## Representative aggregate trace
 
-For every comparable set, the verifier traces every available one of:
+M1.4 requires representative aggregate traceability, not a second implementation of every M1.3 statistic. V1 therefore records exactly one deterministic representative trace per comparable set.
+
+Selection priority is:
 
 ```text
-yandex_games_rating
-player_rating
 rating_count
-first_published_age_days
+→ yandex_games_rating
+→ player_rating
+→ first_published_age_days
 ```
 
-A trace contains the feature distribution plus every contributing listing-level value:
+The first field with observed coverage is used. A comparable set with none of these fields observed does not pass the real pilot verifier; that is treated as a practical-analysis blocker.
+
+Each representative trace stores:
 
 ```text
-platform_listing_id
-source_value
-derived_numeric_value
-observation_id
-raw_snapshot_ids
-source_field_paths
-normalizer_name
-normalizer_version
+set_id / set_version
+feature_name
+coverage
+reported_median
+recomputed_median
+contributing listing IDs
+source values
+numeric values used for the median
+observation IDs
+raw snapshot IDs
+source field paths
+normalizer name/version
 ```
 
-The verifier independently recomputes:
+The verifier recomputes the median independently from the listing-level contributions and requires it to match the frozen feature report.
 
-```text
-minimum
-p25
-median
-p75
-maximum
-mean
-```
+If `first_published_age_days` is selected, the numeric age is derived again from the exported `firstPublished` timestamp and frozen `snapshot.created_at`. A publication timestamp after snapshot time fails closed.
 
-from the trace contributions and requires them to match the feature report.
-
-`first_published_age_days` is derived again from the exported `firstPublished` timestamp and the frozen snapshot time. A publication timestamp after snapshot time fails closed.
-
-A comparable set with no traceable quantitative rich-metadata feature does not pass the real pilot verifier. That condition is treated as a practical-analysis blocker rather than silently producing an empty proof.
+This narrow trace is intentional. The feature layer remains the owner of full min/p25/median/p75/max/mean distributions; the pilot verifier proves one representative aggregate per niche without duplicating the whole analytical implementation.
 
 ## Raw-evidence replay
 
@@ -148,7 +145,7 @@ This list does not replace the human M1.4 review. Real source behavior may revea
 
 ## Interpretation boundary
 
-Passing `analyst-pilot-verification-v1` proves only that the real pilot artifact chain is internally reproducible and traceable to immutable raw evidence.
+Passing `analyst-pilot-verification-v1` proves only that the real pilot artifact chain is internally reproducible and that representative aggregates can be traced back to immutable evidence.
 
 It does **not** prove:
 

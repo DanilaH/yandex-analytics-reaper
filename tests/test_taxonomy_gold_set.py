@@ -23,6 +23,7 @@ from yandex_analytics_reaper.taxonomy.gold_set import (
     build_taxonomy_gold_set,
     taxonomy_annotation_contract_content_hash,
     validate_taxonomy_annotation_batch,
+    validate_taxonomy_gold_set_report,
 )
 
 
@@ -109,6 +110,21 @@ def _batch(
     )
 
 
+def _gold_report(sample: TaxonomyDiversitySampleReport):
+    batch = _batch(sample)
+    validated = validate_taxonomy_annotation_batch(sample, batch)
+    declaration = TaxonomyGoldSetDeclaration(
+        gold_set_id="gold:1",
+        sample_id=sample.sample_id,
+        sample_content_hash=sample.sample_content_hash,
+        adjudicator_id="adjudicator:a",
+        adjudicated_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
+        source_annotation_batch_hashes=(validated.annotation_batch_hash,),
+        labels=_labels(sample),
+    )
+    return batch, validated, declaration, build_taxonomy_gold_set(sample, declaration, (batch,))
+
+
 def test_annotation_contract_hash_is_frozen() -> None:
     assert taxonomy_annotation_contract_content_hash() == ANNOTATION_CONTRACT_V1_CONTENT_HASH
 
@@ -166,19 +182,7 @@ def test_annotation_boundary_rejects_tampered_sample_content() -> None:
 
 def test_gold_set_reconciles_source_batches_and_hashes_adjudication() -> None:
     sample = _sample()
-    batch = _batch(sample)
-    validated = validate_taxonomy_annotation_batch(sample, batch)
-    declaration = TaxonomyGoldSetDeclaration(
-        gold_set_id="gold:1",
-        sample_id=sample.sample_id,
-        sample_content_hash=sample.sample_content_hash,
-        adjudicator_id="adjudicator:a",
-        adjudicated_at=datetime(2026, 8, 29, 14, 0, tzinfo=UTC),
-        source_annotation_batch_hashes=(validated.annotation_batch_hash,),
-        labels=_labels(sample),
-    )
-
-    report = build_taxonomy_gold_set(sample, declaration, (batch,))
+    batch, validated, declaration, report = _gold_report(sample)
 
     assert report.sample_content_hash == sample.sample_content_hash
     assert report.source_batches[0].annotation_batch_hash == validated.annotation_batch_hash
@@ -190,6 +194,20 @@ def test_gold_set_reconciles_source_batches_and_hashes_adjudication() -> None:
     )
     with pytest.raises(TaxonomyGoldSetError, match="exactly match"):
         build_taxonomy_gold_set(sample, wrong_sources, (batch,))
+
+
+def test_persisted_gold_set_revalidates_content_hash() -> None:
+    sample = _sample()
+    _, _, _, report = _gold_report(sample)
+
+    assert validate_taxonomy_gold_set_report(sample, report) == report
+
+    changed = report.labels[0].model_copy(
+        update={"primary_archetype": PrimaryGameplayArchetype.MATCH}
+    )
+    tampered = report.model_copy(update={"labels": (changed,) + report.labels[1:]})
+    with pytest.raises(TaxonomyGoldSetError, match="content hash"):
+        validate_taxonomy_gold_set_report(sample, tampered)
 
 
 def test_gold_set_rejects_duplicate_annotators() -> None:

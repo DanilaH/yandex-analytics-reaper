@@ -66,8 +66,10 @@ Phase 1 is complete when this foundation lands on `main`.
   - [x] freeze primary-archetype validation/review protocol and merge gold-set-bound tooling
   - [ ] execute the review against the completed real gold set and record the validation artifact/hash
 - [ ] confusion analysis / agreement analysis
-  - [x] freeze independent-annotation agreement/confusion protocol and merge gold-set-bound analysis tooling
-  - [ ] execute against the real independent annotation batches and record the agreement/confusion artifact/hash
+  - [x] freeze primary-archetype independent-annotation agreement/confusion protocol and merge gold-set-bound analysis tooling
+  - [x] freeze controlled-dimension exact-set agreement + per-label gold-alignment tooling
+  - [ ] define the theme-canonicalization validation protocol required by the taxonomy spec
+  - [ ] execute the real primary, controlled-dimension, and theme analyses and record their artifact identities/hashes
 - [ ] revise taxonomy
 - [ ] freeze first validated taxonomy version
 - [ ] implement classifier only after schema stabilizes

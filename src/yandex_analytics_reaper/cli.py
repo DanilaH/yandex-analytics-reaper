@@ -246,9 +246,15 @@ def _probe_search(args: argparse.Namespace) -> None:
 
 def _analyze_feed_depth(args: argparse.Namespace) -> None:
     store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "collect feed trials before running feed-depth analysis"
+        )
     experiment = FeedDepthExperiment(
         raw_store=store,
-        probe_store=SQLiteProbeRunStore(_database_path(store)),
+        probe_store=SQLiteProbeRunStore(database_path),
     )
     try:
         report = experiment.analyze(args.run_ids)
@@ -351,9 +357,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     depth = sub.add_parser(
         "analyze-feed-depth",
-        help="Replay explicit 10-page feed runs and evaluate feed-depth-v1.",
+        help="Replay explicit up-to-10-page feed runs and evaluate feed-depth-v1.",
     )
-    depth.add_argument("run_ids", nargs="+", help="Probe run IDs to include in the experiment report.")
+    depth.add_argument(
+        "run_ids",
+        nargs="+",
+        help="Probe run IDs to include in the experiment report.",
+    )
     depth.add_argument("--output", help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.")
     depth.set_defaults(handler=_analyze_feed_depth)
 

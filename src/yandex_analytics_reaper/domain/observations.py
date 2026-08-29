@@ -22,6 +22,8 @@ class PlatformDeveloper(BaseModel):
     platform: Platform
     external_developer_id: str
     display_name: str | None = None
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
 
 
 class ListingStateObservation(BaseModel):

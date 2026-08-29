@@ -19,6 +19,8 @@ Versioned normalizers
   ↓
 Platform-neutral domain observations
   ↓
+Operational normalized persistence
+  ↓
 Lineage
   ↓
 Market state / taxonomy / derived features
@@ -44,12 +46,10 @@ src/yandex_analytics_reaper/
   normalizers/    source DTO → stable domain observation boundary
   sources/        source capability contracts
     yandex/        Yandex client + source DTO parsers
-  storage/        immutable raw storage
+  storage/        raw snapshot + normalized operational persistence
   taxonomy/       draft taxonomy schema foundations
   cli.py          explicit local probes/debug interface
 ```
-
-Normalized persistence packages are introduced later in Phase 2 when normalized market-state storage begins.
 
 ## Source capability architecture
 
@@ -141,6 +141,18 @@ Collectors return raw responses. Parsers own Yandex response-shape interpretatio
 
 ## Persistence boundary
 
-Foundation stores immutable raw responses on the filesystem.
+Raw responses remain immutable filesystem snapshots.
 
-Normalized persistence, lineage persistence, schema-drift registry, and historical market-state reconstruction belong to Phase 2. PostgreSQL/Parquet/DuckDB should be introduced only where their concrete storage/query roles are defined, not merely to match an architecture diagram.
+Phase 2 uses SQLite as the initial **operational normalized store** because the tool is private/single-user, collection is batch-oriented, and the current workload does not justify a database service. The storage contract remains domain-oriented so this is not a commitment to SQLite as a permanent analytical backend.
+
+SQLite currently owns:
+
+```text
+platform listing identities
+platform developer identities
+listing ↔ developer observation history
+```
+
+Metric observations, observation envelopes/field-level lineage, probe runs, and other historical state are added by their explicit Phase 2 roadmap tasks rather than hidden inside the identity store.
+
+Parquet/DuckDB should be introduced later for analytical scans/backtests when concrete query patterns require them. PostgreSQL should only replace the operational store if measured concurrency, scale, deployment, or query requirements justify running a database service.

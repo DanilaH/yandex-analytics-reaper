@@ -118,7 +118,10 @@ def _build_search_comparable_set(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-analyst",
-        description="Offline operator workflow over already persisted Yandex evidence.",
+        description=(
+            "Offline operator workflow over persisted Yandex evidence. "
+            "See docs/analyst-workflow.md."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

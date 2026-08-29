@@ -471,7 +471,7 @@ def _validate_source_batches(
     )
     if actual_refs != expected_refs:
         raise ControlledDimensionAgreementError(
-            "controlled-agreement source batches must exactly match gold-set source batches in order"
+            "source batches must exactly match gold-set source refs in order"
         )
     return validated
 
@@ -657,19 +657,19 @@ def _optional_rate(numerator: int, denominator: int) -> float | None:
 
 def _validate_sha256(value: str, field_name: str) -> None:
     if len(value) != 64 or any(
-        character not in "0123456789abcdef" for character in value
-    ):
-        raise ValueError(f"{field_name} must be 64 lowercase hexadecimal characters")
-
-
-def _content_hash(payload: object) -> str:
-    encoded = json.dumps(
-        payload,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
-
-
-_validate_contract()
++        character not in "0123456789abcdef" for character in value
++    ):
++        raise ValueError(f"{field_name} must be 64 lowercase hexadecimal characters")
++
++
++def _content_hash(payload: object) -> str:
++    encoded = json.dumps(
++        payload,
++        sort_keys=True,
++        separators=(",", ":"),
++        ensure_ascii=False,
++    ).encode("utf-8")
++    return hashlib.sha256(encoded).hexdigest()
++
++
++_validate_contract()

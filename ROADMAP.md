@@ -60,6 +60,8 @@ Phase 1 is complete when this foundation lands on `main`.
   - [x] freeze `taxonomy-diversity-sample-v1` and merge deterministic raw-replay sampling tooling
   - [ ] execute the sampler against real persisted Yandex evidence and record the 100–200-listing sample identity/hash
 - [ ] create manual gold set
+  - [x] freeze manual annotation/adjudication contracts and merge sample-bound validation/gold-set tooling
+  - [ ] execute real manual annotation/adjudication against the completed real sample and record the gold-set identity/hash
 - [ ] validate primary gameplay-archetype labels
 - [ ] confusion analysis / agreement analysis
 - [ ] revise taxonomy

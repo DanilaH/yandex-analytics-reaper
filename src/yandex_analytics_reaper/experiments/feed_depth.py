@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import UTC
 from itertools import combinations
 from math import floor
 from statistics import median
@@ -29,7 +29,7 @@ RANK_PERSISTENCE = 0.90
 
 
 class FeedDepthTrialObservation(BaseModel):
-    """Replay-derived organic rankings for one eligible 10-page feed run."""
+    """Replay-derived organic rankings for one eligible up-to-10-page feed run."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -110,7 +110,7 @@ class FeedDepthEligibilityError(ValueError):
 
 
 class FeedDepthExperiment:
-    """Replay stored 10-page runs and evaluate the frozen feed-depth-v1 policy."""
+    """Replay stored feed runs and evaluate the frozen feed-depth-v1 policy."""
 
     def __init__(
         self,
@@ -134,8 +134,19 @@ class FeedDepthExperiment:
             raise FeedDepthEligibilityError("feed-depth trial must have completed status")
         if run.requested_page_limit != 10:
             raise FeedDepthEligibilityError("feed-depth trial must request exactly 10 pages")
-        if len(record.pages) != 10 or tuple(page.page_index for page in record.pages) != tuple(range(10)):
-            raise FeedDepthEligibilityError("feed-depth trial must contain exactly pages 0 through 9")
+
+        page_count = len(record.pages)
+        expected_indexes = tuple(range(page_count))
+        actual_indexes = tuple(page.page_index for page in record.pages)
+        if not 1 <= page_count <= 10 or actual_indexes != expected_indexes:
+            raise FeedDepthEligibilityError(
+                "feed-depth trial must contain a contiguous page prefix from 0 with at most 10 pages"
+            )
+        if page_count < 10 and record.pages[-1].has_next_page:
+            raise FeedDepthEligibilityError(
+                "feed-depth trial stopped before page 10 without source exhaustion"
+            )
+
         if context.session_profile is not SessionProfile.CLEAN_ANONYMOUS:
             raise FeedDepthEligibilityError("feed-depth-v1 requires clean_anonymous session profile")
         if context.cookie_state_hash is not None or context.profile_age_days != 0:
@@ -170,7 +181,9 @@ class FeedDepthExperiment:
             if metadata.request_key != "catalogue.feed":
                 raise FeedDepthEligibilityError("feed-depth raw page is not a catalogue.feed response")
             if not 200 <= metadata.http_status < 300:
-                raise FeedDepthEligibilityError("feed-depth raw page does not have a successful HTTP status")
+                raise FeedDepthEligibilityError(
+                    "feed-depth raw page does not have a successful HTTP status"
+                )
             if _feed_page_size(metadata.request_context) != PAGE_SIZE:
                 raise FeedDepthEligibilityError(
                     f"feed-depth-v1 requires games_count={PAGE_SIZE} on every raw page"
@@ -193,8 +206,12 @@ class FeedDepthExperiment:
             if depth in CANDIDATE_DEPTHS:
                 rankings[depth] = tuple(ranked)
 
-        if not rankings.get(10):
+        final_ranking = tuple(ranked)
+        if not final_ranking:
             raise FeedDepthEligibilityError("feed-depth trial requires at least one organic game")
+        for depth in CANDIDATE_DEPTHS:
+            if depth not in rankings:
+                rankings[depth] = final_ranking
 
         return FeedDepthTrialObservation(
             run_id=run.id,
@@ -294,7 +311,8 @@ def _metrics_for_depth(
         for trial in trials:
             current_count = len(trial.organic_rankings[depth])
             next_count = len(trial.organic_rankings[next_depth])
-            marginal_gains.append(0.0 if next_count == 0 else (next_count - current_count) / next_count)
+            gain = 0.0 if next_count == 0 else (next_count - current_count) / next_count
+            marginal_gains.append(gain)
 
     jaccards: list[float] = []
     ranked_overlaps: list[float] = []
@@ -303,7 +321,11 @@ def _metrics_for_depth(
         second_ranked = second.organic_rankings[depth]
         jaccards.append(_jaccard(first_ranked, second_ranked))
         ranked_overlaps.append(
-            _ranked_prefix_overlap(first_ranked, second_ranked, persistence=RANK_PERSISTENCE)
+            _ranked_prefix_overlap(
+                first_ranked,
+                second_ranked,
+                persistence=RANK_PERSISTENCE,
+            )
         )
 
     return FeedDepthMetrics(
@@ -356,8 +378,14 @@ def _recommend_depth(metrics: Sequence[FeedDepthMetrics]) -> tuple[int, tuple[st
                     f"depth {depth} is the smallest candidate satisfying feed-depth-v1",
                     f"median coverage={coverage:.4f} >= {MEDIAN_COVERAGE_MIN:.2f}",
                     f"p25 coverage={p25:.4f} >= {P25_COVERAGE_MIN:.2f}",
-                    f"median marginal gain={marginal:.4f} <= {MEDIAN_MARGINAL_GAIN_MAX:.2f}",
-                    f"rank stability={rank:.4f} within {RANK_STABILITY_TOLERANCE:.2f} of depth 10 ({full_rank:.4f})",
+                    (
+                        f"median marginal gain={marginal:.4f} "
+                        f"<= {MEDIAN_MARGINAL_GAIN_MAX:.2f}"
+                    ),
+                    (
+                        f"rank stability={rank:.4f} within "
+                        f"{RANK_STABILITY_TOLERANCE:.2f} of depth 10 ({full_rank:.4f})"
+                    ),
                 ),
             )
         failures.append(
@@ -379,9 +407,7 @@ def _sufficiency_reasons(
 ) -> list[str]:
     reasons: list[str] = []
     if len(trials) < MIN_ELIGIBLE_TRIALS:
-        reasons.append(
-            f"eligible trials={len(trials)} < required {MIN_ELIGIBLE_TRIALS}"
-        )
+        reasons.append(f"eligible trials={len(trials)} < required {MIN_ELIGIBLE_TRIALS}")
     if span_hours < MIN_SAMPLE_SPAN_HOURS:
         reasons.append(
             f"sample span={span_hours:.2f}h < required {MIN_SAMPLE_SPAN_HOURS:.2f}h"

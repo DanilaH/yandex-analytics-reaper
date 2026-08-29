@@ -129,9 +129,7 @@ class PrimaryArchetypeValidationDeclaration(BaseModel):
     @field_validator("reviewed_at")
     @classmethod
     def validate_reviewed_at(cls, value: datetime) -> datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("primary-archetype validation reviewed_at must be timezone-aware")
-        return value.astimezone(UTC)
+        return _utc_datetime(value, "primary-archetype validation reviewed_at")
 
     @model_validator(mode="after")
     def validate_review_shape(self) -> Self:
@@ -157,6 +155,21 @@ class PrimaryArchetypeValidationEntry(BaseModel):
     disposition: PrimaryArchetypeReviewDisposition
     evidence_listing_ids: tuple[str, ...]
     rationale: str
+
+    @model_validator(mode="after")
+    def validate_entry(self) -> Self:
+        if self.archetype in _SPECIAL_PRIMARY_STATES:
+            raise ValueError("validation entries cannot use other/unknown special states")
+        if self.support_count != len(self.adjudicated_listing_ids):
+            raise ValueError("validation entry support_count must match adjudicated listing IDs")
+        if (
+            self.high_confidence_count
+            + self.medium_confidence_count
+            + self.low_confidence_count
+            != self.support_count
+        ):
+            raise ValueError("validation entry confidence counts must sum to support_count")
+        return self
 
 
 class PrimaryArchetypeValidationReport(BaseModel):
@@ -191,8 +204,58 @@ class PrimaryArchetypeValidationReport(BaseModel):
     labels_with_support: int = Field(ge=0)
     labels_without_support: int = Field(ge=0)
     revision_candidate_count: int = Field(ge=0)
-    entries: tuple[PrimaryArchetypeValidationEntry, ...]
+    entries: tuple[PrimaryArchetypeValidationEntry, ...] = Field(min_length=1)
     validation_content_hash: str
+
+    @field_validator("review_id", "reviewer_id", "sample_id", "gold_set_id")
+    @classmethod
+    def validate_identifier(cls, value: str) -> str:
+        if not value or value != value.strip():
+            raise ValueError("primary-archetype validation report IDs must be nonblank and trimmed")
+        return value
+
+    @field_validator("reviewed_at")
+    @classmethod
+    def validate_reviewed_at(cls, value: datetime) -> datetime:
+        return _utc_datetime(value, "primary-archetype validation report reviewed_at")
+
+    @field_validator(
+        "validation_contract_content_hash",
+        "annotation_contract_content_hash",
+        "sample_content_hash",
+        "gold_set_content_hash",
+        "validation_content_hash",
+    )
+    @classmethod
+    def validate_hash(cls, value: str) -> str:
+        _validate_sha256(value, "primary-archetype validation report hash")
+        return value
+
+    @model_validator(mode="after")
+    def validate_report_shape(self) -> Self:
+        if (
+            self.validation_contract_content_hash
+            != PRIMARY_ARCHETYPE_VALIDATION_CONTRACT_V1_CONTENT_HASH
+        ):
+            raise ValueError("validation report contract content hash does not match v1")
+        if self.annotation_contract_content_hash != ANNOTATION_CONTRACT_V1_CONTENT_HASH:
+            raise ValueError("validation report annotation contract hash does not match v1")
+        if tuple(entry.archetype for entry in self.entries) != _MODELED_PRIMARY_ARCHETYPES:
+            raise ValueError("validation report entries must follow modeled archetype registry order")
+        if self.modeled_label_count + self.unknown_count + self.other_count != self.total_labels:
+            raise ValueError("validation report label counts must sum to total_labels")
+        if (
+            self.high_confidence_count
+            + self.medium_confidence_count
+            + self.low_confidence_count
+            != self.total_labels
+        ):
+            raise ValueError("validation report confidence counts must sum to total_labels")
+        if self.labels_with_support + self.labels_without_support != len(self.entries):
+            raise ValueError("validation report support diagnostics must cover every entry")
+        if self.revision_candidate_count > len(self.entries):
+            raise ValueError("validation report revision candidate count exceeds entry count")
+        return self
 
 
 def build_primary_archetype_validation_report(
@@ -338,11 +401,16 @@ def _build_entry(
     listing_id_set = set(listing_ids)
     if any(value not in listing_id_set for value in review.evidence_listing_ids):
         raise PrimaryArchetypeValidationError(
-            f"review evidence for {review.archetype.value} must use listings adjudicated to that archetype"
+            f"review evidence for {review.archetype.value} must use listings adjudicated "
+            "to that archetype"
         )
-    if not labels and review.disposition is not PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE:
+    if (
+        not labels
+        and review.disposition is not PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE
+    ):
         raise PrimaryArchetypeValidationError(
-            f"archetype {review.archetype.value} has zero gold-set support and must be insufficient_evidence"
+            f"archetype {review.archetype.value} has zero gold-set support and must be "
+            "insufficient_evidence"
         )
     if (
         review.disposition is not PrimaryArchetypeReviewDisposition.INSUFFICIENT_EVIDENCE
@@ -409,6 +477,12 @@ def _report_payload(
         "revision_candidate_count": revision_candidate_count,
         "entries": [entry.model_dump(mode="json") for entry in entries],
     }
+
+
+def _utc_datetime(value: datetime, field_name: str) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    return value.astimezone(UTC)
 
 
 def _validate_sha256(value: str, field_name: str) -> None:

@@ -10,6 +10,8 @@ from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
 from yandex_analytics_reaper.experiments import (
     CollectionCadenceExperiment,
     CollectionCadenceManifest,
+    CollectionCadencePlanDeclaration,
+    CollectionCadencePlanFreezer,
     FeedDepthExperiment,
     SessionProfileStabilityExperiment,
 )
@@ -288,13 +290,32 @@ def _analyze_session_profile_stability(args: argparse.Namespace) -> None:
     print(report.model_dump_json(indent=2))
 
 
+def _freeze_collection_cadence_plan(args: argparse.Namespace) -> None:
+    store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "persist the listing cohort and query family before freezing a cadence plan"
+        )
+    plan_path = Path(args.plan)
+    try:
+        declaration = CollectionCadencePlanDeclaration.model_validate_json(
+            plan_path.read_text(encoding="utf-8")
+        )
+        frozen = CollectionCadencePlanFreezer(database_path).freeze(declaration)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    print(frozen.model_dump_json(indent=2))
+
+
 def _analyze_collection_cadence(args: argparse.Namespace) -> None:
     store = _store(args.output)
     database_path = _database_path(store)
     if not database_path.is_file():
         raise SystemExit(
             f"operational database not found: {database_path}; "
-            "collect daily cadence evidence before analysis"
+            "freeze a cadence plan and collect daily evidence before analysis"
         )
     manifest_path = Path(args.manifest)
     try:
@@ -445,11 +466,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     session_profiles.set_defaults(handler=_analyze_session_profile_stability)
 
+    freeze_cadence = sub.add_parser(
+        "freeze-collection-cadence-plan",
+        help="Persist a collection-cadence-v1 cohort/window before daily collection begins.",
+    )
+    freeze_cadence.add_argument(
+        "plan",
+        help="Path to a predeclared collection-cadence-v1 plan JSON file.",
+    )
+    freeze_cadence.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    freeze_cadence.set_defaults(handler=_freeze_collection_cadence_plan)
+
     cadence = sub.add_parser(
         "analyze-collection-cadence",
-        help="Replay a frozen daily-reference manifest and evaluate collection-cadence-v1.",
+        help="Replay run bindings against one frozen collection-cadence-v1 plan.",
     )
-    cadence.add_argument("manifest", help="Path to the collection-cadence-v1 JSON manifest.")
+    cadence.add_argument("manifest", help="Path to the cadence evidence-binding JSON manifest.")
     cadence.add_argument(
         "--output",
         help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",

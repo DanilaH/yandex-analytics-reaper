@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from yandex_analytics_reaper.domain import (
     Platform,
@@ -42,7 +42,7 @@ class TaxonomySamplingError(ValueError):
 class TaxonomySampleManifest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    spec_version: Literal["taxonomy-diversity-sample-v1"] = SPEC_VERSION
+    spec_version: Literal["taxonomy-diversity-sample-v1"] = "taxonomy-diversity-sample-v1"
     sample_id: str
     target_size: int = Field(default=DEFAULT_TARGET_SIZE, ge=100, le=200)
     max_per_developer: int = Field(default=DEFAULT_MAX_PER_DEVELOPER, ge=1, le=10)
@@ -96,7 +96,7 @@ class TaxonomySampleMember(TaxonomySampleCandidate):
 class TaxonomyDiversitySampleReport(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    spec_version: Literal["taxonomy-diversity-sample-v1"] = SPEC_VERSION
+    spec_version: Literal["taxonomy-diversity-sample-v1"] = "taxonomy-diversity-sample-v1"
     sample_id: str
     parser_name: str = PARSER_NAME
     parser_version: str = PARSER_VERSION
@@ -328,7 +328,9 @@ def select_taxonomy_diversity_candidates(
                 "developer diversity cap prevents reaching target_size; broaden the candidate pool"
             )
 
-        def selection_key(candidate: TaxonomySampleCandidate) -> tuple[object, ...]:
+        def selection_key(
+            candidate: TaxonomySampleCandidate,
+        ) -> tuple[Fraction, int, Fraction, Fraction, str]:
             features = _feature_tokens(candidate)
             new_feature_weight = sum(
                 (Fraction(1, frequencies[token]) for token in features - covered_features),
@@ -457,7 +459,11 @@ def _validate_feed_request(
     if set(params) != expected_keys:
         raise TaxonomySamplingError("feed raw params do not match expected request shape")
     games_count = params.get("games_count")
-    if not isinstance(games_count, int) or isinstance(games_count, bool) or not 1 <= games_count <= 100:
+    if (
+        not isinstance(games_count, int)
+        or isinstance(games_count, bool)
+        or not 1 <= games_count <= 100
+    ):
         raise TaxonomySamplingError("feed raw games_count must be an integer between 1 and 100")
     expected = {
         "with_promos": "false",
@@ -591,10 +597,9 @@ def _candidate_from_accumulator(
 
 
 def _feature_tokens(candidate: TaxonomySampleCandidate) -> set[str]:
-    return {
-        *(f"category:{value}" for value in candidate.category_ids),
-        *(f"tag:{value}" for value in candidate.tag_ids),
-    }
+    category_tokens = {f"category:{value}" for value in candidate.category_ids}
+    tag_tokens = {f"tag:{value}" for value in candidate.tag_ids}
+    return category_tokens | tag_tokens
 
 
 def _jaccard_distance(first: set[str], second: set[str]) -> Fraction:

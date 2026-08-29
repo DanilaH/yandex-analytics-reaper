@@ -12,6 +12,7 @@ from yandex_analytics_reaper.taxonomy import (
     TaxonomyDiversitySampleReport,
     TaxonomyGoldSetDeclaration,
     TaxonomyGoldSetReport,
+    build_controlled_dimension_agreement_report,
     build_primary_archetype_agreement_report,
     build_primary_archetype_validation_report,
     build_taxonomy_gold_set,
@@ -91,6 +92,17 @@ def _analyze_primary_agreement(args: argparse.Namespace) -> None:
     _emit_report(report, args.report)
 
 
+def _analyze_controlled_agreement(args: argparse.Namespace) -> None:
+    sample = _load_model(args.sample, TaxonomyDiversitySampleReport)
+    gold_set = _load_model(args.gold_set, TaxonomyGoldSetReport)
+    batches = tuple(_load_model(path, TaxonomyAnnotationBatch) for path in args.batches)
+    try:
+        report = build_controlled_dimension_agreement_report(sample, gold_set, batches)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    _emit_report(report, args.report)
+
+
 def _add_report_argument(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--report",
@@ -149,19 +161,45 @@ def build_parser() -> argparse.ArgumentParser:
     _add_report_argument(primary_validation)
     primary_validation.set_defaults(handler=_build_primary_validation)
 
-    agreement = sub.add_parser(
+    primary_agreement = sub.add_parser(
         "analyze-primary-agreement",
-        help="Analyze the exact independent source batches bound by one gold-set artifact.",
+        help="Analyze primary-archetype agreement for exact gold-bound source batches.",
     )
-    agreement.add_argument("sample", help="Path to taxonomy-diversity-sample-v1 report JSON.")
-    agreement.add_argument("gold_set", help="Path to taxonomy-gold-set-v1 report JSON.")
-    agreement.add_argument(
+    primary_agreement.add_argument(
+        "sample",
+        help="Path to taxonomy-diversity-sample-v1 report JSON.",
+    )
+    primary_agreement.add_argument(
+        "gold_set",
+        help="Path to taxonomy-gold-set-v1 report JSON.",
+    )
+    primary_agreement.add_argument(
         "batches",
         nargs="+",
         help="Source annotation batch JSON paths in exact gold-set source-batch order.",
     )
-    _add_report_argument(agreement)
-    agreement.set_defaults(handler=_analyze_primary_agreement)
+    _add_report_argument(primary_agreement)
+    primary_agreement.set_defaults(handler=_analyze_primary_agreement)
+
+    controlled_agreement = sub.add_parser(
+        "analyze-controlled-agreement",
+        help="Analyze exact-set agreement for the four frozen controlled dimensions.",
+    )
+    controlled_agreement.add_argument(
+        "sample",
+        help="Path to taxonomy-diversity-sample-v1 report JSON.",
+    )
+    controlled_agreement.add_argument(
+        "gold_set",
+        help="Path to taxonomy-gold-set-v1 report JSON.",
+    )
+    controlled_agreement.add_argument(
+        "batches",
+        nargs="+",
+        help="Source annotation batch JSON paths in exact gold-set source-batch order.",
+    )
+    _add_report_argument(controlled_agreement)
+    controlled_agreement.set_defaults(handler=_analyze_controlled_agreement)
 
     return parser
 

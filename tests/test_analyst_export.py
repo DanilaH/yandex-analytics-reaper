@@ -316,6 +316,7 @@ def test_export_is_snapshot_scoped_and_keeps_missingness(tmp_path: Path) -> None
     first, missing = export.listings
     assert first.title.value == "Old Merge"
     assert first.developer_name.value == "Old Studio"
+    assert first.first_published_at.value == "2025-08-24T01:46:40Z"
     assert first.yandex_games_rating.value == 81
     assert first.rating_count.value == 120
     assert first.title.evidence is not None
@@ -323,12 +324,26 @@ def test_export_is_snapshot_scoped_and_keeps_missingness(tmp_path: Path) -> None
     assert missing.title.value is None
     assert missing.title.missing_reason == "not_observed"
     assert missing.yandex_games_rating.value is None
-    assert export.search_supply[0].total_games_count == 42
-    assert {row.platform_listing_id for row in export.search_exposures} == {
-        "yandex_games:10",
-        "yandex_games:20",
+
+    supply = export.search_supply[0]
+    assert supply.total_games_count == 42
+    assert supply.source_field_path == "$.totalGamesCount"
+    assert supply.missing_reason is None
+
+    membership = export.comparable_memberships[0]
+    assert membership.source_queries == ("merge",)
+    assert membership.probe_run_ids
+    assert membership.raw_snapshot_ids
+    assert membership.source_object_paths
+
+    assert {
+        (row.platform_listing_id, row.exposure_kind)
+        for row in export.search_exposures
+    } == {
+        ("yandex_games:10", "organic_search"),
+        ("yandex_games:20", "organic_search"),
+        ("yandex_games:9999", "sponsored_search"),
     }
-    assert all(row.exposure_kind == "organic_search" for row in export.search_exposures)
 
 
 def test_export_keeps_feed_exposure_separate_from_metrics(tmp_path: Path) -> None:

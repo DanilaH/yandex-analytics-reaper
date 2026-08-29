@@ -42,6 +42,7 @@ Implemented:
 - explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with stable non-secret persistent-profile instance IDs plus safe cookie-state fingerprint/profile-age provenance;
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
 - frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
+- frozen `collection-cadence-v1` daily-reference/downsampling protocol plus raw-first evidence analyzer tooling; the real 28+ day cadence calibration is still pending;
 - immutable versioned search query-family declarations with exact ordered query membership and SQLite persistence;
 - provisional `yandex_search_union_v1` comparable-set construction from explicit clean search runs, with raw replay, organic union/dedupe, exact member evidence, and immutable SQLite persistence;
 - append-only update/status/media histories with direct-presence status semantics, field-level raw lineage, point-in-time readers, and immutable SQLite persistence;
@@ -59,9 +60,10 @@ Not implemented yet:
 
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
 - empirical session-profile classifications from the required real matched-block sample;
+- empirical collection-cadence decisions from the required 28+ consecutive daily reference checkpoints;
 - automated query-family execution/scheduling and taxonomy-refined comparable sets;
 - authenticated test-session credential provider;
-- production scheduled collection and empirically selected collection cadence;
+- production scheduled collection using empirically selected cadence;
 - validated taxonomy classifier;
 - historical backfill/backtesting;
 - external trend connectors;
@@ -165,6 +167,8 @@ For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical 
 
 Feed/search probes persist each raw response before interpretation and group pages into one logical run. Each later page must consume the exact continuation tokens emitted by the preceding page. A run is persisted as `completed`, `partial`, or `failed`; when a received raw response caused a terminal error, the run retains that raw snapshot ID for inspection.
 
+`probe-games` and `probe-page` also remain raw-first: raw persistence and schema/parser validation happen before normalized writes. After a successful parse they persist listing identity, available metric observations, and update/status/media history evidence into the operational SQLite database next to the selected raw root. This supports point-in-time/cadence analysis; it does not turn the manual CLI into a scheduler.
+
 JSON feed/search/get-games probes also record structural schema analyses; breaking contract drift stops interpretation after the raw response is safely stored. The HTML game-page path currently records parser failures but does not run the generic JSON structural profiler over raw HTML.
 
 ## Feed-depth calibration tooling
@@ -236,6 +240,64 @@ yandex-reaper analyze-session-profile-stability \
 ```
 
 The report replays immutable raw bodies, verifies stored page linkage and frozen request context, rejects corrupt/ineligible blocks, requires one persistent `session_instance_id` across all eligible blocks, and classifies every depth as `stable`, `material_difference`, or `inconclusive` only after the minimum sample is sufficient. Synthetic fixtures are never empirical evidence.
+
+## Collection-cadence calibration tooling
+
+`collection-cadence-v1` is frozen in `docs/spec/collection-cadence-experiment.md`. It does **not** infer an exact event rate from snapshots. It collects a daily reference series and retrospectively asks how stale that observed series would have become under candidate intervals `1 / 2 / 3 / 7` days.
+
+The result is capability-specific rather than one global timer:
+
+```text
+catalogue_metadata
+game_page
+recommendation_feed depth 1 / 3 / 5 / 10
+search depth 1 / 3 / 5 / 10 across one frozen query family
+```
+
+Before day 1, create and save/commit one JSON manifest with a fixed cohort of at least 20 `yandex_games:<appID>` listing IDs and an already-persisted query-family version. `frozen_at` must be at least two hours before the first checkpoint. Skeleton:
+
+```json
+{
+  "spec_version": "collection-cadence-v1",
+  "frozen_at": "2026-09-01T09:00:00Z",
+  "listing_ids": [
+    "yandex_games:1",
+    "yandex_games:2"
+  ],
+  "query_family_id": "example-intent",
+  "query_family_version": 1,
+  "checkpoints": [
+    {
+      "checkpoint_at": "2026-09-01T12:00:00Z",
+      "feed_run_id": "probe:<feed-day-1>",
+      "search_run_ids": ["probe:<query-a-day-1>", "probe:<query-b-day-1>"]
+    }
+  ]
+}
+```
+
+The example is intentionally abbreviated; the real manifest validator requires at least 20 distinct listing IDs and at least 28 consecutive daily checkpoints. Neighboring checkpoints must be 22–26 elapsed hours apart and remain inside the frozen UTC clock-time band.
+
+For every reference day, collect within the two hours before that day's `checkpoint_at`:
+
+1. `probe-games` for the same frozen listing cohort;
+2. `probe-page` for each frozen listing whose game-page update series is being calibrated;
+3. one clean-anonymous `probe-feed --count 20 --pages 10 ...` run;
+4. one clean-anonymous `probe-search <exact-query> --pages 10 ...` run for **every** exact member of the frozen query family.
+
+Record the returned feed/search run IDs into that day's manifest checkpoint. Keep every command on the same `--output data/raw` root so raw snapshots, normalized observations, query-family data, and probe runs resolve to the same operational database.
+
+After at least 28 complete consecutive checkpoints:
+
+```bash
+yandex-reaper analyze-collection-cadence \
+  cadence-manifest.json \
+  --output data/raw
+```
+
+The analyzer checks the manifest freeze boundary, exact query-family preexistence, daily timing guards, normalized observation provenance/lineage, raw snapshot replay, feed/search run timing, request context, parser/page linkage, and organic ranking reconstruction. The report includes a deterministic `manifest_id`, the exact submitted run bindings, and the exact normalized observation/raw snapshot IDs used for eligible state points.
+
+A capability with incomplete reference coverage returns no cadence recommendation. The tooling does not borrow another capability's cadence and does not consume the still-pending feed-depth/session-profile empirical conclusions. Synthetic tests validate mechanics only; the Phase 2 cadence parent remains incomplete until the real daily reference calibration is executed.
 
 ## Search query-family model
 

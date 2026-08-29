@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from enum import StrEnum
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION = 1
+TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH = (
+    "38cea47878b053ffc34dbfb270d4344ffcf94a05a04f19ffcff394257715d49f"
+)
 
 
 class ControlledLabelDimension(StrEnum):
@@ -53,7 +58,7 @@ class TaxonomyLabelRegistryBundle(BaseModel):
 
     def registry_for(self, dimension: ControlledLabelDimension) -> TaxonomyLabelRegistry:
         for registry in self.registries:
-            if registry.dimension is dimension:
+            if registry.dimension == dimension:
                 return registry
         raise RuntimeError(f"taxonomy registry missing dimension: {dimension.value}")
 
@@ -82,6 +87,12 @@ def normalize_taxonomy_label(value: str) -> str:
     if any(character.isspace() for character in value):
         raise ValueError("taxonomy labels cannot contain whitespace")
     return value
+
+
+def taxonomy_label_registry_content_hash(bundle: TaxonomyLabelRegistryBundle) -> str:
+    payload = bundle.model_dump(mode="json")
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 _REGISTRY_V1 = TaxonomyLabelRegistryBundle(
@@ -183,6 +194,11 @@ _REGISTRY_V1 = TaxonomyLabelRegistryBundle(
         ),
     ),
 )
+
+if taxonomy_label_registry_content_hash(_REGISTRY_V1) != TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH:
+    raise RuntimeError(
+        "taxonomy label registry v1 changed without a new version/content identity"
+    )
 
 _REGISTRY_BUNDLES = (_REGISTRY_V1,)
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Self
+
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from yandex_analytics_reaper.domain import (
@@ -39,7 +41,7 @@ class NormalizedListingHistories(BaseModel):
     media: NormalizedListingMedia | None = None
 
     @model_validator(mode="after")
-    def require_history_observation(self) -> "NormalizedListingHistories":
+    def require_history_observation(self) -> Self:
         if self.update is None and self.status is None and self.media is None:
             raise ValueError("normalized listing histories cannot be empty")
         return self

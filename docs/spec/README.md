@@ -34,7 +34,7 @@ Ownership reminder:
 ```text
 /ARCHITECTURE.md  code/runtime boundaries
 /ROADMAP.md       implementation sequencing and Definition of Done
-/docs/spec/*      living analytical/domain specifications
+/docs/spec/*      analytical/domain semantics
 /docs/research/*  dated factual observations/probes
 /docs/history/*   historical review/decision records
 ```

@@ -227,9 +227,7 @@ def _card_state_lineage(
     context: NormalizationContext,
 ) -> tuple[FieldLineage, ...]:
     base = _source_object_path(card)
-    fields: list[tuple[str, str]] = [
-        (f"{base}.appID", "platform_listing_id"),
-    ]
+    fields: list[tuple[str, str]] = [(f"{base}.appID", "platform_listing_id")]
     if state.title is not None:
         fields.append((f"{base}.title", "title"))
     if state.developer_id is not None:
@@ -243,7 +241,7 @@ def _details_state_lineage(
     context: NormalizationContext,
 ) -> tuple[FieldLineage, ...]:
     base = _source_object_path(details)
-    fields = list(_card_state_lineage(details, state, context))
+    lineage = list(_card_state_lineage(details, state, context))
     mapping = (
         (state.languages, f"{base}.features.languages", "languages"),
         (
@@ -261,18 +259,10 @@ def _details_state_lineage(
         ),
         (state.has_products, f"{base}.extraFeatures.hasProducts", "has_products"),
     )
-    fields.extend(
-        _state_lineage(context, [(source, target)])
-        for value, source, target in mapping
-        if value is not None
-    )
-    flattened: list[FieldLineage] = []
-    for item in fields:
-        if isinstance(item, FieldLineage):
-            flattened.append(item)
-        else:
-            flattened.extend(item)
-    return tuple(flattened)
+    for value, source, target in mapping:
+        if value is not None:
+            lineage.extend(_state_lineage(context, [(source, target)]))
+    return tuple(lineage)
 
 
 def _play_page_state_lineage(

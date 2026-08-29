@@ -12,6 +12,7 @@ taxonomy.md
 production-assessment.md
 market-observation.md
 feed-depth-experiment.md
+session-profile-stability-experiment.md
 historical-backtesting.md
 data-model.md
 decision-policy.md

@@ -41,6 +41,7 @@ Implemented:
 - logical paginated feed/search probe runs with deterministic context identity, ordered page/cursor linkage, terminal status, and raw error provenance;
 - explicit `clean_anonymous` and `persistent_anonymous` HTTP session mechanics for contextual feed/search probes, with stable non-secret persistent-profile instance IDs plus safe cookie-state fingerprint/profile-age provenance;
 - frozen `feed-depth-v1` protocol plus replay/analyzer tooling for explicit stored trials; the empirical calibration result is still pending;
+- frozen `session-profile-stability-v1` matched-block protocol plus replay/analyzer tooling for explicit clean/persistent feed blocks; empirical per-depth classifications are still pending;
 - shared versioned SQLite migrations for the operational store;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
@@ -54,6 +55,7 @@ Implemented:
 Not implemented yet:
 
 - empirical feed-depth recommendation from the required real `feed-depth-v1` trial sample;
+- empirical session-profile classifications from the required real matched-block sample;
 - authenticated test-session credential provider;
 - production scheduled collection and empirically selected collection cadence;
 - validated taxonomy classifier;
@@ -191,6 +193,45 @@ yandex-reaper analyze-feed-depth \
 ```
 
 The command replays raw bodies, verifies content hashes and stored page linkage, excludes sponsored cards from depth selection, reports rejected trials, and applies the predeclared thresholds. Until the minimum sample is satisfied it returns `recommended_depth = null`; do not treat synthetic fixture tests as the empirical calibration result.
+
+## Session-profile stability tooling
+
+`session-profile-stability-v1` is frozen in `docs/spec/session-profile-stability-experiment.md`. It compares `clean_anonymous` with one controlled `persistent_anonymous` profile without consuming the pending feed-depth recommendation: every run is requested up to 10 pages and the analyzer reports profile stability independently for depths `1 / 3 / 5 / 10`.
+
+One matched block contains four runs whose starts fall within 10 minutes. Alternate the two frozen orders across blocks:
+
+```text
+C-P-P-C
+P-C-C-P
+```
+
+where `C` is `clean_anonymous` and `P` is `persistent_anonymous`. Use the same local persistent profile for every `P` run in the entire experiment; do not reset the local persistent profile between blocks.
+
+Each run uses the same frozen feed shape:
+
+```bash
+yandex-reaper probe-feed \
+  --count 20 \
+  --pages 10 \
+  --session-profile clean_anonymous \
+  --lang ru \
+  --device desktop \
+  --platform desktop_other \
+  --output data/raw
+```
+
+For a `P` position, use the same command with `--session-profile persistent_anonymous`. Record every returned run ID. The analyzer derives chronological order from persisted timestamps, so the caller does not need to fake or encode chronology in the ID order.
+
+Do not classify any depth until there are at least 6 eligible blocks spanning at least 4 hours and 3 distinct UTC hour buckets, including at least 2 `C-P-P-C` and 2 `P-C-C-P` blocks. Analyze explicit block membership with repeated `--block` arguments:
+
+```bash
+yandex-reaper analyze-session-profile-stability \
+  --block probe:<c1> probe:<p1> probe:<p2> probe:<c2> \
+  --block probe:<p3> probe:<c3> probe:<c4> probe:<p4> \
+  --output data/raw
+```
+
+The report replays immutable raw bodies, verifies stored page linkage and frozen request context, rejects corrupt/ineligible blocks, requires one persistent `session_instance_id` across all eligible blocks, and classifies every depth as `stable`, `material_difference`, or `inconclusive` only after the minimum sample is sufficient. Synthetic fixtures are never empirical evidence.
 
 ## Read before changing the project
 

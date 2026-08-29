@@ -7,7 +7,10 @@ from pathlib import Path
 
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import ProbeContext, SessionProfile
-from yandex_analytics_reaper.experiments import FeedDepthExperiment
+from yandex_analytics_reaper.experiments import (
+    FeedDepthExperiment,
+    SessionProfileStabilityExperiment,
+)
 from yandex_analytics_reaper.ingestion import (
     ProbeCollectionError,
     SessionConfigurationError,
@@ -263,6 +266,25 @@ def _analyze_feed_depth(args: argparse.Namespace) -> None:
     print(report.model_dump_json(indent=2))
 
 
+def _analyze_session_profile_stability(args: argparse.Namespace) -> None:
+    store = _store(args.output)
+    database_path = _database_path(store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "collect matched session-profile blocks before analysis"
+        )
+    experiment = SessionProfileStabilityExperiment(
+        raw_store=store,
+        probe_store=SQLiteProbeRunStore(database_path),
+    )
+    try:
+        report = experiment.analyze(args.blocks)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(report.model_dump_json(indent=2))
+
+
 def _probe_games(args: argparse.Namespace) -> None:
     store = _store(args.output)
     with _client() as client:
@@ -366,6 +388,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     depth.add_argument("--output", help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.")
     depth.set_defaults(handler=_analyze_feed_depth)
+
+    session_profiles = sub.add_parser(
+        "analyze-session-profile-stability",
+        help="Replay explicit matched feed blocks and evaluate session-profile-stability-v1.",
+    )
+    session_profiles.add_argument(
+        "--block",
+        dest="blocks",
+        action="append",
+        nargs=4,
+        required=True,
+        metavar=("RUN1", "RUN2", "RUN3", "RUN4"),
+        help="Four run IDs for one matched block; repeat --block for additional blocks.",
+    )
+    session_profiles.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    session_profiles.set_defaults(handler=_analyze_session_profile_stability)
 
     games = sub.add_parser("probe-games", help="Fetch and persist rich metadata for app IDs.")
     games.add_argument("app_ids", nargs="+", type=int)

@@ -2,9 +2,9 @@
 
 `ROADMAP.md` is the single source of truth for implementation sequencing, current delivery milestones, and Definition of Done. Specifications describe semantics, not delivery order.
 
-The roadmap is now optimized for **time to useful analytical work**, not for completing every validation/research layer before the system can be used.
+The roadmap is optimized for **time to useful analytical work**, not for completing every validation/research layer before the system can be used.
 
-The project still keeps the same evidence-honesty rules:
+The project keeps the same evidence-honesty rules:
 
 - synthetic fixtures prove tooling mechanics only;
 - an unfinished empirical task cannot be consumed as if its conclusion were known;
@@ -38,7 +38,7 @@ candidate can be evaluated end to end into a traceable heuristic portfolio decis
 
 Long-running calibration and validation work proceeds in parallel when possible. It becomes a hard dependency only when a later feature would otherwise falsely present an unvalidated result as validated.
 
-A dashboard, ML model, scheduler, external trend source, historical backtest, or fully automatic classifier is **not** required to reach `START ANALYSIS`.
+A dashboard, ML model, scheduler, external trend source, historical backtest, validated taxonomy, or automatic classifier is **not** required to reach `START ANALYSIS`.
 
 ---
 
@@ -75,7 +75,9 @@ A dashboard, ML model, scheduler, external trend source, historical backtest, or
 
 ## M1 — Analyst Workbench v0 — `START ANALYSIS`
 
-Goal: make the existing evidence/market-state foundation operable as one reproducible analyst workflow. This milestone does **not** require automated discovery, a validated classifier, historical backtesting, or an empirically optimal collection cadence.
+Goal: make the existing evidence/market-state foundation operable as one reproducible analyst workflow. This milestone does **not** require automated discovery, a validated taxonomy/classifier, historical backtesting, or empirically optimal collection parameters.
+
+Early analysis is intentionally based on **explicit query families + reproducible search-derived comparable sets**. Taxonomy becomes important when the system needs to aggregate or discover opportunities automatically across the broader market; it is not a prerequisite for a human analyst to compare concrete niches.
 
 ### M1.1 — Reproducible analyst collection
 
@@ -93,11 +95,11 @@ Still required for analyst use:
 
 - [ ] expose query-family declaration/persistence through a supported operator-facing CLI/file workflow
 - [ ] expose `yandex_search_union_v1` comparable-set construction through a supported operator-facing CLI/file workflow
-- [ ] add a small reproducible **analyst collection manifest/workflow** that records the exact feed/search/query-family/rich-metadata inputs used for one analysis session
-- [ ] support an explicit **pilot collection profile** for analyst sessions without calling its depth/session/cadence empirically optimal
-- [ ] fail closed when an analyst workflow mixes incompatible contexts or incomplete/failed evidence
+- [ ] add a small reproducible **analyst snapshot manifest/workflow** that binds the exact feed/search/query-family/rich-metadata evidence used for one analysis session
+- [ ] require the snapshot to record explicit collection context/depth/session choices and label still-uncalibrated choices as provisional rather than hiding them behind an “optimal” default
+- [ ] fail closed when an analyst snapshot mixes incompatible contexts or incomplete/failed evidence
 
-The pilot profile is an operational convenience, not an empirical recommendation. Pending feed-depth/session/cadence experiments remain pending and must not be reverse-engineered from the chosen pilot defaults.
+Pending feed-depth/session/cadence experiments remain pending and must not be reverse-engineered from whatever explicit parameters were used in an early analyst snapshot.
 
 ### M1.2 — Analyst-readable market snapshot
 
@@ -124,18 +126,9 @@ Compute only transparent current-state features that are supported by already pr
 
 Do **not** fabricate unavailable competitor DAU, retention, playtime, CTR, revenue, or ARPDAU.
 
-### M1.4 — Human-in-the-loop taxonomy for selected analyses
+Taxonomy is optional at this milestone. If an analyst manually attaches draft taxonomy labels during exploratory work, those labels must remain explicitly provisional and must not be presented as validated classifier output.
 
-The existing draft taxonomy can support exploratory work before its full validation only when its status is explicit.
-
-- [x] pragmatic draft primary gameplay-archetype model
-- [x] explicit `unknown` distinct from `other`
-- [x] immutable controlled registries for mechanics/objectives/meta/tone
-- [ ] support explicit analyst/manual taxonomy labels for selected listings/comparable sets with taxonomy version + label provenance
-- [ ] mark all pre-validation taxonomy use as `provisional_manual` (or equivalent explicit status)
-- [ ] do not run a market-wide automatic taxonomy classifier before the taxonomy is frozen/validated
-
-### M1.5 — Real analyst pilot
+### M1.4 — Real analyst pilot
 
 - [ ] collect one real analyst snapshot from current Yandex evidence
 - [ ] build at least two explicit comparable sets for real game hypotheses/niches
@@ -228,7 +221,7 @@ Goal: reduce the amount of manual idea generation once M1/M2 have proved that th
 - [ ] feed surfaced candidates into the M2 dossier workflow
 - [ ] keep discovery results labeled heuristic until historical evaluation exists
 
-A validated taxonomy/classifier improves scale and consistency, but discovery must not silently call provisional labels validated. Until classifier validation lands, automated taxonomy-wide discovery may be restricted to explicitly reviewed/manual labels or clearly provisional segments.
+A validated taxonomy/classifier improves scale and consistency. Until it lands, any taxonomy-driven automatic discovery must remain explicitly provisional or be restricted to analyst-reviewed labels. Query-family-driven exploration can continue independently.
 
 **Definition of Done:** the system can surface plausible current Yandex-native candidate hypotheses and route them into the already-proven dossier loop.
 
@@ -236,7 +229,7 @@ A validated taxonomy/classifier improves scale and consistency, but discovery mu
 
 # PARALLEL EVIDENCE / VALIDATION TRACKS
 
-These tracks increase confidence and eventually replace pilot/manual defaults. They do **not** block `START ANALYSIS` unless a specific analytical feature would otherwise consume their unfinished conclusion.
+These tracks increase confidence and eventually replace provisional collection/taxonomy assumptions. They do **not** block `START ANALYSIS` unless a specific analytical feature would otherwise consume their unfinished conclusion.
 
 ## V1 — Market-collection calibration
 
@@ -245,7 +238,7 @@ These tracks increase confidence and eventually replace pilot/manual defaults. T
 - [x] freeze `feed-depth-v1` protocol and merge replay/analyzer tooling
 - [ ] execute the empirical calibration with the frozen minimum sample/time-span guards
 - [ ] record the resulting depth decision
-- [ ] replace the pilot feed depth only through an explicit versioned operating-profile change
+- [ ] replace early analyst collection parameters only through an explicit versioned operating-profile change
 
 ### Session profile
 
@@ -358,7 +351,7 @@ External trends enrich the proven Yandex-native loop; they are not prerequisites
 
 ## M8 — Own-game calibration
 
-- [ ] freeze immutable pre-build prediction/dossier snapshot
+- [ ] freeze immutable pre-build prediction/dossier snapshot for each actual release
 - [ ] capture actual development cost
 - [ ] import actual Yandex analytics/revenue
 - [ ] append realized outcome cohorts after every release
@@ -391,4 +384,4 @@ dossier usability
 explicit heuristic decision-making
 ```
 
-In particular, do not let dashboard work, ML/ranking, orchestration frameworks, broad external-source integrations, or additional statistical protocols displace the shortest path to actual analyst use.
+In particular, do not let dashboard work, ML/ranking, orchestration frameworks, broad external-source integrations, extra taxonomy machinery, or additional statistical protocols displace the shortest path to actual analyst use.

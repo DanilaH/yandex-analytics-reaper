@@ -11,6 +11,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from yandex_analytics_reaper.domain import ProbeKind, ProbeRunStatus, SessionProfile
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
+from yandex_analytics_reaper.sources.yandex.probes import probe_page_from_yandex
 from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLiteProbeRunStore
 
 SPEC_VERSION = "feed-depth-v1"
@@ -95,8 +96,10 @@ class FeedDepthReport(BaseModel):
     page_size: int = PAGE_SIZE
     submitted_run_ids: tuple[str, ...]
     eligible_run_ids: tuple[str, ...]
+    eligible_trial_count: int
     rejected_trials: tuple[RejectedFeedDepthTrial, ...]
     sample_span_hours: float
+    hour_buckets_utc: tuple[str, ...]
     distinct_hour_buckets: int
     sample_sufficient: bool
     decision_policy: FeedDepthDecisionPolicy
@@ -191,10 +194,21 @@ class FeedDepthExperiment:
 
             try:
                 parsed = parser.parse(body)
+                replayed_page = probe_page_from_yandex(
+                    run=run,
+                    context=context,
+                    metadata=metadata,
+                    page_index=page.page_index,
+                    page_info=parsed.page_info,
+                )
             except ValueError as exc:
                 raise FeedDepthEligibilityError(
-                    f"feed-depth raw page cannot be replayed by parser @{PARSER_VERSION}: {exc}"
+                    f"feed-depth raw page cannot be replayed consistently: {exc}"
                 ) from exc
+            if replayed_page != page:
+                raise FeedDepthEligibilityError(
+                    f"replayed probe page {page.page_index} does not match stored page linkage"
+                )
 
             for game in parsed.games:
                 if game.sponsored or game.app_id in seen:
@@ -250,19 +264,33 @@ def evaluate_feed_depth_trials(
     """Evaluate already replayed eligible trials using the frozen v1 policy."""
 
     eligible = tuple(trials)
-    if len({trial.run_id for trial in eligible}) != len(eligible):
+    eligible_ids = tuple(trial.run_id for trial in eligible)
+    rejected = tuple(rejected_trials)
+    rejected_ids = tuple(trial.run_id for trial in rejected)
+    if len(set(eligible_ids)) != len(eligible_ids):
         raise ValueError("eligible feed-depth trial IDs must be unique")
+    if len(set(rejected_ids)) != len(rejected_ids):
+        raise ValueError("rejected feed-depth trial IDs must be unique")
+    if set(eligible_ids) & set(rejected_ids):
+        raise ValueError("feed-depth trial cannot be both eligible and rejected")
 
-    submitted = tuple(submitted_run_ids) if submitted_run_ids is not None else tuple(
-        trial.run_id for trial in eligible
-    )
-    if len(set(submitted)) != len(submitted):
-        raise ValueError("submitted feed-depth run IDs must be unique")
+    if submitted_run_ids is None:
+        if rejected:
+            raise ValueError("rejected feed-depth trials require explicit submitted_run_ids")
+        submitted = eligible_ids
+    else:
+        submitted = tuple(submitted_run_ids)
+        if len(set(submitted)) != len(submitted):
+            raise ValueError("submitted feed-depth run IDs must be unique")
+        if set(submitted) != set(eligible_ids) | set(rejected_ids):
+            raise ValueError(
+                "submitted feed-depth IDs must exactly match eligible and rejected trial IDs"
+            )
 
     metrics = tuple(_metrics_for_depth(eligible, depth) for depth in CANDIDATE_DEPTHS)
     span_hours = _sample_span_hours(eligible)
-    hour_buckets = _distinct_hour_buckets(eligible)
-    sufficiency_reasons = _sufficiency_reasons(eligible, span_hours, hour_buckets)
+    hour_buckets = _hour_buckets_utc(eligible)
+    sufficiency_reasons = _sufficiency_reasons(eligible, span_hours, len(hour_buckets))
     sample_sufficient = not sufficiency_reasons
 
     if not sample_sufficient:
@@ -273,10 +301,12 @@ def evaluate_feed_depth_trials(
 
     return FeedDepthReport(
         submitted_run_ids=submitted,
-        eligible_run_ids=tuple(trial.run_id for trial in eligible),
-        rejected_trials=tuple(rejected_trials),
+        eligible_run_ids=eligible_ids,
+        eligible_trial_count=len(eligible),
+        rejected_trials=rejected,
         sample_span_hours=span_hours,
-        distinct_hour_buckets=hour_buckets,
+        hour_buckets_utc=hour_buckets,
+        distinct_hour_buckets=len(hour_buckets),
         sample_sufficient=sample_sufficient,
         decision_policy=FeedDepthDecisionPolicy(),
         metrics=metrics,
@@ -426,12 +456,14 @@ def _sample_span_hours(trials: Sequence[FeedDepthTrialObservation]) -> float:
     return (max(starts) - min(starts)).total_seconds() / 3600.0
 
 
-def _distinct_hour_buckets(trials: Sequence[FeedDepthTrialObservation]) -> int:
-    return len(
-        {
-            trial.started_at.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
-            for trial in trials
-        }
+def _hour_buckets_utc(trials: Sequence[FeedDepthTrialObservation]) -> tuple[str, ...]:
+    buckets = {
+        trial.started_at.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+        for trial in trials
+    }
+    return tuple(
+        value.isoformat().replace("+00:00", "Z")
+        for value in sorted(buckets)
     )
 
 

@@ -37,3 +37,29 @@ def test_cli_parses_explicit_feed_depth_run_ids() -> None:
     assert args.command == "analyze-feed-depth"
     assert args.run_ids == ["probe:one", "probe:two"]
     assert args.output == "data/raw"
+
+
+def test_cli_parses_explicit_session_profile_blocks() -> None:
+    args = build_parser().parse_args(
+        [
+            "analyze-session-profile-stability",
+            "--block",
+            "probe:one",
+            "probe:two",
+            "probe:three",
+            "probe:four",
+            "--block",
+            "probe:five",
+            "probe:six",
+            "probe:seven",
+            "probe:eight",
+            "--output",
+            "data/raw",
+        ]
+    )
+    assert args.command == "analyze-session-profile-stability"
+    assert args.blocks == [
+        ["probe:one", "probe:two", "probe:three", "probe:four"],
+        ["probe:five", "probe:six", "probe:seven", "probe:eight"],
+    ]
+    assert args.output == "data/raw"

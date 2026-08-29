@@ -52,6 +52,8 @@ The persistent anonymous cookie jar is local runtime state, not market evidence.
 
 `cookie_state_hash` is provenance for distinguishing anonymous states; it is not an authentication token and must never be used to reconstruct cookie values. The fingerprint describes the state **loaded at the start of the run**. Cookies learned during the run are persisted locally for the next persistent run, so the next run receives the next fingerprint.
 
+`cookie_state_hash` and `profile_age_days` participate in `ProbeContext` identity because they describe the actual observation state, but they are intentionally excluded from schema-drift comparison scope so normal cookie churn does not fragment schema baselines. `session_profile` remains part of schema scope because anonymous vs future authenticated surfaces may legitimately differ in shape. This scope-semantics change requires a new schema-analyzer version.
+
 Persistent state is saved when the prepared session closes, including after a partial/failed probe when possible. A local state-save failure must not replace the original collection/parser failure; the original error remains primary and the state error is attached as secondary diagnostic context.
 
 If the persistent profile is incomplete, corrupt, or has impossible time metadata, collection fails closed. Do not silently reset it and call the resulting observation the same persistent cohort.

@@ -220,17 +220,23 @@ class YandexPaginatedProbeRunner:
                 completed_at=_completion_time(self.clock(), run, last_retrieved_at),
             )
         except Exception as exc:
-            record = self.probe_store.get_run(run.id)
-            if record is None:
-                raise RuntimeError("probe run disappeared during collection") from exc
-            if record.run.status is ProbeRunStatus.RUNNING:
-                status = ProbeRunStatus.PARTIAL if record.pages else ProbeRunStatus.FAILED
-                self.probe_store.finish_run(
-                    run.id,
-                    status=status,
-                    completed_at=_completion_time(self.clock(), run, last_retrieved_at),
-                    error=_error_text(exc),
-                    error_raw_snapshot_id=error_raw_snapshot_id,
+            try:
+                record = self.probe_store.get_run(run.id)
+                if record is None:
+                    raise RuntimeError("probe run disappeared during collection")
+                if record.run.status is ProbeRunStatus.RUNNING:
+                    status = ProbeRunStatus.PARTIAL if record.pages else ProbeRunStatus.FAILED
+                    self.probe_store.finish_run(
+                        run.id,
+                        status=status,
+                        completed_at=_completion_time(self.clock(), run, last_retrieved_at),
+                        error=_error_text(exc),
+                        error_raw_snapshot_id=error_raw_snapshot_id,
+                    )
+            except Exception as finalization_exc:
+                exc.add_note(
+                    "probe terminal-state persistence also failed: "
+                    f"{_error_text(finalization_exc)}"
                 )
             raise
 

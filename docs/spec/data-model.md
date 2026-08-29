@@ -90,6 +90,8 @@ id
 source_id
 retrieved_at
 request_key
+method
+url
 request_context_json_redacted
 content_location
 content_hash
@@ -239,16 +241,64 @@ status_reason
 
 ## Probe runs / exposure
 
+`probe_contexts` deduplicates the declared observation context by deterministic canonical identity:
+
 ```text
 probe_contexts
-probe_runs
-probe_pages
-surface_exposures
+  id
+  language
+  device_type
+  platform
+  country_observed
+  collector_region
+  session_profile
+  cookie_state_hash
+  profile_age_days
 ```
 
-A probe run groups all pages belonging to one logical contextual observation.
+`probe_runs` stores one logical paginated feed/search observation:
 
-`surface_exposures` stores listing ID, page/position/row/column, surface, and selection origin (`organic/sponsored/editorial/unknown`).
+```text
+probe_runs
+  id
+  source_id
+  request_key
+  probe_kind
+  context_id
+  query_text
+  requested_page_limit
+  started_at
+  completed_at
+  status
+  error
+  error_raw_snapshot_id
+```
+
+`query_text` is required for search and absent for recommendation-feed runs. Terminal states are `completed`, `partial`, and `failed`; a running run has no completion/error metadata. `error_raw_snapshot_id` identifies the persisted raw response that caused a terminal error when one exists and remains null for failures that occur before a response is available.
+
+`probe_pages` stores the ordered raw pages of the run:
+
+```text
+probe_pages
+  run_id
+  page_index
+  source_id
+  raw_snapshot_id
+  retrieved_at
+  request_page_id
+  request_rtx_reqid
+  response_next_page_id
+  response_rtx_reqid
+  has_next_page
+```
+
+Pages must be contiguous from zero. Page 0 has no request continuation tokens. Later pages must consume exactly the prior page's emitted continuation values; no page may follow source exhaustion or a previous page that omitted required continuation tokens. Retrieval timestamps cannot move backwards.
+
+Raw-page assignment is unique by `(source_id, raw_snapshot_id)`. The same generated snapshot ID may exist under a different source identity, but one raw response within a source cannot be assigned to multiple logical probe pages.
+
+A `completed` run must contain at least one page and either reach its requested page limit or end on source exhaustion. A `partial` run contains at least one valid page plus an error. A `failed` run contains zero valid pages plus an error.
+
+`surface_exposures` will store listing ID, page/position/row/column, surface, and selection origin (`organic/sponsored/editorial/unknown`) in its later roadmap task.
 
 ## Search discovery
 

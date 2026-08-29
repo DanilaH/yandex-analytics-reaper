@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 
 from yandex_analytics_reaper.domain import (
@@ -12,6 +12,7 @@ from yandex_analytics_reaper.domain import (
     Platform,
     ProbeContext,
     ProbeKind,
+    ProbePage,
     ProbeRunStatus,
     QueryFamilyVersion,
     SessionProfile,
@@ -28,6 +29,7 @@ _SOURCE_ID = "yandex_public"
 _REQUEST_KEY = "catalogue.search"
 _PARSER_NAME = "YandexFeedParser"
 _PARSER_VERSION = "2"
+_PAGINATION_KEYS = {"page_id", "rtx-reqid"}
 
 
 class ComparableSetConstructionError(ValueError):
@@ -69,7 +71,7 @@ class YandexSearchComparableSetBuilder:
                 "comparable-set construction requires exactly one run per query-family member"
             )
 
-        declared_queries: dict[str, int] = {
+        declared_queries = {
             member.query_text: ordinal for ordinal, member in enumerate(family.members)
         }
         records_by_query: dict[str, ProbeRunRecord] = {}
@@ -213,6 +215,12 @@ class YandexSearchComparableSetBuilder:
                     raise ComparableSetConstructionError(
                         f"raw page for {run.id} does not have successful HTTP status"
                     )
+                _validate_search_request(
+                    metadata.request_context,
+                    record.context,
+                    run.query_text,
+                    page,
+                )
                 try:
                     parsed = parser.parse(body)
                     replayed_page = probe_page_from_yandex(
@@ -275,3 +283,59 @@ class YandexSearchComparableSetBuilder:
             members=members,
             evidence=tuple(evidence),
         )
+
+
+def _validate_search_request(
+    request_context: Mapping[str, object],
+    context: ProbeContext,
+    query_text: str | None,
+    page: ProbePage,
+) -> None:
+    if query_text is None:
+        raise ComparableSetConstructionError("search run unexpectedly lacks query_text")
+    if set(request_context) != {"probe_context", "query", "params"}:
+        raise ComparableSetConstructionError(
+            "search raw request context contains undeclared top-level fields"
+        )
+    if request_context.get("probe_context") != context.model_dump(mode="json"):
+        raise ComparableSetConstructionError(
+            "search raw probe_context does not match persisted ProbeContext"
+        )
+    if request_context.get("query") != query_text:
+        raise ComparableSetConstructionError(
+            "search raw query does not match persisted probe run query_text"
+        )
+    params = request_context.get("params")
+    if not isinstance(params, Mapping):
+        raise ComparableSetConstructionError("search raw request is missing params metadata")
+
+    expected_keys = {"query", "lang"}
+    if page.page_index > 0:
+        expected_keys |= _PAGINATION_KEYS
+    if set(params) != expected_keys:
+        raise ComparableSetConstructionError(
+            "search raw params do not match the frozen request shape"
+        )
+    if params.get("query") != query_text or params.get("lang") != context.language:
+        raise ComparableSetConstructionError(
+            "search raw query/lang params do not match persisted run context"
+        )
+    expected_page_id = None if page.page_index == 0 else page.request_page_id
+    expected_rtx = None if page.page_index == 0 else page.request_rtx_reqid
+    if _optional_token(params.get("page_id")) != expected_page_id:
+        raise ComparableSetConstructionError(
+            "search raw page_id does not match stored page linkage"
+        )
+    if _optional_token(params.get("rtx-reqid")) != expected_rtx:
+        raise ComparableSetConstructionError(
+            "search raw rtx-reqid does not match stored page linkage"
+        )
+
+
+def _optional_token(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ComparableSetConstructionError("search pagination token must be a string")
+    stripped = value.strip()
+    return stripped or None

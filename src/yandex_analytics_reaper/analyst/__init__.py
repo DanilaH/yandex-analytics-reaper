@@ -36,14 +36,13 @@ from .features import (
 )
 from .pilot import (
     ANALYST_PILOT_VERIFICATION_SPEC_VERSION,
-    AnalystNumericFeatureTrace,
     AnalystPilotError,
-    AnalystPilotSetVerification,
+    AnalystPilotRepresentativeTrace,
+    AnalystPilotTraceContribution,
     AnalystPilotVerificationPayload,
     AnalystPilotVerificationReport,
     AnalystPilotVerifier,
     AnalystRawEvidenceVerification,
-    AnalystTraceContribution,
     validate_analyst_pilot_verification,
 )
 from .snapshot import (
@@ -87,10 +86,10 @@ __all__ = [
     "AnalystMarketFeaturesPayload",
     "AnalystMarketFeaturesReport",
     "AnalystNumericDistribution",
-    "AnalystNumericFeatureTrace",
     "AnalystOrganicExposureSummary",
     "AnalystPilotError",
-    "AnalystPilotSetVerification",
+    "AnalystPilotRepresentativeTrace",
+    "AnalystPilotTraceContribution",
     "AnalystPilotVerificationPayload",
     "AnalystPilotVerificationReport",
     "AnalystPilotVerifier",
@@ -109,7 +108,6 @@ __all__ = [
     "AnalystSnapshotError",
     "AnalystSnapshotPayload",
     "AnalystSnapshotReport",
-    "AnalystTraceContribution",
     "AnalystUpdateObservation",
     "validate_analyst_market_export",
     "validate_analyst_market_features",

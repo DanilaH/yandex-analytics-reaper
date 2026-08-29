@@ -10,6 +10,7 @@ from yandex_analytics_reaper.domain import (
     ProbeKind,
     ProbeRun,
     ProbeRunStatus,
+    SessionProfile,
 )
 from yandex_analytics_reaper.schema_drift import DriftSeverity, SQLiteSchemaDriftRegistry
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
@@ -135,6 +136,7 @@ class YandexPaginatedProbeRunner:
     ) -> PaginatedProbeResult:
         if page_limit < 1:
             raise ValueError("page_limit must be at least 1")
+        _validate_effective_session_context(context)
 
         run = self.probe_store.create_run(
             source_id=self.client.source_id,
@@ -244,6 +246,28 @@ class YandexPaginatedProbeRunner:
         if record is None:
             raise RuntimeError("completed probe run could not be reloaded")
         return PaginatedProbeResult(record=record, parsed_pages=tuple(parsed_pages))
+
+
+def _validate_effective_session_context(context: ProbeContext) -> None:
+    if context.session_profile is SessionProfile.CLEAN_ANONYMOUS:
+        if context.cookie_state_hash is not None or context.profile_age_days != 0:
+            raise ValueError(
+                "clean_anonymous probe requires a fresh effective context "
+                "with no cookie fingerprint and profile_age_days=0"
+            )
+        return
+
+    if context.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
+        fingerprint = context.cookie_state_hash
+        if (
+            fingerprint is None
+            or len(fingerprint) != 64
+            or any(character not in "0123456789abcdef" for character in fingerprint)
+            or context.profile_age_days is None
+        ):
+            raise ValueError(
+                "persistent_anonymous probe requires effective cookie fingerprint and profile age"
+            )
 
 
 def _required_token(value: str | None, error: str) -> str:

@@ -23,6 +23,7 @@ search-query-family.md
 comparable-set.md
 analyst-snapshot.md
 listing-state-observations.md
+analyst-market-export.md
 listing-histories.md
 historical-backtesting.md
 data-model.md

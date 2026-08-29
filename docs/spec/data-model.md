@@ -266,7 +266,7 @@ listing_media_observations
   manifest_hash
 ```
 
-`source_published_at` preserves Yandex `publishedTime` without claiming it is a general `updated_at`. The current status vocabulary is intentionally conservative: directly returned catalogue/page presence is `published`; a previously known requested app omitted from one successful `get_games` response is only `unknown / requested_but_not_returned`. Transport failure is not a listing status.
+`source_published_at` preserves Yandex `publishedTime` without claiming it is a general `updated_at`. The v1 status history stores only directly observed public presence as `published`, with provenance distinguishing catalogue metadata from game-page presence. Request omission is not persisted as a status until a future batch path can prove exact requested IDs against the same successful immutable response. Transport failure is likewise not a listing status.
 
 Media history stores a canonical SHA-256 fingerprint rather than copying the opaque Yandex media DTO into the platform-neutral schema. `YandexGetGamesParser@4` distinguishes missing/non-object media (`None`) from a present empty object (`{}`). The raw manifest remains recoverable through required field lineage.
 

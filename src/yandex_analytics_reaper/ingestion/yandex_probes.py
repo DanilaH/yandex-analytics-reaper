@@ -268,6 +268,15 @@ def _validate_effective_session_context(context: ProbeContext) -> None:
             raise ValueError(
                 "persistent_anonymous probe requires effective cookie fingerprint and profile age"
             )
+        return
+
+    if context.session_profile is SessionProfile.AUTHENTICATED_TEST:
+        raise ValueError(
+            "authenticated_test probe requires an explicit credential provider; "
+            "the current paginated collector fails closed"
+        )
+
+    raise ValueError(f"unsupported session profile: {context.session_profile}")
 
 
 def _required_token(value: str | None, error: str) -> str:

@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _MIGRATIONS: dict[int, str] = {
     1: """
@@ -82,6 +82,26 @@ CREATE TABLE IF NOT EXISTS game_metric_observations (
 
 CREATE INDEX IF NOT EXISTS idx_game_metric_history
 ON game_metric_observations (platform_listing_id, metric_name, observation_id);
+""",
+    3: """
+CREATE TABLE IF NOT EXISTS observation_lineage (
+    normalized_observation_id TEXT NOT NULL
+        REFERENCES normalized_observations(id) ON DELETE CASCADE,
+    raw_snapshot_id TEXT NOT NULL,
+    source_field_path TEXT NOT NULL,
+    target_field_path TEXT NOT NULL,
+    transformation_name TEXT NOT NULL,
+    transformation_version TEXT NOT NULL,
+    PRIMARY KEY (
+        normalized_observation_id,
+        raw_snapshot_id,
+        source_field_path,
+        target_field_path
+    )
+);
+
+CREATE INDEX IF NOT EXISTS idx_observation_lineage_raw_snapshot
+ON observation_lineage (raw_snapshot_id, normalized_observation_id);
 """,
 }
 

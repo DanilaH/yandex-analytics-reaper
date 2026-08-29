@@ -1,6 +1,7 @@
 from .models import (
     CoverageStatus,
     EvidenceEnvelope,
+    FieldLineage,
     HistoricalAvailability,
     MeasurementKind,
     MissingReason,
@@ -12,6 +13,7 @@ from .models import (
 __all__ = [
     "CoverageStatus",
     "EvidenceEnvelope",
+    "FieldLineage",
     "HistoricalAvailability",
     "MeasurementKind",
     "MissingReason",

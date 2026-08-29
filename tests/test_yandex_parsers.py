@@ -9,7 +9,7 @@ from yandex_analytics_reaper.sources.yandex.parsers import (
 )
 
 
-def test_feed_parser_separates_sponsored_cards() -> None:
+def test_feed_parser_separates_sponsored_cards_and_preserves_widget_path() -> None:
     payload = {
         "feed": [
             {
@@ -50,8 +50,28 @@ def test_feed_parser_separates_sponsored_cards() -> None:
     assert parsed.games[0].sponsored is False
     assert parsed.games[1].sponsored is True
     assert parsed.games[0].yandex_rating == 74
+    assert parsed.games[0].source_object_path == "$.feed[0].widgets[0].data"
+    assert parsed.games[1].source_object_path == "$.feed[0].widgets[1].data"
     assert parsed.total_games_count == 120
     assert parsed.page_info.next_page_id == "next"
+
+
+def test_feed_parser_preserves_items_path_instead_of_guessing_widget_shape() -> None:
+    payload = {
+        "feed": [
+            {
+                "items": [
+                    {"appID": 10, "gqRating": 81},
+                    {"appID": 11, "ratingCount": 25},
+                ]
+            }
+        ]
+    }
+
+    parsed = YandexFeedParser().parse(json.dumps(payload).encode())
+
+    assert parsed.games[0].source_object_path == "$.feed[0].items[0]"
+    assert parsed.games[1].source_object_path == "$.feed[0].items[1]"
 
 
 def test_get_games_parser_keeps_yandex_rating_separate_from_player_rating() -> None:
@@ -92,6 +112,7 @@ def test_get_games_parser_keeps_yandex_rating_separate_from_player_rating() -> N
     assert game.languages == ("ru", "en")
     assert game.purchases_enabled is True
     assert game.has_products is False
+    assert game.source_object_path == "$.games[0]"
 
 
 def test_get_games_parser_distinguishes_missing_language_fields() -> None:
@@ -101,6 +122,7 @@ def test_get_games_parser_distinguishes_missing_language_fields() -> None:
 
     assert game.languages is None
     assert game.platforms is None
+    assert game.source_object_path == "$.games[0]"
 
 
 def test_play_page_parser_reads_play_page_data() -> None:

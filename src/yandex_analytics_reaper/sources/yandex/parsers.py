@@ -28,6 +28,7 @@ class GameCard(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     app_id: int
+    source_object_path: str | None = None
     title: str | None = None
     developer: Developer | None = None
     category_ids: tuple[int, ...] = ()
@@ -169,13 +170,18 @@ def _is_sponsored(game: Mapping[str, object]) -> bool:
     return bool(game.get("source") or game.get("click_link") or badge_type == "badge.direct")
 
 
-def _card(value: Mapping[str, object]) -> GameCard | None:
+def _card(
+    value: Mapping[str, object],
+    *,
+    source_object_path: str | None = None,
+) -> GameCard | None:
     app_id = _as_int(value.get("appID"))
     if app_id is None:
         return None
     badge = _string_mapping(value.get("badge")) or {}
     return GameCard(
         app_id=app_id,
+        source_object_path=source_object_path,
         title=_as_str(value.get("title")),
         developer=_developer(value.get("developer")),
         category_ids=_tuple_ints(value.get("categoryIDs")),
@@ -203,6 +209,7 @@ def _details(card: GameCard, value: Mapping[str, object]) -> GameDetails:
     media = _string_mapping(value.get("media")) or {}
     return GameDetails(
         app_id=card.app_id,
+        source_object_path=card.source_object_path,
         title=card.title,
         developer=card.developer,
         category_ids=card.category_ids,
@@ -234,7 +241,7 @@ def _details(card: GameCard, value: Mapping[str, object]) -> GameDetails:
 
 
 class YandexFeedParser:
-    version = "1"
+    version = "2"
 
     def parse(self, body: bytes) -> FeedPage:
         data = _string_mapping(_load_json(body))
@@ -245,28 +252,36 @@ class YandexFeedParser:
         seen: set[int] = set()
         feed = data.get("feed")
         if isinstance(feed, list):
-            for raw_block in feed:
+            for block_index, raw_block in enumerate(feed):
                 block = _string_mapping(raw_block)
                 if block is None:
                     continue
                 widgets = block.get("widgets")
                 if isinstance(widgets, list):
-                    for raw_widget in widgets:
+                    for widget_index, raw_widget in enumerate(widgets):
                         widget = _string_mapping(raw_widget)
                         if widget is None or widget.get("type") != "game":
                             continue
                         game_data = _string_mapping(widget.get("data"))
                         if game_data is not None:
-                            card = _card(game_data)
+                            card = _card(
+                                game_data,
+                                source_object_path=(
+                                    f"$.feed[{block_index}].widgets[{widget_index}].data"
+                                ),
+                            )
                             if card is not None and card.app_id not in seen:
                                 seen.add(card.app_id)
                                 games.append(card)
                 items = block.get("items")
                 if isinstance(items, list):
-                    for raw_item in items:
+                    for item_index, raw_item in enumerate(items):
                         item = _string_mapping(raw_item)
                         if item is not None:
-                            card = _card(item)
+                            card = _card(
+                                item,
+                                source_object_path=f"$.feed[{block_index}].items[{item_index}]",
+                            )
                             if card is not None and card.app_id not in seen:
                                 seen.add(card.app_id)
                                 games.append(card)
@@ -285,7 +300,7 @@ class YandexFeedParser:
 
 
 class YandexGetGamesParser:
-    version = "2"
+    version = "3"
 
     def parse(self, body: bytes) -> GetGamesResult:
         data = _string_mapping(_load_json(body))
@@ -296,11 +311,11 @@ class YandexGetGamesParser:
             return GetGamesResult(games=())
 
         games: list[GameDetails] = []
-        for raw_value in raw_games:
+        for game_index, raw_value in enumerate(raw_games):
             value = _string_mapping(raw_value)
             if value is None:
                 continue
-            card = _card(value)
+            card = _card(value, source_object_path=f"$.games[{game_index}]")
             if card is not None:
                 games.append(_details(card, value))
         return GetGamesResult(games=tuple(games))

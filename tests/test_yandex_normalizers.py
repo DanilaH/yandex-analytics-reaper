@@ -7,17 +7,30 @@ from pydantic import ValidationError
 
 from yandex_analytics_reaper.domain import GameMetricName, Platform, ProbeContext, SessionProfile
 from yandex_analytics_reaper.normalizers import NormalizationContext, YandexGameNormalizer
-from yandex_analytics_reaper.sources.yandex.parsers import Developer, GameDetails, PlayPageData
+from yandex_analytics_reaper.sources.yandex.parsers import (
+    Developer,
+    GameCard,
+    GameDetails,
+    PlayPageData,
+)
+
+_RAW_SNAPSHOT_ID = "20260828T180000000000Z-test"
 
 
 def _context() -> NormalizationContext:
     instant = datetime(2026, 8, 28, 18, 0, tzinfo=UTC)
-    return NormalizationContext(observed_at=instant, available_at=instant, retrieved_at=instant)
+    return NormalizationContext(
+        raw_snapshot_id=_RAW_SNAPSHOT_ID,
+        observed_at=instant,
+        available_at=instant,
+        retrieved_at=instant,
+    )
 
 
 def test_details_normalizer_converts_source_dto_to_domain_semantics() -> None:
     details = GameDetails(
         app_id=438560,
+        source_object_path="$.games[0]",
         title="Example",
         developer=Developer(id=10, name="Dev"),
         yandex_rating=86,
@@ -46,13 +59,45 @@ def test_details_normalizer_converts_source_dto_to_domain_semantics() -> None:
     assert normalized.listing_state.has_products is False
     assert normalized.listing.first_published_at == datetime.fromtimestamp(1750000000, UTC)
 
-    metrics = {metric.metric_name: metric.value for metric in normalized.metrics}
+    metrics = {item.metric.metric_name: item.metric.value for item in normalized.metrics}
     assert metrics == {
         GameMetricName.YANDEX_GAMES_RATING: 86,
         GameMetricName.PLAYER_RATING: 4.3,
         GameMetricName.RATING_COUNT: 6,
         GameMetricName.MIN_LOAD_TIME_SECONDS: 14.8,
     }
+
+    yandex_rating = next(
+        item
+        for item in normalized.metrics
+        if item.metric.metric_name is GameMetricName.YANDEX_GAMES_RATING
+    )
+    assert len(yandex_rating.lineage) == 1
+    lineage = yandex_rating.lineage[0]
+    assert lineage.raw_snapshot_id == _RAW_SNAPSHOT_ID
+    assert lineage.source_field_path == "$.games[0].gqRating"
+    assert lineage.target_field_path == "game_metric_observations.value_numeric"
+    assert lineage.transformation_name == "YandexGameNormalizer.yandex_games_rating"
+    assert lineage.transformation_version == YandexGameNormalizer.version
+
+
+def test_card_normalizer_uses_exact_feed_items_source_path() -> None:
+    card = GameCard(
+        app_id=10,
+        source_object_path="$.feed[1].items[2]",
+        yandex_rating=81,
+    )
+
+    normalized = YandexGameNormalizer().normalize_card(card, _context())
+
+    assert normalized.metrics[0].lineage[0].source_field_path == "$.feed[1].items[2].gqRating"
+
+
+def test_normalizer_rejects_metric_dto_without_parser_source_path() -> None:
+    card = GameCard(app_id=10, yandex_rating=81)
+
+    with pytest.raises(ValueError, match="missing source_object_path"):
+        YandexGameNormalizer().normalize_card(card, _context())
 
 
 def test_play_page_normalizer_preserves_boolean_false_and_publish_time() -> None:
@@ -76,6 +121,10 @@ def test_play_page_normalizer_preserves_boolean_false_and_publish_time() -> None
     assert normalized.listing_state.fullscreen_ads is False
     assert normalized.listing_state.sticky_ads is False
     assert normalized.listing_state.has_products is False
+    assert (
+        normalized.metrics[0].lineage[0].source_field_path
+        == "$.__playPageData__.gameData.gqRating"
+    )
 
 
 def test_play_page_normalizer_rejects_missing_identity() -> None:
@@ -90,18 +139,36 @@ def test_normalizer_rejects_invalid_source_timestamp() -> None:
         YandexGameNormalizer().normalize_details(details, _context())
 
 
-def test_normalization_context_requires_aware_ordered_timestamps() -> None:
+def test_normalization_context_requires_snapshot_and_aware_ordered_timestamps() -> None:
     instant = datetime(2026, 8, 28, 18, 0, tzinfo=UTC)
+
+    with pytest.raises(ValidationError, match="raw_snapshot_id"):
+        NormalizationContext(
+            raw_snapshot_id="",
+            observed_at=instant,
+            available_at=instant,
+            retrieved_at=instant,
+        )
 
     with pytest.raises(ValidationError):
         NormalizationContext(
+            raw_snapshot_id=_RAW_SNAPSHOT_ID,
             observed_at=datetime(2026, 8, 28, 18, 0),
             available_at=instant,
             retrieved_at=instant,
         )
 
+    with pytest.raises(ValidationError, match="observed_at cannot be later"):
+        NormalizationContext(
+            raw_snapshot_id=_RAW_SNAPSHOT_ID,
+            observed_at=instant + timedelta(seconds=1),
+            available_at=instant,
+            retrieved_at=instant + timedelta(seconds=2),
+        )
+
     with pytest.raises(ValidationError, match="available_at cannot be later"):
         NormalizationContext(
+            raw_snapshot_id=_RAW_SNAPSHOT_ID,
             observed_at=instant,
             available_at=instant + timedelta(seconds=1),
             retrieved_at=instant,

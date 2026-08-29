@@ -12,8 +12,9 @@ from typing import Protocol, Self
 from pydantic import BaseModel, ConfigDict, model_validator
 
 from yandex_analytics_reaper.domain import GameMetricName, GameMetricObservation
-from yandex_analytics_reaper.evidence import EvidenceEnvelope
+from yandex_analytics_reaper.evidence import EvidenceEnvelope, FieldLineage
 
+from .lineage import persist_lineage_in_connection
 from .sqlite import SQLiteDatabase
 
 
@@ -26,6 +27,7 @@ class MetricWrite(BaseModel):
     evidence: EvidenceEnvelope
     normalizer_name: str
     normalizer_version: str
+    lineage: tuple[FieldLineage, ...] = ()
 
     @model_validator(mode="after")
     def validate_contract(self) -> Self:
@@ -250,6 +252,8 @@ class SQLiteMetricStore:
         ).fetchone()
         if row is None or _canonical_row(row) != expected:
             raise ValueError(f"conflicting metric observation {observation_id}")
+
+        persist_lineage_in_connection(connection, observation_id, write.lineage)
         return observation_id
 
 

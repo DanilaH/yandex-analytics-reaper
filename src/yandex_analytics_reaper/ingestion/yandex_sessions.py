@@ -158,15 +158,16 @@ class YandexSessionManager:
         return self._profile_dir / "metadata.json"
 
     def _load_persistent_state(self, now: datetime) -> tuple[MozillaCookieJar, datetime]:
-        cookie_exists = self._cookie_path.exists()
-        metadata_exists = self._metadata_path.exists()
-        if cookie_exists != metadata_exists:
+        profile_exists = self._profile_dir.exists()
+        cookie_exists = self._cookie_path.is_file()
+        metadata_exists = self._metadata_path.is_file()
+        if cookie_exists != metadata_exists or (profile_exists and not cookie_exists):
             raise SessionStateError(
                 "persistent anonymous session state is incomplete; "
                 "delete the local profile directory to create a new baseline"
             )
 
-        if not cookie_exists:
+        if not profile_exists:
             return MozillaCookieJar(), now
 
         try:
@@ -193,16 +194,16 @@ class YandexSessionManager:
         *,
         created_at: datetime,
     ) -> None:
-        self._profile_dir.mkdir(parents=True, exist_ok=True)
         cookie_tmp = self._cookie_path.with_suffix(".tmp")
         metadata_tmp = self._metadata_path.with_suffix(".tmp")
 
-        jar = MozillaCookieJar(str(cookie_tmp))
-        for cookie in client.cookies.jar:
-            if not cookie.is_expired():
-                jar.set_cookie(copy.copy(cookie))
-
         try:
+            self._profile_dir.mkdir(parents=True, exist_ok=True)
+            jar = MozillaCookieJar(str(cookie_tmp))
+            for cookie in client.cookies.jar:
+                if not cookie.is_expired():
+                    jar.set_cookie(copy.copy(cookie))
+
             jar.save(ignore_discard=True, ignore_expires=False)
             _make_private(cookie_tmp)
             metadata = _PersistentSessionMetadata(created_at=created_at)

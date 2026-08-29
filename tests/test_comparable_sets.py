@@ -12,6 +12,7 @@ from yandex_analytics_reaper.comparables import (
 )
 from yandex_analytics_reaper.domain import (
     ComparableSetMemberEvidence,
+    ComparableSetVersion,
     ProbeContext,
     ProbeKind,
     ProbePage,
@@ -130,7 +131,7 @@ def _build_fixture(
     tmp_path: Path,
 ) -> tuple[
     QueryFamilyVersion,
-    object,
+    ComparableSetVersion,
     FilesystemRawSnapshotStore,
     SQLiteProbeRunStore,
 ]:
@@ -186,7 +187,9 @@ def test_builder_uses_family_order_unions_organic_results_and_keeps_evidence(
         for item in comparable_set.evidence
     )
     duplicate_evidence = [
-        item for item in comparable_set.evidence if item.platform_listing_id == "yandex_games:20"
+        item
+        for item in comparable_set.evidence
+        if item.platform_listing_id == "yandex_games:20"
     ]
     assert len(duplicate_evidence) == 3
 
@@ -226,7 +229,9 @@ def test_builder_rejects_raw_query_that_disagrees_with_probe_run(tmp_path: Path)
         )
 
 
-def test_store_round_trips_idempotently_and_rejects_conflicting_version(tmp_path: Path) -> None:
+def test_store_round_trips_idempotently_and_rejects_conflicting_version(
+    tmp_path: Path,
+) -> None:
     _, comparable_set, _, probe_store = _build_fixture(tmp_path)
     store = SQLiteComparableSetStore(probe_store.path)
 
@@ -240,14 +245,18 @@ def test_store_round_trips_idempotently_and_rejects_conflicting_version(tmp_path
         store.persist(changed)
 
 
-def test_store_rejects_family_membership_or_raw_page_provenance_mismatch(tmp_path: Path) -> None:
+def test_store_rejects_family_membership_or_raw_page_provenance_mismatch(
+    tmp_path: Path,
+) -> None:
     _, comparable_set, _, probe_store = _build_fixture(tmp_path)
     store = SQLiteComparableSetStore(probe_store.path)
 
     wrong_runs = comparable_set.model_copy(
         update={
             "runs": (
-                comparable_set.runs[0].model_copy(update={"query_text": "not-the-family-query"}),
+                comparable_set.runs[0].model_copy(
+                    update={"query_text": "not-the-family-query"}
+                ),
                 comparable_set.runs[1],
             )
         }

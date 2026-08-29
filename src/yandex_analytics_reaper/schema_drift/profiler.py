@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from collections import defaultdict
 from collections.abc import Mapping
@@ -12,6 +13,9 @@ from .models import FieldProfile, JsonValueType, SchemaProfile, SchemaProfileSta
 
 def profile_json_snapshot(metadata: RawSnapshotMetadata, body: bytes) -> SchemaProfile:
     """Profile exact JSON types/presence without source-specific coercion."""
+
+    if hashlib.sha256(body).hexdigest() != metadata.content_hash:
+        raise ValueError("raw body hash does not match snapshot metadata")
 
     try:
         value: object = json.loads(body)

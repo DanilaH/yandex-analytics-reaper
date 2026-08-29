@@ -56,7 +56,7 @@ def test_v3_database_migrates_to_schema_drift_registry_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 11
+        assert version[0] == 12
         columns = {
             str(row[1])
             for row in connection.execute("PRAGMA table_info(schema_observations)").fetchall()

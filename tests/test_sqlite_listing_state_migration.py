@@ -34,7 +34,7 @@ def test_v10_database_migrates_to_listing_state_schema_without_identity_loss(
     with sqlite3.connect(path) as connection:
         version = connection.execute("PRAGMA user_version").fetchone()
         assert version is not None
-        assert version[0] == 11
+        assert version[0] == 12
         tables = {
             str(row[0])
             for row in connection.execute(
@@ -51,6 +51,8 @@ def test_v10_database_migrates_to_listing_state_schema_without_identity_loss(
         assert {
             "title",
             "developer_id",
+            "developer_name",
+            "first_published_at",
             "published_at",
             "languages_json",
             "supported_platforms_json",

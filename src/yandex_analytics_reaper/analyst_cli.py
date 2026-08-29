@@ -11,11 +11,14 @@ from yandex_analytics_reaper.analyst import (
     AnalystMarketExportReport,
     AnalystMarketExporter,
     AnalystMarketFeatureBuilder,
+    AnalystMarketFeaturesReport,
+    AnalystPilotVerifier,
     AnalystSnapshotBuilder,
     AnalystSnapshotDeclaration,
     AnalystSnapshotReport,
     validate_analyst_market_export,
     validate_analyst_market_features,
+    validate_analyst_pilot_verification,
     write_analyst_export_csv,
 )
 from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
@@ -197,6 +200,28 @@ def _build_market_features(args: argparse.Namespace) -> None:
     print(f"analyst_features={report.snapshot_id} content_hash={report.content_hash}")
 
 
+def _verify_pilot(args: argparse.Namespace) -> None:
+    raw_store = _raw_store(args.output)
+    try:
+        snapshot = AnalystSnapshotReport.model_validate_json(_read_text(args.snapshot_report))
+        market_export = AnalystMarketExportReport.model_validate_json(
+            _read_text(args.market_export)
+        )
+        market_features = AnalystMarketFeaturesReport.model_validate_json(
+            _read_text(args.market_features)
+        )
+        report = AnalystPilotVerifier(raw_store=raw_store).build(
+            snapshot,
+            market_export,
+            market_features,
+        )
+        report = validate_analyst_pilot_verification(report)
+    except (OSError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    _write_report(args.report, report.model_dump_json(indent=2))
+    print(f"analyst_pilot={report.snapshot_id} content_hash={report.content_hash}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-analyst",
@@ -265,6 +290,20 @@ def build_parser() -> argparse.ArgumentParser:
     features.add_argument("market_export", help="Path to an AnalystMarketExportReport JSON file.")
     features.add_argument("--report", required=True, help="Create-only feature report JSON path.")
     features.set_defaults(handler=_build_market_features)
+
+    pilot = sub.add_parser(
+        "verify-pilot",
+        help="Replay raw evidence and verify the real M1 analyst pilot artifact chain.",
+    )
+    pilot.add_argument("snapshot_report", help="Path to an AnalystSnapshotReport JSON file.")
+    pilot.add_argument("market_export", help="Path to an AnalystMarketExportReport JSON file.")
+    pilot.add_argument("market_features", help="Path to an AnalystMarketFeaturesReport JSON file.")
+    pilot.add_argument("--report", required=True, help="Create-only pilot verification JSON path.")
+    pilot.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    pilot.set_defaults(handler=_verify_pilot)
     return parser
 
 

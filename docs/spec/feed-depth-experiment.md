@@ -12,13 +12,19 @@ This experiment does **not** decide session-profile, device, language, or long-t
 spec_version = feed-depth-v1
 analyzer_version = 1
 feed_parser_version = 2
+source_id = yandex_public
 surface = recommendation_feed
 candidate_depths = 1 / 3 / 5 / 10 pages
 page_size = 20 requested cards
 baseline_language = ru
 baseline_device_type = desktop
 baseline_platform = desktop_other
+baseline_country_observed = null
+baseline_collector_region = null
 baseline_session_profile = clean_anonymous
+stable feed params = games_count=20, with_promos=false, lang=ru,
+                     device-type=desktop, platform=desktop_other
+only page_id / rtx-reqid may vary between pages
 ```
 
 A trial is one logical `ProbeRun` requested at **up to 10 pages**. Depths 1/3/5/10 are derived as prefixes of that same run. Do not collect four independent runs for the four candidate depths: doing so would mix depth effects with time/random/session variation.
@@ -34,6 +40,7 @@ Within a trial, an app ID enters the organic ranked list at its first organic oc
 A trial is eligible only when all of the following hold:
 
 ```text
+source_id = yandex_public
 probe_kind = recommendation_feed
 status = completed
 requested_page_limit = 10
@@ -45,12 +52,16 @@ profile_age_days = 0
 language = ru
 device_type = desktop
 platform = desktop_other
-every persisted raw page requested games_count = 20
+country_observed = null
+collector_region = null
+every persisted raw page has exactly the frozen stable feed params
+pagination request params match the stored cursor chain
 all raw bodies still match their persisted content hashes
 all persisted pages can be replayed by YandexFeedParser@2
+replayed raw request/context/response pagination reconstructs the stored ProbePage exactly
 ```
 
-A run that becomes `partial`/`failed`, has a non-contiguous page chain, has missing/tampered raw data, uses a different context, or stops before page 10 without source exhaustion is not silently coerced into an eligible trial.
+A run that becomes `partial`/`failed`, has a non-contiguous page chain, has missing/tampered raw data, uses a different source/context/request cohort, contains an undeclared feed parameter, or stops before page 10 without source exhaustion is not silently coerced into an eligible trial.
 
 Operational failures are not evidence that a shallower depth is analytically sufficient. They must be diagnosed separately rather than converted into artificial depth wins.
 
@@ -140,7 +151,7 @@ eligible trial IDs
 rejected trials + reasons
 sample size
 sample time span
-represented hour buckets
+represented UTC hour buckets
 per-depth metrics
 recommended depth or null
 sample_sufficient boolean

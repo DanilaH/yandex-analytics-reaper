@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import argparse
+from collections.abc import Sequence
+from pathlib import Path
+
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
+from yandex_analytics_reaper.config import load_settings
+from yandex_analytics_reaper.domain import QueryFamilyVersion
+from yandex_analytics_reaper.storage import (
+    FilesystemRawSnapshotStore,
+    SQLiteComparableSetStore,
+    SQLiteProbeRunStore,
+    SQLiteQueryFamilyStore,
+)
+
+
+class SearchComparableSetDeclaration(BaseModel):
+    """Explicit file input for one reproducible yandex_search_union_v1 build."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    set_id: str
+    version: int = Field(ge=1)
+    query_family_id: str
+    query_family_version: int = Field(ge=1)
+    created_at: AwareDatetime
+    run_ids: tuple[str, ...] = Field(min_length=1)
+
+    @field_validator("set_id", "query_family_id")
+    @classmethod
+    def validate_trimmed_non_blank(cls, value: str) -> str:
+        if not value:
+            raise ValueError("declaration identifiers cannot be blank")
+        if value != value.strip():
+            raise ValueError("declaration identifiers must already be trimmed")
+        return value
+
+    @model_validator(mode="after")
+    def validate_run_ids(self) -> SearchComparableSetDeclaration:
+        if any(not run_id or run_id != run_id.strip() for run_id in self.run_ids):
+            raise ValueError("run_ids must be non-blank and already trimmed")
+        if len(set(self.run_ids)) != len(self.run_ids):
+            raise ValueError("run_ids must be unique")
+        return self
+
+
+def _raw_store(output: str | None) -> FilesystemRawSnapshotStore:
+    settings = load_settings()
+    root = Path(output) if output else settings.data_dir / "raw"
+    return FilesystemRawSnapshotStore(root)
+
+
+def _database_path(raw_store: FilesystemRawSnapshotStore) -> Path:
+    return raw_store.root.parent / "market.sqlite3"
+
+
+def _read_text(path: str) -> str:
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def _persist_query_family(args: argparse.Namespace) -> None:
+    raw_store = _raw_store(args.output)
+    try:
+        family = QueryFamilyVersion.model_validate_json(_read_text(args.declaration))
+        stored = SQLiteQueryFamilyStore(_database_path(raw_store)).persist(family)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(stored.model_dump_json(indent=2))
+
+
+def _build_search_comparable_set(args: argparse.Namespace) -> None:
+    raw_store = _raw_store(args.output)
+    database_path = _database_path(raw_store)
+    if not database_path.is_file():
+        raise SystemExit(
+            f"operational database not found: {database_path}; "
+            "persist the query family and collect its search runs first"
+        )
+
+    try:
+        declaration = SearchComparableSetDeclaration.model_validate_json(
+            _read_text(args.declaration)
+        )
+        family = SQLiteQueryFamilyStore(database_path).get(
+            declaration.query_family_id,
+            declaration.query_family_version,
+        )
+        if family is None:
+            raise ValueError(
+                "referenced query-family version is not persisted: "
+                f"{declaration.query_family_id}@{declaration.query_family_version}"
+            )
+        comparable_set = YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=SQLiteProbeRunStore(database_path),
+        ).build(
+            family,
+            declaration.run_ids,
+            set_id=declaration.set_id,
+            version=declaration.version,
+            created_at=declaration.created_at,
+        )
+        stored = SQLiteComparableSetStore(database_path).persist(comparable_set)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    print(stored.model_dump_json(indent=2))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="yandex-reaper-analyst",
+        description="Offline operator workflow over already persisted Yandex evidence.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    family = sub.add_parser(
+        "persist-query-family",
+        help="Validate and persist one immutable QueryFamilyVersion JSON declaration.",
+    )
+    family.add_argument("declaration", help="Path to a QueryFamilyVersion JSON file.")
+    family.add_argument("--output", help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.")
+    family.set_defaults(handler=_persist_query_family)
+
+    comparable = sub.add_parser(
+        "build-search-comparable-set",
+        help="Replay explicit completed search runs into yandex_search_union_v1.",
+    )
+    comparable.add_argument(
+        "declaration",
+        help="Path to a SearchComparableSetDeclaration JSON file.",
+    )
+    comparable.add_argument(
+        "--output",
+        help="Raw snapshot root. Defaults to REAPER_DATA_DIR/raw.",
+    )
+    comparable.set_defaults(handler=_build_search_comparable_set)
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    handler = args.handler
+    handler(args)

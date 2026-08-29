@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from yandex_analytics_reaper.analyst_cli import (
     SearchComparableSetDeclaration,
@@ -131,6 +132,21 @@ def test_analyst_cli_parses_operator_commands() -> None:
     assert comparable.output == "data/raw"
 
 
+def test_comparable_declaration_requires_frozen_construction_method() -> None:
+    with pytest.raises(ValidationError, match="yandex_search_union_v1"):
+        SearchComparableSetDeclaration.model_validate(
+            {
+                "construction_method": "different_method",
+                "set_id": "merge-search",
+                "version": 1,
+                "query_family_id": "merge-games",
+                "query_family_version": 1,
+                "created_at": "2026-08-29T17:10:00Z",
+                "run_ids": ["probe:one"],
+            }
+        )
+
+
 def test_persist_query_family_command_round_trips_to_operational_store(
     tmp_path: Path,
 ) -> None:
@@ -169,6 +185,7 @@ def test_build_search_comparable_set_command_replays_and_persists_explicit_runs(
     )
     run_id = _persist_completed_search_run(tmp_path)
     declaration = SearchComparableSetDeclaration(
+        construction_method="yandex_search_union_v1",
         set_id="merge-search",
         version=1,
         query_family_id=family.family_id,
@@ -182,6 +199,14 @@ def test_build_search_comparable_set_command_replays_and_persists_explicit_runs(
         encoding="utf-8",
     )
 
+    main(
+        [
+            "build-search-comparable-set",
+            str(declaration_path),
+            "--output",
+            str(tmp_path / "raw"),
+        ]
+    )
     main(
         [
             "build-search-comparable-set",
@@ -204,6 +229,7 @@ def test_build_search_comparable_set_command_replays_and_persists_explicit_runs(
 def test_build_search_comparable_set_rejects_missing_query_family(tmp_path: Path) -> None:
     SQLiteProbeRunStore(tmp_path / "market.sqlite3")
     declaration = SearchComparableSetDeclaration(
+        construction_method="yandex_search_union_v1",
         set_id="missing-family",
         version=1,
         query_family_id="missing",

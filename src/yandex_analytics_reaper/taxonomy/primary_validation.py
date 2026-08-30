@@ -20,8 +20,8 @@ from .gold_set import (
 from .models import PrimaryGameplayArchetype
 from .sampling import (
     SPEC_VERSION as TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
-    TaxonomyDiversitySampleReport,
 )
+from .sampling import TaxonomyDiversitySampleReport
 
 PRIMARY_ARCHETYPE_VALIDATION_SPEC_VERSION: Literal[
     "taxonomy-primary-archetype-validation-v1"

@@ -4,6 +4,7 @@ import hashlib
 import json
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
+from itertools import pairwise
 from math import isfinite
 from pathlib import Path
 from typing import Self
@@ -45,12 +46,16 @@ from .collection_cadence import (
 from .collection_cadence_evidence import (
     CadenceCheckpointInput,
     CollectionCadenceEvidenceError,
-    CollectionCadenceExperiment as _EvidenceExperiment,
-    CollectionCadenceManifest as _EvidenceManifest,
     RejectedCadenceSeries,
     _latest_media,
     _latest_metric,
     _latest_update,
+)
+from .collection_cadence_evidence import (
+    CollectionCadenceExperiment as _EvidenceExperiment,
+)
+from .collection_cadence_evidence import (
+    CollectionCadenceManifest as _EvidenceManifest,
 )
 
 _SOURCE_ID = "yandex_public"
@@ -545,16 +550,16 @@ def _validate_checkpoint_schedule(values: Sequence[datetime]) -> None:
     utc_times = tuple(_utc(value) for value in values)
     if any(
         current <= previous
-        for previous, current in zip(utc_times, utc_times[1:], strict=False)
+        for previous, current in pairwise(utc_times)
     ):
         raise ValueError("cadence checkpoints must be strictly increasing")
     dates = tuple(item.date() for item in utc_times)
     if len(dates) != len(set(dates)):
         raise ValueError("cadence plan must contain one checkpoint per UTC date")
-    for previous, current in zip(dates, dates[1:], strict=False):
+    for previous, current in pairwise(dates):
         if (current - previous).days != 1:
             raise ValueError("cadence checkpoint UTC dates must be consecutive")
-    for previous, current in zip(utc_times, utc_times[1:], strict=False):
+    for previous, current in pairwise(utc_times):
         spacing = current - previous
         if not _MIN_DAILY_SPACING <= spacing <= _MAX_DAILY_SPACING:
             raise ValueError("cadence checkpoints must be spaced 22 to 26 hours apart")
@@ -571,10 +576,7 @@ def _circular_clock_span_seconds(values: Sequence[int]) -> int:
     ordered = sorted(values)
     if len(ordered) == 1:
         return 0
-    gaps = [
-        current - previous
-        for previous, current in zip(ordered, ordered[1:], strict=False)
-    ]
+    gaps = [current - previous for previous, current in pairwise(ordered)]
     gaps.append(_DAY_SECONDS - ordered[-1] + ordered[0])
     return _DAY_SECONDS - max(gaps)
 

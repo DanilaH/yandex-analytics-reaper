@@ -96,6 +96,7 @@ def test_get_games_normalization_persists_state_metrics_histories_and_raw_lineag
     assert states[0].observation.developer_id == "yandex_games:77"
     assert states[0].observation.languages == ("ru", "en")
     assert states[0].observation.leaderboards is False
+    assert states[0].normalizer_version == "4"
 
     metric_store = SQLiteMetricStore(database_path)
     rating = metric_store.metric_history(
@@ -107,7 +108,9 @@ def test_get_games_normalization_persists_state_metrics_histories_and_raw_lineag
         GameMetricName.RATING_COUNT,
     )
     assert rating[0].metric.value == 86
+    assert rating[0].normalizer_version == "2"
     assert rating_count[0].metric.value == 6
+    assert rating_count[0].normalizer_version == "2"
 
     history_store = SQLiteListingHistoryStore(database_path)
     statuses = history_store.status_history(first.platform_listing_id)
@@ -131,6 +134,12 @@ def test_get_games_normalization_persists_state_metrics_histories_and_raw_lineag
         resolved = raw_store.get_metadata("yandex_public", metadata.id)
         assert resolved.content_hash == metadata.content_hash
         assert raw_store.get_body("yandex_public", metadata.id) == body
+
+    state_lineage = lineage_store.for_observation(first.listing_state_observation_id)
+    assert {item.transformation_version for item in state_lineage} == {"4"}
+    for observation_id in first.metric_observation_ids:
+        metric_lineage = lineage_store.for_observation(observation_id)
+        assert {item.transformation_version for item in metric_lineage} == {"2"}
 
 
 def test_play_page_normalization_persists_state_and_update_from_same_raw_snapshot(
@@ -177,6 +186,14 @@ def test_play_page_normalization_persists_state_and_update_from_same_raw_snapsho
     assert states[0].observation.app_version == "1.2.3"
     assert states[0].observation.has_products is False
     assert states[0].observation.fullscreen_ads is False
+    assert states[0].normalizer_version == "4"
+
+    metrics = SQLiteMetricStore(database_path).metric_history(
+        persisted.platform_listing_id,
+        GameMetricName.YANDEX_GAMES_RATING,
+    )
+    assert len(metrics) == 1
+    assert metrics[0].normalizer_version == "2"
 
     updates = SQLiteListingHistoryStore(database_path).update_history(
         persisted.platform_listing_id

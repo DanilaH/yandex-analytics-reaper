@@ -66,7 +66,9 @@ def test_cookie_fingerprint_and_profile_age_do_not_fragment_schema_scope() -> No
         profile_age_days=12,
     )
 
-    assert schema_comparison_scope_for_snapshot(first) == schema_comparison_scope_for_snapshot(later)
+    assert schema_comparison_scope_for_snapshot(first) == schema_comparison_scope_for_snapshot(
+        later
+    )
 
 
 def test_nullable_session_instance_is_backward_compatible_with_legacy_scope() -> None:
@@ -106,7 +108,9 @@ def test_persistent_session_instance_remains_part_of_schema_scope() -> None:
         profile_age_days=0,
     )
 
-    assert schema_comparison_scope_for_snapshot(first) != schema_comparison_scope_for_snapshot(reset)
+    assert schema_comparison_scope_for_snapshot(first) != schema_comparison_scope_for_snapshot(
+        reset
+    )
 
 
 def test_session_profile_remains_part_of_schema_scope() -> None:

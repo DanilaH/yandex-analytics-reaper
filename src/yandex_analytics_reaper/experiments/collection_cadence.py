@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from datetime import date
 from enum import StrEnum
+from itertools import pairwise
 from math import floor
 from statistics import median
 from typing import Self
@@ -111,12 +112,14 @@ class RankingSeriesObservation(BaseModel):
             raise ValueError("ranking cadence series must be feed or search")
         if self.depth not in RANKING_DEPTHS:
             raise ValueError("ranking cadence depth must be 1, 3, 5, or 10")
-        if self.capability is CadenceCapability.RECOMMENDATION_FEED:
-            if self.query_text is not None:
-                raise ValueError("feed cadence series cannot carry query_text")
-        else:
-            if self.query_text is None:
-                raise ValueError("search cadence series requires query_text")
+        if (
+            self.capability is CadenceCapability.RECOMMENDATION_FEED
+            and self.query_text is not None
+        ):
+            raise ValueError("feed cadence series cannot carry query_text")
+        if self.capability is CadenceCapability.SEARCH and self.query_text is None:
+            raise ValueError("search cadence series requires query_text")
+        if self.query_text is not None:
             _require_exact_non_blank(self.query_text, "query_text")
         _validate_reference_dates(tuple(point.reference_date for point in self.points))
         return self
@@ -217,8 +220,7 @@ def evaluate_collection_cadence(
     reference_dates = _shared_reference_dates(state_series, ranking_series)
 
     signal_reports = tuple(
-        _evaluate_state_signal(signal, state_series)
-        for signal in CadenceStateSignal
+        _evaluate_state_signal(signal, state_series) for signal in CadenceStateSignal
     )
     capability_reports = (
         _evaluate_state_capability(CadenceCapability.CATALOGUE_METADATA, signal_reports),
@@ -250,7 +252,9 @@ def _evaluate_state_signal(
     series = [item for item in all_series if item.signal is signal]
     capability = _signal_capability(signal)
     minimum_required = MIN_LISTING_SERIES
-    diagnostic_only = signal is CadenceStateSignal.MEDIA_MANIFEST and len(series) < minimum_required
+    diagnostic_only = (
+        signal is CadenceStateSignal.MEDIA_MANIFEST and len(series) < minimum_required
+    )
     sample_sufficient = len(series) >= minimum_required
 
     metrics: list[StateCandidateMetrics] = []
@@ -295,6 +299,8 @@ def _evaluate_state_capability(
     signal_reports: Sequence[StateSignalReport],
 ) -> StateCapabilityReport:
     reports = {report.signal: report for report in signal_reports}
+    required: tuple[CadenceStateSignal, ...]
+    participating: tuple[CadenceStateSignal, ...]
     if capability is CadenceCapability.CATALOGUE_METADATA:
         required = (
             CadenceStateSignal.YANDEX_GAMES_RATING,
@@ -473,25 +479,27 @@ def _assert_daily_identity(
     state_reports: Sequence[StateSignalReport],
     ranking_reports: Sequence[RankingCadenceReport],
 ) -> None:
-    for report in state_reports:
-        if report.series_count == 0:
+    for state_report in state_reports:
+        if state_report.series_count == 0:
             continue
-        metric = _state_metric_for_interval(report, 1)
+        state_metric = _state_metric_for_interval(state_report, 1)
         if (
-            metric.median_reference_match_ratio != 1.0
-            or metric.p25_reference_match_ratio != 1.0
-            or metric.minimum_reference_match_ratio != 1.0
+            state_metric.median_reference_match_ratio != 1.0
+            or state_metric.p25_reference_match_ratio != 1.0
+            or state_metric.minimum_reference_match_ratio != 1.0
         ):
             raise RuntimeError("daily state cadence must be identity against its reference")
-    for report in ranking_reports:
-        if report.series_count == 0:
+    for ranking_report in ranking_reports:
+        if ranking_report.series_count == 0:
             continue
-        metric = next(item for item in report.metrics if item.interval_days == 1)
+        ranking_metric = next(
+            item for item in ranking_report.metrics if item.interval_days == 1
+        )
         if (
-            metric.median_series_median_jaccard != 1.0
-            or metric.p25_series_median_jaccard != 1.0
-            or metric.median_series_median_ranked_overlap != 1.0
-            or metric.p25_series_median_ranked_overlap != 1.0
+            ranking_metric.median_series_median_jaccard != 1.0
+            or ranking_metric.p25_series_median_jaccard != 1.0
+            or ranking_metric.median_series_median_ranked_overlap != 1.0
+            or ranking_metric.p25_series_median_ranked_overlap != 1.0
         ):
             raise RuntimeError("daily ranking cadence must be identity against its reference")
 
@@ -501,9 +509,11 @@ def _shared_reference_dates(
     ranking_series: Sequence[RankingSeriesObservation],
 ) -> tuple[date, ...]:
     all_dates = [
-        tuple(point.reference_date for point in series.points)
-        for series in (*state_series, *ranking_series)
+        tuple(point.reference_date for point in series.points) for series in state_series
     ]
+    all_dates.extend(
+        tuple(point.reference_date for point in series.points) for series in ranking_series
+    )
     if not all_dates:
         raise ValueError("collection cadence evaluation requires at least one series")
     expected = all_dates[0]
@@ -516,7 +526,8 @@ def _validate_unique_series_ids(
     state_series: Sequence[StateSeriesObservation],
     ranking_series: Sequence[RankingSeriesObservation],
 ) -> None:
-    series_ids = [series.series_id for series in (*state_series, *ranking_series)]
+    series_ids = [series.series_id for series in state_series]
+    series_ids.extend(series.series_id for series in ranking_series)
     if len(series_ids) != len(set(series_ids)):
         raise ValueError("collection cadence series IDs must be globally unique")
 
@@ -551,7 +562,7 @@ def _validate_reference_dates(values: Sequence[date]) -> None:
         raise ValueError("cadence reference dates must be unique")
     if tuple(values) != tuple(sorted(values)):
         raise ValueError("cadence reference dates must be strictly increasing")
-    for previous, current in zip(values, values[1:], strict=False):
+    for previous, current in pairwise(values):
         if (current - previous).days != 1:
             raise ValueError("cadence reference dates must be consecutive UTC dates")
 

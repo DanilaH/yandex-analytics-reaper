@@ -404,12 +404,16 @@ class AnalystMarketExporter:
     ) -> AnalystResolvedValue:
         scoped: list[tuple[PersistedMetricObservation, tuple[FieldLineage, ...]]] = []
         for observation in self.metric_store.metric_history(listing_id, metric_name):
-            lineage = self.lineage_store.for_observation(observation.observation_id)
-            if lineage and all(item.raw_snapshot_id in rich_raw_ids for item in lineage):
-                scoped.append((observation, lineage))
+            observation_lineage = self.lineage_store.for_observation(
+                observation.observation_id
+            )
+            if observation_lineage and all(
+                item.raw_snapshot_id in rich_raw_ids for item in observation_lineage
+            ):
+                scoped.append((observation, observation_lineage))
         if not scoped:
             return _missing()
-        observation, lineage = scoped[-1]
+        observation, selected_lineage = scoped[-1]
         return AnalystResolvedValue(
             value=observation.metric.value,
             evidence=_evidence_reference(
@@ -418,7 +422,7 @@ class AnalystMarketExporter:
                 observation.evidence.retrieved_at,
                 observation.normalizer_name,
                 observation.normalizer_version,
-                lineage,
+                selected_lineage,
             ),
         )
 
@@ -430,9 +434,9 @@ class AnalystMarketExporter:
         rows: list[AnalystUpdateObservation] = []
         for listing_id in listing_ids:
             for update in self.history_store.update_history(listing_id):
-                lineage = self.lineage_store.for_observation(update.observation_id)
-                if not lineage or not all(
-                    item.raw_snapshot_id in rich_raw_ids for item in lineage
+                update_lineage = self.lineage_store.for_observation(update.observation_id)
+                if not update_lineage or not all(
+                    item.raw_snapshot_id in rich_raw_ids for item in update_lineage
                 ):
                     continue
                 rows.append(
@@ -447,10 +451,10 @@ class AnalystMarketExporter:
                             else _iso(update.observation.source_published_at)
                         ),
                         raw_snapshot_ids=_ordered_unique(
-                            item.raw_snapshot_id for item in lineage
+                            item.raw_snapshot_id for item in update_lineage
                         ),
                         source_field_paths=_ordered_unique(
-                            item.source_field_path for item in lineage
+                            item.source_field_path for item in update_lineage
                         ),
                     )
                 )
@@ -716,10 +720,7 @@ def _resolve_state_value(
         if not lineage:
             continue
         exported: str | int | float | bool | tuple[str, ...]
-        if isinstance(value, datetime):
-            exported = _iso(value)
-        else:
-            exported = value
+        exported = _iso(value) if isinstance(value, datetime) else value
         return AnalystResolvedValue(
             value=exported,
             evidence=_evidence_reference(

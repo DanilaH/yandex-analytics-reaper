@@ -135,7 +135,7 @@ def test_daily_changing_required_metric_forces_daily_catalogue_cadence() -> None
     assert every_other.median_reference_match_ratio == 0.5
 
 
-def test_alternating_feed_ranking_forces_daily_at_that_depth() -> None:
+def test_alternating_feed_ranking_follows_frozen_v1_median_policy() -> None:
     first = ("yandex_games:1", "yandex_games:2", "yandex_games:3")
     second = ("yandex_games:4", "yandex_games:5", "yandex_games:6")
     rankings = tuple(first if index % 2 == 0 else second for index in range(28))
@@ -154,9 +154,11 @@ def test_alternating_feed_ranking_forces_daily_at_that_depth() -> None:
         if item.capability is CadenceCapability.RECOMMENDATION_FEED and item.depth == 1
     )
     assert depth1.sample_sufficient is True
-    assert depth1.recommended_interval_days == 1
+    assert depth1.recommended_interval_days == 7
     every_other = next(item for item in depth1.metrics if item.interval_days == 2)
+    weekly = next(item for item in depth1.metrics if item.interval_days == 7)
     assert every_other.passes is False
+    assert weekly.passes is True
 
 
 def test_stable_search_family_recommends_weekly() -> None:
@@ -211,7 +213,7 @@ def test_reference_dates_must_be_consecutive_and_shared() -> None:
     dates = list(_dates())
     dates[10] += timedelta(days=1)
 
-    with pytest.raises(ValidationError, match="unique|consecutive"):
+    with pytest.raises(ValidationError, match=r"unique|consecutive"):
         StateSeriesObservation(
             series_id="broken",
             capability=CadenceCapability.GAME_PAGE,

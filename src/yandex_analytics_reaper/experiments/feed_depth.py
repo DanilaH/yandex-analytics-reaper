@@ -479,8 +479,7 @@ def _recommend_depth(metrics: Sequence[FeedDepthMetrics]) -> tuple[int, tuple[st
 
     return (
         10,
-        tuple(failures)
-        + ("no shallower candidate passed every predeclared threshold; use depth 10",),
+        (*failures, "no shallower candidate passed every predeclared threshold; use depth 10"),
     )
 
 

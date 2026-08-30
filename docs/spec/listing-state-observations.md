@@ -143,6 +143,17 @@ Do not infer a new update/status event merely because a later listing-state row 
 
 ## Versioning
 
-`YandexGameNormalizer` v3 introduced persisted listing-state field lineage. Existing v2 normalized observations remain valid historical evidence.
+Metric and listing-state transformations are versioned independently even though they are implemented by the same `YandexGameNormalizer` class. A listing-state-only schema/lineage addition must not rewrite the semantic identity of unchanged metric transformations.
 
-`YandexGameNormalizer` v4 adds snapshot-scoped `developer_name` and `first_published_at` lineage required by `analyst-market-export-v1`. Existing v3 observations remain valid; they simply cannot provide those two fields to a frozen export unless they were actually observed/persisted under a supporting normalizer version.
+Current version identities are:
+
+```text
+YandexGameNormalizer.metric_version = 2
+YandexGameNormalizer.listing_state_version = 4
+```
+
+Metric v2 remains the frozen metric evidence identity used by `collection-cadence-v1`. The later listing-state work did not change the `gqRating`, `rating`, `ratingCount`, or `minLoadTime` transformation semantics.
+
+Listing-state v3 introduced persisted listing-state field lineage. Existing v2 normalized observations remain valid historical evidence.
+
+Listing-state v4 adds snapshot-scoped `developer_name` and `first_published_at` lineage required by `analyst-market-export-v1`. Existing v3 observations remain valid; they simply cannot provide those two fields to a frozen export unless they were actually observed/persisted under a supporting listing-state normalizer version.

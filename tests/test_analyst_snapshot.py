@@ -295,7 +295,7 @@ def test_builder_rejects_feed_from_different_effective_context(tmp_path: Path) -
     feed_run_id = _persist_feed_run(tmp_path, different_context)
     raw_snapshot_id = _persist_get_games_snapshot(tmp_path, 10)
 
-    with pytest.raises(AnalystSnapshotError, match="does not match.*effective context"):
+    with pytest.raises(AnalystSnapshotError, match=r"does not match.*effective context"):
         AnalystSnapshotBuilder(
             raw_store=FilesystemRawSnapshotStore(tmp_path / "raw"),
             database_path=tmp_path / "market.sqlite3",

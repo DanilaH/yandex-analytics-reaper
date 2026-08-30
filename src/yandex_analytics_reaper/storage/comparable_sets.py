@@ -194,15 +194,15 @@ class SQLiteComparableSetStore:
         if (
             comparable_set.construction_method
             is ComparableSetConstructionMethod.YANDEX_SEARCH_UNION_V1
-        ):
-            if (
+            and (
                 comparable_set.source_id != _YANDEX_SOURCE_ID
                 or comparable_set.parser_name != _YANDEX_PARSER_NAME
                 or comparable_set.parser_version != _YANDEX_PARSER_VERSION
-            ):
-                raise ValueError(
-                    "yandex_search_union_v1 requires frozen Yandex source/parser semantics"
-                )
+            )
+        ):
+            raise ValueError(
+                "yandex_search_union_v1 requires frozen Yandex source/parser semantics"
+            )
 
         family_row = connection.execute(
             """

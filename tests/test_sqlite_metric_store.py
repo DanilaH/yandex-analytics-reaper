@@ -258,13 +258,68 @@ def test_v1_identity_database_migrates_to_metric_schema_without_data_loss(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "market.sqlite3"
-    identity = SQLiteIdentityStore(path)
     observed_at = datetime(2026, 8, 29, 0, 0, tzinfo=UTC)
-    identity.persist_listing_identity(_listing(), None, observed_at)
+    observed_at_text = observed_at.isoformat().replace("+00:00", "Z")
 
     with sqlite3.connect(path) as connection:
-        connection.execute("DROP TABLE game_metric_observations")
-        connection.execute("DROP TABLE normalized_observations")
+        connection.executescript(
+            """
+            CREATE TABLE platform_listings (
+                id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                external_app_id TEXT NOT NULL,
+                listing_url TEXT,
+                developer_external_id TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                first_published_at TEXT,
+                UNIQUE (platform, external_app_id)
+            );
+
+            CREATE TABLE platform_developers (
+                id TEXT PRIMARY KEY,
+                platform TEXT NOT NULL,
+                external_developer_id TEXT NOT NULL,
+                display_name TEXT,
+                first_seen_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL,
+                UNIQUE (platform, external_developer_id)
+            );
+
+            CREATE TABLE listing_developer_observations (
+                listing_id TEXT NOT NULL
+                    REFERENCES platform_listings(id) ON DELETE CASCADE,
+                developer_id TEXT NOT NULL REFERENCES platform_developers(id),
+                observed_at TEXT NOT NULL,
+                PRIMARY KEY (listing_id, observed_at)
+            );
+
+            CREATE INDEX idx_listing_developer_observations_developer
+            ON listing_developer_observations (developer_id, observed_at);
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO platform_listings (
+                id,
+                platform,
+                external_app_id,
+                listing_url,
+                developer_external_id,
+                first_seen_at,
+                last_seen_at,
+                first_published_at
+            ) VALUES (?, ?, ?, ?, NULL, ?, ?, NULL)
+            """,
+            (
+                "yandex_games:438560",
+                "yandex_games",
+                "438560",
+                "https://yandex.ru/games/app/438560",
+                observed_at_text,
+                observed_at_text,
+            ),
+        )
         connection.execute("PRAGMA user_version = 1")
 
     store = SQLiteMetricStore(path)
@@ -273,4 +328,6 @@ def test_v1_identity_database_migrates_to_metric_schema_without_data_loss(
     listing = SQLiteIdentityStore(path).get_listing("yandex_games:438560")
     assert listing is not None
     assert listing.external_app_id == "438560"
+    assert listing.first_seen_at == observed_at
+    assert listing.last_seen_at == observed_at
     assert len(store.metric_history(listing.id)) == 1

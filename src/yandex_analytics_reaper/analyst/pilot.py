@@ -194,8 +194,13 @@ class AnalystPilotVerifier:
             market_features.comparable_sets,
             strict=True,
         ):
-            if (binding.set_id, binding.version) != (features.set_id, features.set_version):
-                raise AnalystPilotError("snapshot/features comparable-set order or identity changed")
+            if (binding.set_id, binding.version) != (
+                features.set_id,
+                features.set_version,
+            ):
+                raise AnalystPilotError(
+                    "snapshot/features comparable-set order or identity changed"
+                )
             rows = tuple(rows_by_id[listing_id] for listing_id in binding.member_listing_ids)
             traces.append(
                 _representative_trace(
@@ -469,10 +474,18 @@ def _expected_raw_request_keys(
             _bind_raw_request_key(expected, raw_id, "catalogue.search")
     for supply in market_export.search_supply:
         _bind_raw_request_key(expected, supply.raw_snapshot_id, "catalogue.search")
-    for exposure in market_export.search_exposures:
-        _bind_raw_request_key(expected, exposure.raw_snapshot_id, "catalogue.search")
-    for exposure in market_export.feed_exposures:
-        _bind_raw_request_key(expected, exposure.raw_snapshot_id, "catalogue.feed")
+    for search_exposure in market_export.search_exposures:
+        _bind_raw_request_key(
+            expected,
+            search_exposure.raw_snapshot_id,
+            "catalogue.search",
+        )
+    for feed_exposure in market_export.feed_exposures:
+        _bind_raw_request_key(
+            expected,
+            feed_exposure.raw_snapshot_id,
+            "catalogue.feed",
+        )
 
     for update in market_export.update_observations:
         _require_rich_raw_refs(update.raw_snapshot_ids, rich_ids, "update observation")

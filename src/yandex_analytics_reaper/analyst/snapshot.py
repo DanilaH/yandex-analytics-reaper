@@ -6,7 +6,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Self
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
 from yandex_analytics_reaper.domain import ProbeContext, ProbeKind, ProbeRunStatus
@@ -24,7 +31,9 @@ from yandex_analytics_reaper.storage import (
 )
 
 ANALYST_SNAPSHOT_SPEC_VERSION: Literal["analyst-snapshot-v1"] = "analyst-snapshot-v1"
-_COLLECTION_PARAMETERS_STATUS: Literal["provisional_uncalibrated"] = "provisional_uncalibrated"
+_COLLECTION_PARAMETERS_STATUS: Literal["provisional_uncalibrated"] = (
+    "provisional_uncalibrated"
+)
 _YANDEX_SOURCE_ID: Literal["yandex_public"] = "yandex_public"
 
 
@@ -96,7 +105,8 @@ class AnalystSnapshotDeclaration(BaseModel):
         if len(set(comparable_keys)) != len(comparable_keys):
             raise ValueError("comparable-set references must be unique")
         raw_keys = [
-            (item.source_id, item.raw_snapshot_id) for item in self.rich_metadata_snapshots
+            (item.source_id, item.raw_snapshot_id)
+            for item in self.rich_metadata_snapshots
         ]
         if len(set(raw_keys)) != len(raw_keys):
             raise ValueError("rich-metadata raw snapshot references must be unique")
@@ -173,7 +183,9 @@ class AnalystSnapshotPayload(BaseModel):
         feed_run_ids = [item.run_id for item in self.feed_runs]
         if len(set(feed_run_ids)) != len(feed_run_ids):
             raise ValueError("snapshot feed-run bindings must be unique")
-        rich_raw_ids = [(item.source_id, item.raw_snapshot_id) for item in self.rich_metadata]
+        rich_raw_ids = [
+            (item.source_id, item.raw_snapshot_id) for item in self.rich_metadata
+        ]
         if len(set(rich_raw_ids)) != len(rich_raw_ids):
             raise ValueError("snapshot rich-metadata bindings must be unique")
 
@@ -226,7 +238,12 @@ class AnalystSnapshotReport(AnalystSnapshotPayload):
 class AnalystSnapshotBuilder:
     """Bind existing current-market evidence into one reproducible analyst artifact."""
 
-    def __init__(self, *, raw_store: FilesystemRawSnapshotStore, database_path: Path) -> None:
+    def __init__(
+        self,
+        *,
+        raw_store: FilesystemRawSnapshotStore,
+        database_path: Path,
+    ) -> None:
         self.raw_store = raw_store
         self.probe_store = SQLiteProbeRunStore(database_path)
         self.query_family_store = SQLiteQueryFamilyStore(database_path)
@@ -241,11 +258,15 @@ class AnalystSnapshotBuilder:
         search_page_limit: int | None = None
         latest_evidence_at: datetime | None = None
 
-        for reference in declaration.comparable_sets:
-            comparable = self.comparable_store.get(reference.set_id, reference.version)
+        for comparable_reference in declaration.comparable_sets:
+            comparable = self.comparable_store.get(
+                comparable_reference.set_id,
+                comparable_reference.version,
+            )
             if comparable is None:
                 raise AnalystSnapshotError(
-                    f"comparable set is not persisted: {reference.set_id}@{reference.version}"
+                    "comparable set is not persisted: "
+                    f"{comparable_reference.set_id}@{comparable_reference.version}"
                 )
             family = self.query_family_store.get(
                 comparable.query_family_id,
@@ -292,7 +313,10 @@ class AnalystSnapshotBuilder:
             for member in comparable.members:
                 if member.platform_listing_id not in member_order:
                     member_order.append(member.platform_listing_id)
-            latest_evidence_at = _max_datetime(latest_evidence_at, comparable.observed_to)
+            latest_evidence_at = _max_datetime(
+                latest_evidence_at,
+                comparable.observed_to,
+            )
             comparable_bindings.append(
                 AnalystComparableSetBinding(
                     set_id=comparable.set_id,
@@ -338,10 +362,15 @@ class AnalystSnapshotBuilder:
                     f"feed run {run_id} does not match the analyst snapshot effective context"
                 )
             for page in record.pages:
-                metadata = self.raw_store.get_metadata(run.source_id, page.raw_snapshot_id)
+                metadata = self.raw_store.get_metadata(
+                    run.source_id,
+                    page.raw_snapshot_id,
+                )
                 body = self.raw_store.get_body(run.source_id, page.raw_snapshot_id)
                 if not 200 <= metadata.http_status < 300:
-                    raise AnalystSnapshotError(f"feed run {run_id} references a non-2xx raw page")
+                    raise AnalystSnapshotError(
+                        f"feed run {run_id} references a non-2xx raw page"
+                    )
                 parsed = feed_parser.parse(body)
                 rebuilt_page = probe_page_from_yandex(
                     run=run,
@@ -352,10 +381,13 @@ class AnalystSnapshotBuilder:
                 )
                 if rebuilt_page != page:
                     raise AnalystSnapshotError(
-                        f"feed run {run_id} page {page.page_index} failed raw linkage replay"
+                        f"feed run {run_id} page {page.page_index} "
+                        "failed raw linkage replay"
                     )
             if run.completed_at is None:
-                raise AnalystSnapshotError(f"completed feed run {run_id} has no completed_at")
+                raise AnalystSnapshotError(
+                    f"completed feed run {run_id} has no completed_at"
+                )
             latest_evidence_at = _max_datetime(latest_evidence_at, run.completed_at)
             feed_bindings.append(
                 AnalystFeedRunBinding(
@@ -364,44 +396,55 @@ class AnalystSnapshotBuilder:
                     requested_page_limit=run.requested_page_limit,
                     started_at=run.started_at,
                     completed_at=run.completed_at,
-                    raw_snapshot_ids=tuple(page.raw_snapshot_id for page in record.pages),
+                    raw_snapshot_ids=tuple(
+                        page.raw_snapshot_id for page in record.pages
+                    ),
                     parser_name=type(feed_parser).__name__,
                     parser_version=feed_parser.version,
                 )
             )
 
         rich_bindings: list[AnalystRichMetadataBinding] = []
-        for reference in declaration.rich_metadata_snapshots:
+        for rich_reference in declaration.rich_metadata_snapshots:
             metadata = self.raw_store.get_metadata(
-                reference.source_id,
-                reference.raw_snapshot_id,
+                rich_reference.source_id,
+                rich_reference.raw_snapshot_id,
             )
-            body = self.raw_store.get_body(reference.source_id, reference.raw_snapshot_id)
-            if metadata.request_key != reference.request_key:
+            body = self.raw_store.get_body(
+                rich_reference.source_id,
+                rich_reference.raw_snapshot_id,
+            )
+            if metadata.request_key != rich_reference.request_key:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} request_key does not match declaration"
+                    f"raw snapshot {rich_reference.raw_snapshot_id} request_key "
+                    "does not match declaration"
                 )
             if not 200 <= metadata.http_status < 300:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} is not a successful response"
+                    f"raw snapshot {rich_reference.raw_snapshot_id} is not a successful response"
                 )
             parser_name, parser_version, parsed_listing_ids = _parse_rich_metadata(
-                reference.request_key,
+                rich_reference.request_key,
                 body,
             )
             relevant_listing_ids = tuple(
-                listing_id for listing_id in member_order if listing_id in parsed_listing_ids
+                listing_id
+                for listing_id in member_order
+                if listing_id in parsed_listing_ids
             )
             if not relevant_listing_ids:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} contains no listing from "
+                    f"raw snapshot {rich_reference.raw_snapshot_id} contains no listing from "
                     "the declared comparable sets"
                 )
-            latest_evidence_at = _max_datetime(latest_evidence_at, metadata.retrieved_at)
+            latest_evidence_at = _max_datetime(
+                latest_evidence_at,
+                metadata.retrieved_at,
+            )
             rich_bindings.append(
                 AnalystRichMetadataBinding(
-                    source_id=reference.source_id,
-                    request_key=reference.request_key,
+                    source_id=rich_reference.source_id,
+                    request_key=rich_reference.request_key,
                     raw_snapshot_id=metadata.id,
                     retrieved_at=metadata.retrieved_at,
                     content_hash=metadata.content_hash,
@@ -436,27 +479,40 @@ class AnalystSnapshotBuilder:
         )
 
 
-def validate_analyst_snapshot_report(report: AnalystSnapshotReport) -> AnalystSnapshotReport:
+def validate_analyst_snapshot_report(
+    report: AnalystSnapshotReport,
+) -> AnalystSnapshotReport:
     validated = AnalystSnapshotReport.model_validate(report.model_dump())
     payload = AnalystSnapshotPayload.model_validate(
         validated.model_dump(exclude={"content_hash"})
     )
     if validated.content_hash != _payload_hash(payload):
-        raise AnalystSnapshotError("analyst snapshot content_hash does not match report content")
+        raise AnalystSnapshotError(
+            "analyst snapshot content_hash does not match report content"
+        )
     return validated
 
 
-def _parse_rich_metadata(request_key: str, body: bytes) -> tuple[str, str, tuple[str, ...]]:
+def _parse_rich_metadata(
+    request_key: str,
+    body: bytes,
+) -> tuple[str, str, tuple[str, ...]]:
     if request_key == "catalogue.get_games":
-        parser = YandexGetGamesParser()
-        parsed = parser.parse(body)
-        listing_ids = tuple(f"yandex_games:{game.app_id}" for game in parsed.games)
-        return type(parser).__name__, parser.version, listing_ids
+        get_games_parser = YandexGetGamesParser()
+        get_games = get_games_parser.parse(body)
+        listing_ids = tuple(
+            f"yandex_games:{game.app_id}" for game in get_games.games
+        )
+        return type(get_games_parser).__name__, get_games_parser.version, listing_ids
     if request_key == "game.page":
-        parser = YandexPlayPageParser()
-        parsed = parser.parse(body)
-        listing_ids = () if parsed.app_id is None else (f"yandex_games:{parsed.app_id}",)
-        return type(parser).__name__, parser.version, listing_ids
+        play_page_parser = YandexPlayPageParser()
+        play_page = play_page_parser.parse(body)
+        listing_ids = (
+            ()
+            if play_page.app_id is None
+            else (f"yandex_games:{play_page.app_id}",)
+        )
+        return type(play_page_parser).__name__, play_page_parser.version, listing_ids
     raise AnalystSnapshotError(f"unsupported rich metadata request_key: {request_key}")
 
 

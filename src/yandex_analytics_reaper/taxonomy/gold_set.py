@@ -10,8 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from .models import PrimaryGameplayArchetype
 from .registries import (
-    ControlledLabelDimension,
     TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH,
+    ControlledLabelDimension,
     get_taxonomy_label_registry,
     normalize_taxonomy_label,
 )
@@ -444,7 +444,9 @@ def _validate_annotation_contract() -> None:
 
 def _validate_sample_shape(sample: TaxonomyDiversitySampleReport) -> None:
     if not 100 <= len(sample.selected) <= 200:
-        raise TaxonomyGoldSetError("manual gold-set tooling requires a real 100–200 member sample")
+        raise TaxonomyGoldSetError(
+            "manual gold-set tooling requires a real 100-200 member sample"
+        )
     if len(sample.selected) != sample.target_size:
         raise TaxonomyGoldSetError("taxonomy sample selected membership does not match target_size")
     if sample.candidate_pool_size < len(sample.selected):
@@ -482,7 +484,9 @@ def _validate_sample_binding(
     labels: tuple[TaxonomyManualLabel, ...],
 ) -> None:
     if sample_id != sample.sample_id or sample_content_hash != sample.sample_content_hash:
-        raise TaxonomyGoldSetError("manual labels do not reference the exact taxonomy sample identity")
+        raise TaxonomyGoldSetError(
+            "manual labels do not reference the exact taxonomy sample identity"
+        )
     expected_ids = tuple(member.platform_listing_id for member in sample.selected)
     actual_ids = tuple(label.platform_listing_id for label in labels)
     if actual_ids != expected_ids:

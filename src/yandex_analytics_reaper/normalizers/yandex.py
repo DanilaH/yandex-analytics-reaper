@@ -19,7 +19,8 @@ from .models import (
     NormalizedMetricObservation,
 )
 
-_NORMALIZER_VERSION = "4"
+_METRIC_NORMALIZER_VERSION = "2"
+_LISTING_STATE_NORMALIZER_VERSION = "4"
 _TARGET_METRIC_VALUE = "game_metric_observations.value_numeric"
 _TARGET_STATE_PREFIX = "listing_state_observations"
 
@@ -27,7 +28,12 @@ _TARGET_STATE_PREFIX = "listing_state_observations"
 class YandexGameNormalizer:
     """Convert Yandex source DTOs into stable domain observations with lineage."""
 
-    version = _NORMALIZER_VERSION
+    # `version` is the stable metric-transformation version retained for the
+    # frozen collection-cadence-v1 evidence contract. Listing-state evolution is
+    # versioned independently because adding state fields must not rewrite metric semantics.
+    version = _METRIC_NORMALIZER_VERSION
+    metric_version = _METRIC_NORMALIZER_VERSION
+    listing_state_version = _LISTING_STATE_NORMALIZER_VERSION
 
     def normalize_card(
         self,
@@ -219,6 +225,7 @@ def _metric(
                 source_field_path,
                 _TARGET_METRIC_VALUE,
                 transformation_name,
+                transformation_version=_METRIC_NORMALIZER_VERSION,
             ),
         ),
     )
@@ -301,6 +308,7 @@ def _state_lineage(
             source,
             f"{_TARGET_STATE_PREFIX}.{target}",
             f"YandexGameNormalizer.listing_state.{target}",
+            transformation_version=_LISTING_STATE_NORMALIZER_VERSION,
         )
         for source, target in fields
     )
@@ -311,13 +319,15 @@ def _lineage(
     source_field_path: str,
     target_field_path: str,
     transformation_name: str,
+    *,
+    transformation_version: str,
 ) -> FieldLineage:
     return FieldLineage(
         raw_snapshot_id=context.raw_snapshot_id,
         source_field_path=source_field_path,
         target_field_path=target_field_path,
         transformation_name=transformation_name,
-        transformation_version=_NORMALIZER_VERSION,
+        transformation_version=transformation_version,
     )
 
 

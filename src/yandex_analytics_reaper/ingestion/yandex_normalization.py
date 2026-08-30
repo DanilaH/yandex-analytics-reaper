@@ -98,7 +98,7 @@ class YandexNormalizationPersistence:
                 observation=normalized.listing_state,
                 evidence=evidence,
                 normalizer_name=normalizer_name,
-                normalizer_version=self.game_normalizer.version,
+                normalizer_version=self.game_normalizer.listing_state_version,
                 lineage=normalized.listing_state_lineage,
             )
         )
@@ -108,7 +108,7 @@ class YandexNormalizationPersistence:
                     metric=item.metric,
                     evidence=evidence,
                     normalizer_name=normalizer_name,
-                    normalizer_version=self.game_normalizer.version,
+                    normalizer_version=self.game_normalizer.metric_version,
                     lineage=item.lineage,
                 )
                 for item in normalized.metrics

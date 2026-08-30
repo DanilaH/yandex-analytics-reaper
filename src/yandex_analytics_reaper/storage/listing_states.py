@@ -135,7 +135,7 @@ class SQLiteListingStateStore:
         as_of: AwareDatetime | None = None,
     ) -> tuple[PersistedListingState, ...]:
         query = _SELECT + " WHERE s.platform_listing_id = ?"
-        params: list[object] = [listing_id]
+        params: list[str] = [listing_id]
         if as_of is not None:
             _require_aware(as_of, "as_of")
             query += " AND n.observed_at <= ?"
@@ -163,7 +163,7 @@ class SQLiteListingStateStore:
             + f"AND l.raw_snapshot_id IN ({placeholders})"
             + ")"
         )
-        params: list[object] = list(raw_ids)
+        params: list[str] = list(raw_ids)
         if listing_ids is not None:
             listing_values = _unique_non_blank(listing_ids, "listing_ids")
             if not listing_values:
@@ -250,7 +250,10 @@ class SQLiteListingStateStore:
         connection: sqlite3.Connection,
         observation_id: str,
     ) -> PersistedListingState | None:
-        row = connection.execute(_SELECT + " WHERE n.id = ?", (observation_id,)).fetchone()
+        row = connection.execute(
+            _SELECT + " WHERE n.id = ?",
+            (observation_id,),
+        ).fetchone()
         return None if row is None else self._row_to_persisted(connection, row)
 
     @staticmethod
@@ -430,7 +433,7 @@ def _optional_bool(value: bool | None) -> int | None:
 def _parse_optional_bool(value: object) -> bool | None:
     if value is None:
         return None
-    integer = int(value)
+    integer = int(str(value))
     if integer not in {0, 1}:
         raise ValueError("stored listing-state boolean is invalid")
     return bool(integer)

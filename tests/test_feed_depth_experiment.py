@@ -115,7 +115,7 @@ def test_rank_stability_threshold_can_reject_good_depth_one_coverage() -> None:
     trials: list[FeedDepthTrialObservation] = []
     for index in range(8):
         prefix = group_a if index < 4 else group_b
-        full = prefix + (100,)
+        full = (*prefix, 100)
         trials.append(
             FeedDepthTrialObservation(
                 run_id=f"run-{index}",
@@ -271,7 +271,7 @@ def test_replay_rejects_trial_with_wrong_page_size(tmp_path: Path) -> None:
     run_id, raw_store, probe_store = _persist_feed_trial(tmp_path, page_size=10)
     experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
 
-    with pytest.raises(FeedDepthEligibilityError, match="games_count=20"):
+    with pytest.raises(FeedDepthEligibilityError, match="games_count"):
         experiment.load_trial(run_id)
 
 

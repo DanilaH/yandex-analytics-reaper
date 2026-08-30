@@ -5,11 +5,18 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from yandex_analytics_reaper.analyst import (
-    AnalystMarketExportReport,
     AnalystMarketExporter,
+    AnalystMarketExportReport,
     AnalystMarketFeatureBuilder,
     AnalystMarketFeaturesReport,
     AnalystPilotVerifier,

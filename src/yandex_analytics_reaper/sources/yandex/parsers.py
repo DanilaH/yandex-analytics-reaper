@@ -114,7 +114,11 @@ def _developer(value: object) -> Developer | None:
     if data is None:
         return None
     raw_id = data.get("id")
-    developer_id = raw_id if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool) else None
+    developer_id = (
+        raw_id
+        if isinstance(raw_id, (str, int)) and not isinstance(raw_id, bool)
+        else None
+    )
     return Developer(id=developer_id, name=_as_str(data.get("name")))
 
 

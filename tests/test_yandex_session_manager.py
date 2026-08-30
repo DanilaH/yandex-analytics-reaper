@@ -137,11 +137,10 @@ def test_session_state_save_failure_does_not_mask_probe_failure(
 
     monkeypatch.setattr(manager, "_persist_persistent_state", fail_persist)
 
-    with pytest.raises(RuntimeError, match="probe failed") as exc_info:
-        with manager.open(
-            ProbeContext(session_profile=SessionProfile.PERSISTENT_ANONYMOUS)
-        ):
-            raise RuntimeError("probe failed")
+    with pytest.raises(RuntimeError, match="probe failed") as exc_info, manager.open(
+        ProbeContext(session_profile=SessionProfile.PERSISTENT_ANONYMOUS)
+    ):
+        raise RuntimeError("probe failed")
 
     notes = getattr(exc_info.value, "__notes__", [])
     assert any("state write failed" in note for note in notes)

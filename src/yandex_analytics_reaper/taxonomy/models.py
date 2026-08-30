@@ -6,8 +6,8 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .registries import (
-    ControlledLabelDimension,
     DEFAULT_TAXONOMY_LABEL_REGISTRY_VERSION,
+    ControlledLabelDimension,
     get_taxonomy_label_registry,
     normalize_taxonomy_label,
 )

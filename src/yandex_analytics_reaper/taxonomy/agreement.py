@@ -24,6 +24,8 @@ from .models import PrimaryGameplayArchetype
 from .registries import TAXONOMY_LABEL_REGISTRY_V1_CONTENT_HASH
 from .sampling import (
     SPEC_VERSION as TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
+)
+from .sampling import (
     TaxonomyDiversitySampleReport,
 )
 

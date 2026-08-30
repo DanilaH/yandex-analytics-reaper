@@ -258,11 +258,15 @@ class AnalystSnapshotBuilder:
         search_page_limit: int | None = None
         latest_evidence_at: datetime | None = None
 
-        for reference in declaration.comparable_sets:
-            comparable = self.comparable_store.get(reference.set_id, reference.version)
+        for comparable_reference in declaration.comparable_sets:
+            comparable = self.comparable_store.get(
+                comparable_reference.set_id,
+                comparable_reference.version,
+            )
             if comparable is None:
                 raise AnalystSnapshotError(
-                    f"comparable set is not persisted: {reference.set_id}@{reference.version}"
+                    "comparable set is not persisted: "
+                    f"{comparable_reference.set_id}@{comparable_reference.version}"
                 )
             family = self.query_family_store.get(
                 comparable.query_family_id,
@@ -401,26 +405,26 @@ class AnalystSnapshotBuilder:
             )
 
         rich_bindings: list[AnalystRichMetadataBinding] = []
-        for reference in declaration.rich_metadata_snapshots:
+        for rich_reference in declaration.rich_metadata_snapshots:
             metadata = self.raw_store.get_metadata(
-                reference.source_id,
-                reference.raw_snapshot_id,
+                rich_reference.source_id,
+                rich_reference.raw_snapshot_id,
             )
             body = self.raw_store.get_body(
-                reference.source_id,
-                reference.raw_snapshot_id,
+                rich_reference.source_id,
+                rich_reference.raw_snapshot_id,
             )
-            if metadata.request_key != reference.request_key:
+            if metadata.request_key != rich_reference.request_key:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} request_key "
+                    f"raw snapshot {rich_reference.raw_snapshot_id} request_key "
                     "does not match declaration"
                 )
             if not 200 <= metadata.http_status < 300:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} is not a successful response"
+                    f"raw snapshot {rich_reference.raw_snapshot_id} is not a successful response"
                 )
             parser_name, parser_version, parsed_listing_ids = _parse_rich_metadata(
-                reference.request_key,
+                rich_reference.request_key,
                 body,
             )
             relevant_listing_ids = tuple(
@@ -430,7 +434,7 @@ class AnalystSnapshotBuilder:
             )
             if not relevant_listing_ids:
                 raise AnalystSnapshotError(
-                    f"raw snapshot {reference.raw_snapshot_id} contains no listing from "
+                    f"raw snapshot {rich_reference.raw_snapshot_id} contains no listing from "
                     "the declared comparable sets"
                 )
             latest_evidence_at = _max_datetime(
@@ -439,8 +443,8 @@ class AnalystSnapshotBuilder:
             )
             rich_bindings.append(
                 AnalystRichMetadataBinding(
-                    source_id=reference.source_id,
-                    request_key=reference.request_key,
+                    source_id=rich_reference.source_id,
+                    request_key=rich_reference.request_key,
                     raw_snapshot_id=metadata.id,
                     retrieved_at=metadata.retrieved_at,
                     content_hash=metadata.content_hash,

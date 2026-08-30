@@ -72,12 +72,16 @@ class ProbeRun(BaseModel):
                 raise ValueError("terminal probe run requires completed_at")
             if self.completed_at < self.started_at:
                 raise ValueError("probe completed_at cannot be earlier than started_at")
-            if self.status is ProbeRunStatus.COMPLETED:
-                if self.error is not None or self.error_raw_snapshot_id is not None:
-                    raise ValueError("completed probe run cannot carry error metadata")
-            if self.status in {ProbeRunStatus.PARTIAL, ProbeRunStatus.FAILED}:
-                if self.error is None or not self.error.strip():
-                    raise ValueError("partial/failed probe run requires an error")
+            if (
+                self.status is ProbeRunStatus.COMPLETED
+                and (self.error is not None or self.error_raw_snapshot_id is not None)
+            ):
+                raise ValueError("completed probe run cannot carry error metadata")
+            if (
+                self.status in {ProbeRunStatus.PARTIAL, ProbeRunStatus.FAILED}
+                and (self.error is None or not self.error.strip())
+            ):
+                raise ValueError("partial/failed probe run requires an error")
         return self
 
 

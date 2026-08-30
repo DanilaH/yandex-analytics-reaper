@@ -596,7 +596,7 @@ def _canonical_envelope_row(row: sqlite3.Row) -> dict[str, object]:
 
 
 def _typed_row(row: sqlite3.Row) -> dict[str, object]:
-    return {key: row[key] for key in row.keys()}
+    return {key: row[key] for key in row}
 
 
 def _evidence_from_row(row: sqlite3.Row) -> EvidenceEnvelope:

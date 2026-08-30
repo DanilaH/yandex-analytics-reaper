@@ -174,7 +174,9 @@ def test_annotation_boundary_revalidates_model_copy_updates() -> None:
 def test_annotation_boundary_rejects_tampered_sample_content() -> None:
     sample = _sample()
     tampered_member = sample.selected[0].model_copy(update={"observed_titles": ("Changed",)})
-    tampered = sample.model_copy(update={"selected": (tampered_member,) + sample.selected[1:]})
+    tampered = sample.model_copy(
+        update={"selected": (tampered_member, *sample.selected[1:])}
+    )
 
     with pytest.raises(TaxonomyGoldSetError, match="content hash"):
         validate_taxonomy_annotation_batch(tampered, _batch(sample))
@@ -205,7 +207,7 @@ def test_persisted_gold_set_revalidates_content_hash() -> None:
     changed = report.labels[0].model_copy(
         update={"primary_archetype": PrimaryGameplayArchetype.MATCH}
     )
-    tampered = report.model_copy(update={"labels": (changed,) + report.labels[1:]})
+    tampered = report.model_copy(update={"labels": (changed, *report.labels[1:])})
     with pytest.raises(TaxonomyGoldSetError, match="content hash"):
         validate_taxonomy_gold_set_report(sample, tampered)
 

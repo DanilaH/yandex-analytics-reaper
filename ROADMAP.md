@@ -73,7 +73,7 @@ A dashboard, ML model, scheduler, external trend source, historical backtest, va
 
 # PRIMARY PATH — GET TO USEFUL ANALYTICS
 
-## M1 — Analyst Workbench v0 — `START ANALYSIS`
+## M1 — Analyst Workbench v0 — `START ANALYSIS` — COMPLETE
 
 Goal: make the existing evidence/market-state foundation operable as one reproducible analyst workflow. This milestone does **not** require automated discovery, a validated taxonomy/classifier, historical backtesting, or empirically optimal collection parameters.
 
@@ -130,13 +130,17 @@ Taxonomy is optional at this milestone. If an analyst manually attaches draft ta
 
 ### M1.4 — Real analyst pilot
 
-- [ ] collect one real analyst snapshot from current Yandex evidence
-- [ ] build at least two explicit comparable sets for real game hypotheses/niches
-- [ ] produce the analyst-readable exports/features for those sets
-- [ ] independently trace representative aggregates back to normalized observations and raw snapshots
-- [ ] record limitations/unknowns exposed by the pilot and fix only blockers to practical analysis
+- [x] collect one real analyst snapshot from current Yandex evidence
+- [x] build at least two explicit comparable sets for real game hypotheses/niches
+- [x] produce the analyst-readable exports/features for those sets
+- [x] independently trace representative aggregates back to normalized observations and raw snapshots
+- [x] record limitations/unknowns exposed by the pilot and fix only blockers to practical analysis
 
-### `START ANALYSIS` gate
+Evidence record: [`docs/history/analyst-pilot-2026-08-30.md`](docs/history/analyst-pilot-2026-08-30.md).
+
+The pilot found no blocker to practical human-in-the-loop analysis. Collection parameters and search-derived comparables remain explicitly provisional; the pilot also demonstrated that query-family coherence can vary materially and must remain an analyst-visible judgment rather than a hidden assumption.
+
+### `START ANALYSIS` gate — REACHED 2026-08-30
 
 `START ANALYSIS` is reached when a human analyst can, from supported commands/files:
 

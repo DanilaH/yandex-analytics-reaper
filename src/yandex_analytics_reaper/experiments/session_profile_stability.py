@@ -69,7 +69,9 @@ class SessionProfileRunObservation(BaseModel):
     def validate_run_observation(self) -> Self:
         if self.session_profile is SessionProfile.CLEAN_ANONYMOUS:
             if self.session_instance_id is not None:
-                raise ValueError("clean session-profile observation cannot carry session_instance_id")
+                raise ValueError(
+                    "clean session-profile observation cannot carry session_instance_id"
+                )
         elif self.session_profile is SessionProfile.PERSISTENT_ANONYMOUS:
             if not _is_session_instance_id(self.session_instance_id):
                 raise ValueError(
@@ -282,11 +284,17 @@ class SessionProfileStabilityExperiment:
         if context.device_type != "desktop":
             raise SessionProfileEligibilityError("session-profile-v1 requires device_type=desktop")
         if context.platform != "desktop_other":
-            raise SessionProfileEligibilityError("session-profile-v1 requires platform=desktop_other")
+            raise SessionProfileEligibilityError(
+                "session-profile-v1 requires platform=desktop_other"
+            )
         if context.country_observed is not None:
-            raise SessionProfileEligibilityError("session-profile-v1 requires country_observed=null")
+            raise SessionProfileEligibilityError(
+                "session-profile-v1 requires country_observed=null"
+            )
         if context.collector_region is not None:
-            raise SessionProfileEligibilityError("session-profile-v1 requires collector_region=null")
+            raise SessionProfileEligibilityError(
+                "session-profile-v1 requires collector_region=null"
+            )
 
         if context.session_profile is SessionProfile.CLEAN_ANONYMOUS:
             if (

@@ -12,8 +12,8 @@ from yandex_analytics_reaper.schema_drift import (
     DriftKind,
     FieldExpectation,
     JsonValueType,
-    SQLiteSchemaDriftRegistry,
     SchemaContract,
+    SQLiteSchemaDriftRegistry,
 )
 from yandex_analytics_reaper.sources.yandex.schema_contracts import (
     YANDEX_GET_GAMES_SCHEMA_V1,
@@ -127,8 +127,12 @@ def test_search_scope_separates_query_and_probe_context() -> None:
         suffix="mobile",
     )
 
-    assert schema_comparison_scope_for_snapshot(merge) != schema_comparison_scope_for_snapshot(obby)
-    assert schema_comparison_scope_for_snapshot(merge) != schema_comparison_scope_for_snapshot(mobile)
+    assert schema_comparison_scope_for_snapshot(merge) != schema_comparison_scope_for_snapshot(
+        obby
+    )
+    assert schema_comparison_scope_for_snapshot(merge) != schema_comparison_scope_for_snapshot(
+        mobile
+    )
 
 
 def test_feed_scope_ignores_token_value_but_preserves_page_kind() -> None:

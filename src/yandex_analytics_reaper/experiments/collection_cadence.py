@@ -111,12 +111,14 @@ class RankingSeriesObservation(BaseModel):
             raise ValueError("ranking cadence series must be feed or search")
         if self.depth not in RANKING_DEPTHS:
             raise ValueError("ranking cadence depth must be 1, 3, 5, or 10")
-        if self.capability is CadenceCapability.RECOMMENDATION_FEED:
-            if self.query_text is not None:
-                raise ValueError("feed cadence series cannot carry query_text")
-        else:
-            if self.query_text is None:
-                raise ValueError("search cadence series requires query_text")
+        if (
+            self.capability is CadenceCapability.RECOMMENDATION_FEED
+            and self.query_text is not None
+        ):
+            raise ValueError("feed cadence series cannot carry query_text")
+        if self.capability is CadenceCapability.SEARCH and self.query_text is None:
+            raise ValueError("search cadence series requires query_text")
+        if self.query_text is not None:
             _require_exact_non_blank(self.query_text, "query_text")
         _validate_reference_dates(tuple(point.reference_date for point in self.points))
         return self
@@ -217,8 +219,7 @@ def evaluate_collection_cadence(
     reference_dates = _shared_reference_dates(state_series, ranking_series)
 
     signal_reports = tuple(
-        _evaluate_state_signal(signal, state_series)
-        for signal in CadenceStateSignal
+        _evaluate_state_signal(signal, state_series) for signal in CadenceStateSignal
     )
     capability_reports = (
         _evaluate_state_capability(CadenceCapability.CATALOGUE_METADATA, signal_reports),
@@ -250,7 +251,9 @@ def _evaluate_state_signal(
     series = [item for item in all_series if item.signal is signal]
     capability = _signal_capability(signal)
     minimum_required = MIN_LISTING_SERIES
-    diagnostic_only = signal is CadenceStateSignal.MEDIA_MANIFEST and len(series) < minimum_required
+    diagnostic_only = (
+        signal is CadenceStateSignal.MEDIA_MANIFEST and len(series) < minimum_required
+    )
     sample_sufficient = len(series) >= minimum_required
 
     metrics: list[StateCandidateMetrics] = []
@@ -295,6 +298,8 @@ def _evaluate_state_capability(
     signal_reports: Sequence[StateSignalReport],
 ) -> StateCapabilityReport:
     reports = {report.signal: report for report in signal_reports}
+    required: tuple[CadenceStateSignal, ...]
+    participating: tuple[CadenceStateSignal, ...]
     if capability is CadenceCapability.CATALOGUE_METADATA:
         required = (
             CadenceStateSignal.YANDEX_GAMES_RATING,

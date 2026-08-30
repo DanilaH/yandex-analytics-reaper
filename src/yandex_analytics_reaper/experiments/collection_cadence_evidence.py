@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
+from itertools import pairwise
 from math import isfinite
 from pathlib import Path
 from typing import Self
@@ -119,13 +120,13 @@ class CollectionCadenceManifest(BaseModel):
         utc_times = [item.checkpoint_at.astimezone(UTC) for item in checkpoints]
         if any(
             current <= previous
-            for previous, current in zip(utc_times, utc_times[1:], strict=False)
+            for previous, current in pairwise(utc_times)
         ):
             raise ValueError("cadence checkpoints must be strictly increasing")
         dates = [item.date() for item in utc_times]
         if len(dates) != len(set(dates)):
             raise ValueError("cadence manifest must contain one checkpoint per UTC date")
-        for previous, current in zip(dates, dates[1:], strict=False):
+        for previous, current in pairwise(dates):
             if (current - previous).days != 1:
                 raise ValueError("cadence checkpoint UTC dates must be consecutive")
         clock_seconds = [
@@ -959,9 +960,6 @@ def _circular_clock_span_seconds(values: Sequence[int]) -> int:
     ordered = sorted(values)
     if len(ordered) == 1:
         return 0
-    gaps = [
-        current - previous
-        for previous, current in zip(ordered, ordered[1:], strict=False)
-    ]
+    gaps = [current - previous for previous, current in pairwise(ordered)]
     gaps.append(_DAY_SECONDS - ordered[-1] + ordered[0])
     return _DAY_SECONDS - max(gaps)

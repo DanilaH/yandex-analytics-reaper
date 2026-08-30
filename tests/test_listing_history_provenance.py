@@ -91,7 +91,7 @@ def test_history_write_rejects_duplicate_type_and_mixed_listing(tmp_path: Path) 
 
     with pytest.raises(ValidationError, match="cannot repeat one observation type"):
         ListingHistoryWrite(
-            observations=write.observations + (write.observations[0],),
+            observations=(*write.observations, write.observations[0]),
             evidence=write.evidence,
             normalizer_name=write.normalizer_name,
             normalizer_version=write.normalizer_version,

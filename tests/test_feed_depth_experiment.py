@@ -115,7 +115,7 @@ def test_rank_stability_threshold_can_reject_good_depth_one_coverage() -> None:
     trials: list[FeedDepthTrialObservation] = []
     for index in range(8):
         prefix = group_a if index < 4 else group_b
-        full = prefix + (100,)
+        full = (*prefix, 100)
         trials.append(
             FeedDepthTrialObservation(
                 run_id=f"run-{index}",

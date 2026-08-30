@@ -26,8 +26,8 @@ from .registries import (
 )
 from .sampling import (
     SPEC_VERSION as TAXONOMY_DIVERSITY_SAMPLE_SPEC_VERSION,
-    TaxonomyDiversitySampleReport,
 )
+from .sampling import TaxonomyDiversitySampleReport
 
 CONTROLLED_DIMENSION_AGREEMENT_SPEC_VERSION: Literal[
     "taxonomy-controlled-dimension-agreement-v1"

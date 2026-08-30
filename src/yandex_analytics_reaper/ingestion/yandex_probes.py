@@ -175,7 +175,8 @@ class YandexPaginatedProbeRunner:
                 )
                 if any(event.severity is DriftSeverity.BREAKING for event in analysis.events):
                     raise ProbeCollectionError(
-                        "breaking source-schema drift detected; raw response and analysis were preserved"
+                        "breaking source-schema drift detected; raw response and "
+                        "analysis were preserved"
                     )
 
                 try:

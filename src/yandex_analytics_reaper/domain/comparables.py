@@ -137,7 +137,9 @@ class ComparableSetVersion(BaseModel):
         member_ids = set(listing_ids)
         evidence_ids = {item.platform_listing_id for item in self.evidence}
         if evidence_ids != member_ids:
-            raise ValueError("every comparable-set member must have evidence and no orphan evidence")
+            raise ValueError(
+                "every comparable-set member must have evidence and no orphan evidence"
+            )
         valid_run_ids = set(run_ids)
         if any(item.probe_run_id not in valid_run_ids for item in self.evidence):
             raise ValueError("comparable-set evidence references an undeclared probe run")

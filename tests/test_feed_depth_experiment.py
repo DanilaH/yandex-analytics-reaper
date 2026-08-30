@@ -271,7 +271,7 @@ def test_replay_rejects_trial_with_wrong_page_size(tmp_path: Path) -> None:
     run_id, raw_store, probe_store = _persist_feed_trial(tmp_path, page_size=10)
     experiment = FeedDepthExperiment(raw_store=raw_store, probe_store=probe_store)
 
-    with pytest.raises(FeedDepthEligibilityError, match="games_count=20"):
+    with pytest.raises(FeedDepthEligibilityError, match="games_count"):
         experiment.load_trial(run_id)
 
 

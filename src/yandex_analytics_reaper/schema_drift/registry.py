@@ -381,7 +381,10 @@ def _evaluate(
                     kind=DriftKind.ROOT_TYPE_MISMATCH,
                     severity=DriftSeverity.BREAKING,
                     current_types=((current.root_type,) if current.root_type is not None else ()),
-                    message=f"root type {current.root_type} violates contract {contract.contract_id}",
+                    message=(
+                        f"root type {current.root_type} "
+                        f"violates contract {contract.contract_id}"
+                    ),
                 )
             )
         for expectation in contract.fields:

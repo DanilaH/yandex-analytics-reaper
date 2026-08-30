@@ -418,7 +418,9 @@ def _evaluate(
                         field_path=expectation.path,
                         current_types=field.value_types,
                         details={
-                            "allowed_types": ",".join(item.value for item in expectation.allowed_types)
+                            "allowed_types": ",".join(
+                                item.value for item in expectation.allowed_types
+                            )
                         },
                         message=f"field {expectation.path} has a type outside its contract",
                     )
@@ -436,7 +438,9 @@ def _evaluate(
                         field_path=expectation.path,
                         current_presence_ratio=field.presence_ratio,
                         details={
-                            "minimum_presence_ratio": str(expectation.minimum_presence_ratio)
+                            "minimum_presence_ratio": str(
+                                expectation.minimum_presence_ratio
+                            )
                         },
                         message=f"field {expectation.path} fell below required presence ratio",
                     )
@@ -607,7 +611,8 @@ def _field_from_row(row: sqlite3.Row) -> FieldProfile:
 def _event_from_row(row: sqlite3.Row) -> DriftEvent:
     details_raw = json.loads(str(row["details_json"]))
     if not isinstance(details_raw, dict) or not all(
-        isinstance(key, str) and isinstance(value, str) for key, value in details_raw.items()
+        isinstance(key, str) and isinstance(value, str)
+        for key, value in details_raw.items()
     ):
         raise ValueError("stored schema drift details_json is invalid")
     return DriftEvent(
@@ -689,4 +694,4 @@ def _optional_str(value: object) -> str | None:
 
 
 def _optional_float(value: object) -> float | None:
-    return None if value is None else float(value)
+    return None if value is None else float(str(value))

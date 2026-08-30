@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from http.cookiejar import CookieJar, LoadError, MozillaCookieJar
@@ -238,7 +239,9 @@ class YandexSessionManager:
         except OSError as exc:
             _unlink_if_exists(cookie_tmp)
             _unlink_if_exists(metadata_tmp)
-            raise SessionStateError("persistent anonymous session state could not be saved") from exc
+            raise SessionStateError(
+                "persistent anonymous session state could not be saved"
+            ) from exc
 
 
 def _cookie_state_hash(jar: CookieJar) -> str:
@@ -276,18 +279,14 @@ def _new_session_instance_id() -> str:
 
 
 def _make_private(path: Path) -> None:
-    try:
-        path.chmod(0o600)
-    except OSError:
+    with suppress(OSError):
         # Best effort on platforms/filesystems that do not expose POSIX permissions.
-        pass
+        path.chmod(0o600)
 
 
 def _unlink_if_exists(path: Path) -> None:
-    try:
+    with suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def _aware(value: datetime, field_name: str) -> datetime:

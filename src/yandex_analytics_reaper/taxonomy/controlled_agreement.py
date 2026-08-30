@@ -284,7 +284,7 @@ class ControlledDimensionAgreementReport(BaseModel):
                     "controlled-dimension unanimous count exceeds total labels"
                 )
             if entry.unanimous_listing_rate != (
-                self.total_labels and entry.unanimous_listing_count / self.total_labels
+                entry.unanimous_listing_count / self.total_labels
             ):
                 raise ValueError(
                     "controlled-dimension unanimous rate is inconsistent with count"

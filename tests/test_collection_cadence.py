@@ -213,7 +213,7 @@ def test_reference_dates_must_be_consecutive_and_shared() -> None:
     dates = list(_dates())
     dates[10] += timedelta(days=1)
 
-    with pytest.raises(ValidationError, match="unique|consecutive"):
+    with pytest.raises(ValidationError, match=r"unique|consecutive"):
         StateSeriesObservation(
             series_id="broken",
             capability=CadenceCapability.GAME_PAGE,

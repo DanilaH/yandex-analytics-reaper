@@ -21,4 +21,4 @@ jobs:
       - run: pip install -c constraints-dev.txt -e ".[dev]"
       - run: ruff check .
       - run: mypy src
-      - run: pytest --cov=yandex_analytics_reaper --cov-report=term-missing
+      - run: pytest --cov=yandex_analytics_reaper --cov-report=term-missing --cov-fail-under=80

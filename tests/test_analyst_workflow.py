@@ -1,0 +1,200 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
+
+import pytest
+from pydantic import ValidationError
+
+import yandex_analytics_reaper.analyst_workflow as workflow
+from yandex_analytics_reaper.experiment_cli import build_parser
+
+
+def _manifest() -> workflow.AnalystExperimentManifest:
+    return workflow.AnalystExperimentManifest.model_validate(
+        {
+            "schema_version": 1,
+            "experiment_id": "curiosity-payoff-sweep-v1",
+            "context": {
+                "pages": 3,
+                "session_profile": "clean_anonymous",
+                "lang": "ru",
+                "device": "desktop",
+                "platform": "desktop_other",
+            },
+            "families": [
+                {"id": "clean-restore", "queries": ["clean", "уборка"]},
+                {"id": "break-reveal", "queries": ["break", "ломай"]},
+            ],
+        }
+    )
+
+
+def test_experiment_manifest_is_explicit_and_strict() -> None:
+    manifest = _manifest()
+
+    assert manifest.schema_version == 1
+    assert manifest.experiment_id == "curiosity-payoff-sweep-v1"
+    assert [family.id for family in manifest.families] == [
+        "clean-restore",
+        "break-reveal",
+    ]
+    assert manifest.families[0].queries == ("clean", "уборка")
+
+
+@pytest.mark.parametrize(
+    "experiment_id",
+    ["Curiosity", "../escape", "has spaces", "ends-", "-starts"],
+)
+def test_experiment_id_must_be_human_safe_slug(experiment_id: str) -> None:
+    payload = _manifest().model_dump()
+    payload["experiment_id"] = experiment_id
+
+    with pytest.raises(ValidationError):
+        workflow.AnalystExperimentManifest.model_validate(payload)
+
+
+def test_experiment_manifest_rejects_duplicate_family_ids() -> None:
+    payload = _manifest().model_dump()
+    payload["families"][1]["id"] = "clean-restore"
+
+    with pytest.raises(ValidationError, match="family ids must be unique"):
+        workflow.AnalystExperimentManifest.model_validate(payload)
+
+
+def test_experiment_manifest_rejects_query_shared_between_families() -> None:
+    payload = _manifest().model_dump()
+    payload["families"][1]["queries"] = ("break", "clean")
+
+    with pytest.raises(ValidationError, match="only one experiment family"):
+        workflow.AnalystExperimentManifest.model_validate(payload)
+
+
+def test_query_family_mapping_does_not_infer_secondary_semantics() -> None:
+    family = workflow._query_family(
+        _manifest().families[0],
+        language="ru",
+        created_at=datetime(2026, 8, 31, tzinfo=UTC),
+    )
+
+    assert family.family_id == "clean-restore"
+    assert [member.query_text for member in family.members] == ["clean", "уборка"]
+    assert [member.kind.value for member in family.members] == ["seed", "other"]
+
+
+def test_experiment_cli_parses_one_high_level_run_command() -> None:
+    args = build_parser().parse_args(["run", "curiosity-payoff-sweep-v1.json"])
+
+    assert args.command == "run"
+    assert args.manifest == "curiosity-payoff-sweep-v1.json"
+
+
+def test_find_repository_root_uses_project_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "repo"
+    nested = root / "inputs"
+    nested.mkdir(parents=True)
+    (root / "pyproject.toml").write_text(
+        '[project]\nname = "yandex-analytics-reaper"\n',
+        encoding="utf-8",
+    )
+    manifest_path = nested / "experiment.json"
+    monkeypatch.chdir(nested)
+
+    assert workflow.find_repository_root(manifest_path) == root
+
+
+def test_allocate_run_paths_never_overwrites_existing_run(tmp_path: Path) -> None:
+    started = datetime(2026, 8, 31, 20, 34, 12, tzinfo=UTC)
+
+    first_id, first_work, first_artifact = workflow._allocate_run_paths(
+        tmp_path,
+        "curiosity-payoff-sweep-v1",
+        started,
+    )
+    first_artifact.parent.mkdir(parents=True, exist_ok=True)
+    first_artifact.write_bytes(b"existing")
+    second_id, second_work, second_artifact = workflow._allocate_run_paths(
+        tmp_path,
+        "curiosity-payoff-sweep-v1",
+        started,
+    )
+
+    assert first_id == "20260831T203412Z"
+    assert second_id == "20260831T203412Z-02"
+    assert first_work.is_dir()
+    assert second_work.is_dir()
+    assert second_artifact != first_artifact
+
+
+def test_artifact_manifest_package_and_reopen_verification(tmp_path: Path) -> None:
+    workdir = tmp_path / "work"
+    (workdir / "input").mkdir(parents=True)
+    (workdir / "reports").mkdir()
+    (workdir / "input" / "manifest.json").write_text(
+        '{"schema_version":1}\n',
+        encoding="utf-8",
+    )
+    (workdir / "reports" / "result.json").write_text(
+        '{"ok":true}\n',
+        encoding="utf-8",
+    )
+
+    artifact_manifest = workflow.build_artifact_manifest(
+        workdir,
+        experiment_id="curiosity-payoff-sweep-v1",
+        run_id="20260831T203412Z",
+    )
+    (workdir / "artifact-manifest.json").write_text(
+        artifact_manifest.model_dump_json(indent=2) + "\n",
+        encoding="utf-8",
+    )
+    artifact = tmp_path / "exports" / "run.zip"
+    artifact.parent.mkdir()
+
+    workflow.package_workdir(workdir, artifact)
+    verified = workflow.verify_packaged_artifact(artifact)
+
+    assert verified == artifact_manifest
+    assert {item.path for item in verified.files} == {
+        "input/manifest.json",
+        "reports/result.json",
+    }
+
+
+def test_packaged_artifact_verifier_detects_payload_tampering(tmp_path: Path) -> None:
+    workdir = tmp_path / "work"
+    workdir.mkdir()
+    payload = workdir / "payload.txt"
+    payload.write_text("original", encoding="utf-8")
+    artifact_manifest = workflow.build_artifact_manifest(
+        workdir,
+        experiment_id="test-experiment",
+        run_id="20260831T203412Z",
+    )
+
+    artifact = tmp_path / "tampered.zip"
+    with ZipFile(artifact, mode="w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("payload.txt", "changed")
+        archive.writestr(
+            "artifact-manifest.json",
+            artifact_manifest.model_dump_json(indent=2),
+        )
+
+    with pytest.raises(workflow.AnalystExperimentError, match="hash/size mismatch"):
+        workflow.verify_packaged_artifact(artifact)
+
+
+def test_yandex_app_id_and_batching_are_internal_deterministic_helpers() -> None:
+    assert workflow._yandex_app_id("yandex_games:123") == 123
+    assert list(workflow._batches((1, 2, 3, 4, 5), 2)) == [
+        (1, 2),
+        (3, 4),
+        (5,),
+    ]
+
+    with pytest.raises(workflow.AnalystExperimentError):
+        workflow._yandex_app_id("steam:123")

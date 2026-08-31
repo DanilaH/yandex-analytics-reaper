@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import time
 from collections.abc import Callable, Iterable, Sequence
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, Self
@@ -959,10 +960,8 @@ def _git_sha(repository_root: Path) -> str | None:
 
 
 def _discard_artifact(path: Path) -> None:
-    try:
+    with suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def _relative_display(path: Path, repository_root: Path) -> str:

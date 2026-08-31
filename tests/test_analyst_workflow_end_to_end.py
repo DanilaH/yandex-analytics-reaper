@@ -207,7 +207,12 @@ def test_package_workdir_removes_partial_zip_when_write_fails(
     (workdir / "payload.txt").write_text("payload", encoding="utf-8")
     artifact_path = tmp_path / "artifact.zip"
 
-    def fail_write(self: ZipFile, filename: object, arcname: object = None, **kwargs: object) -> None:
+    def fail_write(
+        self: ZipFile,
+        filename: object,
+        arcname: object = None,
+        **kwargs: object,
+    ) -> None:
         del self, filename, arcname, kwargs
         raise OSError("synthetic package failure")
 

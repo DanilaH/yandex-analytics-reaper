@@ -524,9 +524,11 @@ class AnalystExperimentRunner:
         artifact_manifest_sha256 = _sha256_file(workdir / "artifact-manifest.json")
 
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        package_workdir(workdir, artifact_path)
-        verify_packaged_artifact(artifact_path)
-        artifact_sha256 = _sha256_file(artifact_path)
+        artifact_sha256 = finalize_verified_artifact(
+            workdir,
+            artifact_path,
+            expected_manifest=artifact_manifest,
+        )
 
         final_result = AnalystExperimentResult(
             experiment_id=manifest.experiment_id,
@@ -785,12 +787,21 @@ def build_artifact_manifest(
 
 
 def package_workdir(workdir: Path, artifact_path: Path) -> None:
-    with ZipFile(artifact_path, mode="x", compression=ZIP_DEFLATED) as archive:
-        for path in sorted(item for item in workdir.rglob("*") if item.is_file()):
-            archive.write(path, path.relative_to(workdir).as_posix())
+    try:
+        with ZipFile(artifact_path, mode="x", compression=ZIP_DEFLATED) as archive:
+            for path in sorted(item for item in workdir.rglob("*") if item.is_file()):
+                archive.write(path, path.relative_to(workdir).as_posix())
+    except Exception:
+        _discard_artifact(artifact_path)
+        raise
 
 
-def verify_packaged_artifact(artifact_path: Path) -> AnalystArtifactManifest:
+def verify_packaged_artifact(
+    artifact_path: Path,
+    *,
+    expected_experiment_id: str | None = None,
+    expected_run_id: str | None = None,
+) -> AnalystArtifactManifest:
     try:
         with ZipFile(artifact_path, mode="r") as archive:
             names = archive.namelist()
@@ -807,6 +818,17 @@ def verify_packaged_artifact(artifact_path: Path) -> AnalystArtifactManifest:
             artifact_manifest = AnalystArtifactManifest.model_validate_json(
                 archive.read("artifact-manifest.json")
             )
+            if (
+                expected_experiment_id is not None
+                and artifact_manifest.experiment_id != expected_experiment_id
+            ):
+                raise AnalystExperimentError(
+                    "packaged artifact experiment_id does not match the execution identity"
+                )
+            if expected_run_id is not None and artifact_manifest.run_id != expected_run_id:
+                raise AnalystExperimentError(
+                    "packaged artifact run_id does not match the execution identity"
+                )
             expected = {item.path for item in artifact_manifest.files}
             if set(names) != expected | {"artifact-manifest.json"}:
                 raise AnalystExperimentError(
@@ -821,6 +843,30 @@ def verify_packaged_artifact(artifact_path: Path) -> AnalystArtifactManifest:
             return artifact_manifest
     except (BadZipFile, OSError, ValueError) as exc:
         raise AnalystExperimentError(f"packaged artifact verification failed: {exc}") from exc
+
+
+def finalize_verified_artifact(
+    workdir: Path,
+    artifact_path: Path,
+    *,
+    expected_manifest: AnalystArtifactManifest,
+) -> str:
+    """Publish, verify, identify, and hash one package or leave no final ZIP behind."""
+    try:
+        package_workdir(workdir, artifact_path)
+        verified_manifest = verify_packaged_artifact(
+            artifact_path,
+            expected_experiment_id=expected_manifest.experiment_id,
+            expected_run_id=expected_manifest.run_id,
+        )
+        if verified_manifest != expected_manifest:
+            raise AnalystExperimentError(
+                "packaged artifact manifest does not match the manifest built from the workdir"
+            )
+        return _sha256_file(artifact_path)
+    except Exception:
+        _discard_artifact(artifact_path)
+        raise
 
 
 def _allocate_run_paths(
@@ -910,6 +956,13 @@ def _git_sha(repository_root: Path) -> str | None:
         return None
     value = result.stdout.strip()
     return value if len(value) == 40 else None
+
+
+def _discard_artifact(path: Path) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _relative_display(path: Path, repository_root: Path) -> str:

@@ -12,4 +12,5 @@ htmlcov/
 .vscode/
 data/*
 !data/README.md
+artifacts/*
 .DS_Store

@@ -69,7 +69,7 @@ _VERIFICATION_SPEC_VERSION: Literal["analyst-experiment-verification-v1"] = (
 _ARTIFACT_MANIFEST_SPEC_VERSION: Literal["analyst-experiment-artifact-v1"] = (
     "analyst-experiment-artifact-v1"
 )
-_SOURCE_ID = "yandex_public"
+_SOURCE_ID: Literal["yandex_public"] = "yandex_public"
 _MAX_RICH_BATCH_SIZE = 100
 _MAX_TRANSPORT_ATTEMPTS = 3
 _EXPERIMENT_ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -375,7 +375,7 @@ class AnalystExperimentRunner:
             query_store.persist(family)
             family_run_ids: list[str] = []
             for query in family_input.queries:
-                result = self._collect_search(
+                search_result = self._collect_search(
                     query,
                     context=context,
                     page_limit=manifest.context.pages,
@@ -384,7 +384,7 @@ class AnalystExperimentRunner:
                     schema_registry=schema_registry,
                     session_manager=session_manager,
                 )
-                family_run_ids.append(result.record.run.id)
+                family_run_ids.append(search_result.record.run.id)
 
             comparable = YandexSearchComparableSetBuilder(
                 raw_store=raw_store,
@@ -425,18 +425,18 @@ class AnalystExperimentRunner:
 
         observed_listing_ids = {
             listing_id
-            for result in rich_results
-            for listing_id in result.parsed_listing_ids
+            for rich_result in rich_results
+            for listing_id in rich_result.parsed_listing_ids
             if listing_id in listing_id_set
         }
         rich_references = tuple(
             AnalystRawSnapshotReference(
                 source_id=_SOURCE_ID,
-                raw_snapshot_id=result.raw_snapshot.id,
+                raw_snapshot_id=rich_result.raw_snapshot.id,
                 request_key="catalogue.get_games",
             )
-            for result in rich_results
-            if set(result.parsed_listing_ids) & listing_id_set
+            for rich_result in rich_results
+            if set(rich_result.parsed_listing_ids) & listing_id_set
         )
         if listing_ids and not rich_references:
             raise AnalystExperimentError(
@@ -528,7 +528,7 @@ class AnalystExperimentRunner:
         verify_packaged_artifact(artifact_path)
         artifact_sha256 = _sha256_file(artifact_path)
 
-        result = AnalystExperimentResult(
+        final_result = AnalystExperimentResult(
             experiment_id=manifest.experiment_id,
             run_id=run_id,
             artifact_path=_relative_display(artifact_path, self.repository_root),
@@ -542,7 +542,7 @@ class AnalystExperimentRunner:
             rich_observed_listing_count=summary.rich_observed_listing_count,
         )
         shutil.rmtree(workdir)
-        return result
+        return final_result
 
     def _collect_search(
         self,

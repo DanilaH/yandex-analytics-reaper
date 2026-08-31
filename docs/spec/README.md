@@ -21,6 +21,7 @@ session-profile-stability-experiment.md
 collection-cadence-experiment.md
 search-query-family.md
 comparable-set.md
+analyst-experiment-runner.md
 analyst-snapshot.md
 listing-state-observations.md
 analyst-market-export.md

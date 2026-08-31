@@ -137,12 +137,13 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
         session_manager: object,
     ):
         del session_manager
+        effective_context = context.model_copy(update={"profile_age_days": 0})
         return YandexPaginatedProbeRunner(
             client=FakeSearchClient(),
             raw_store=raw_store,
             probe_store=probe_store,
             schema_registry=schema_registry,
-        ).run_search(query, context, page_limit=page_limit)
+        ).run_search(query, effective_context, page_limit=page_limit)
 
     def collect_rich_batch(
         app_ids: Sequence[int],

@@ -8,7 +8,8 @@ from pathlib import Path
 from yandex_analytics_reaper.domain import PlatformDeveloper, PlatformListing
 
 from . import listing_states as listing_state_storage
-from .identity import SQLiteIdentityStore, _timestamp as identity_timestamp
+from .identity import SQLiteIdentityStore
+from .identity import _timestamp as identity_timestamp
 from .lineage import persist_lineage_in_connection
 from .listing_histories import ListingHistoryWrite, SQLiteListingHistoryStore
 from .listing_states import ListingStateWrite, SQLiteListingStateStore

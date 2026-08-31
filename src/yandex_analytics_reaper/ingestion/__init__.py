@@ -7,6 +7,11 @@ from .yandex_probes import (
     ProbeCollectionError,
     YandexPaginatedProbeRunner,
 )
+from .yandex_rich import (
+    RichMetadataCollectionError,
+    RichMetadataCollectionResult,
+    YandexRichMetadataCollector,
+)
 from .yandex_sessions import (
     PreparedYandexSession,
     SessionConfigurationError,
@@ -19,9 +24,12 @@ __all__ = [
     "PersistedYandexNormalization",
     "PreparedYandexSession",
     "ProbeCollectionError",
+    "RichMetadataCollectionError",
+    "RichMetadataCollectionResult",
     "SessionConfigurationError",
     "SessionStateError",
     "YandexNormalizationPersistence",
     "YandexPaginatedProbeRunner",
+    "YandexRichMetadataCollector",
     "YandexSessionManager",
 ]

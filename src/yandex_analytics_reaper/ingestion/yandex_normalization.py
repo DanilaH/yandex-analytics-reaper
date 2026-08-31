@@ -27,11 +27,8 @@ from yandex_analytics_reaper.storage import (
     ListingStateWrite,
     MetricWrite,
     RawSnapshotMetadata,
-    SQLiteIdentityStore,
-    SQLiteListingHistoryStore,
-    SQLiteListingStateStore,
-    SQLiteMetricStore,
 )
+from yandex_analytics_reaper.storage.normalization import SQLiteAtomicNormalizationStore
 
 _SOURCE_ID = "yandex_public"
 _GET_GAMES_REQUEST_KEY = "catalogue.get_games"
@@ -48,13 +45,14 @@ class PersistedYandexNormalization(BaseModel):
 
 
 class YandexNormalizationPersistence:
-    """Persist normalized current Yandex observations after immutable raw capture."""
+    """Persist normalized Yandex observations atomically after immutable raw capture."""
 
     def __init__(self, database_path: Path) -> None:
-        self.identity_store = SQLiteIdentityStore(database_path)
-        self.state_store = SQLiteListingStateStore(database_path)
-        self.metric_store = SQLiteMetricStore(database_path)
-        self.history_store = SQLiteListingHistoryStore(database_path)
+        self.atomic_store = SQLiteAtomicNormalizationStore(database_path)
+        self.identity_store = self.atomic_store.identity_store
+        self.state_store = self.atomic_store.state_store
+        self.metric_store = self.atomic_store.metric_store
+        self.history_store = self.atomic_store.history_store
         self.game_normalizer = YandexGameNormalizer()
         self.history_normalizer = YandexListingHistoryNormalizer()
 
@@ -88,31 +86,22 @@ class YandexNormalizationPersistence:
         context = normalized.context
         evidence = _evidence(context)
         normalizer_name = type(self.game_normalizer).__name__
-        self.identity_store.persist_listing_identity(
-            normalized.listing,
-            normalized.developer,
-            context.observed_at,
+        state_write = ListingStateWrite(
+            observation=normalized.listing_state,
+            evidence=evidence,
+            normalizer_name=normalizer_name,
+            normalizer_version=self.game_normalizer.listing_state_version,
+            lineage=normalized.listing_state_lineage,
         )
-        state_id = self.state_store.persist(
-            ListingStateWrite(
-                observation=normalized.listing_state,
+        metric_writes = tuple(
+            MetricWrite(
+                metric=item.metric,
                 evidence=evidence,
                 normalizer_name=normalizer_name,
-                normalizer_version=self.game_normalizer.listing_state_version,
-                lineage=normalized.listing_state_lineage,
+                normalizer_version=self.game_normalizer.metric_version,
+                lineage=item.lineage,
             )
-        )
-        metric_ids = self.metric_store.persist_metrics(
-            tuple(
-                MetricWrite(
-                    metric=item.metric,
-                    evidence=evidence,
-                    normalizer_name=normalizer_name,
-                    normalizer_version=self.game_normalizer.metric_version,
-                    lineage=item.lineage,
-                )
-                for item in normalized.metrics
-            )
+            for item in normalized.metrics
         )
         history_items = tuple(
             ListingHistoryObservationWrite(
@@ -127,13 +116,20 @@ class YandexNormalizationPersistence:
         }
         if history_listing_ids != {normalized.listing.id}:
             raise RuntimeError("Yandex normalizers disagreed on platform listing identity")
-        history_ids = self.history_store.persist(
-            ListingHistoryWrite(
-                observations=history_items,
-                evidence=evidence,
-                normalizer_name=type(self.history_normalizer).__name__,
-                normalizer_version=self.history_normalizer.version,
-            )
+        history_write = ListingHistoryWrite(
+            observations=history_items,
+            evidence=evidence,
+            normalizer_name=type(self.history_normalizer).__name__,
+            normalizer_version=self.history_normalizer.version,
+        )
+
+        state_id, metric_ids, history_ids = self.atomic_store.persist(
+            listing=normalized.listing,
+            developer=normalized.developer,
+            observed_at=context.observed_at,
+            state=state_write,
+            metrics=metric_writes,
+            history=history_write,
         )
         return PersistedYandexNormalization(
             platform_listing_id=normalized.listing.id,

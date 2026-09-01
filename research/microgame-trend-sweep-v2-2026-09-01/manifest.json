@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "experiment_id": "microgame-trend-sweep-v2-2026-09-01",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "mystery-opening-control",
+      "queries": ["распаковка сюрпризов", "открывай коробки", "коробка сюрприз", "mystery box", "blind box", "unboxing game"]
+    },
+    {
+      "id": "peel-reveal",
+      "queries": ["сними пленку", "снять пленку", "отклей пленку", "сорви пленку", "peel game", "peel reveal", "tear open", "распаковка пленки"]
+    },
+    {
+      "id": "scratch-wipe-reveal",
+      "queries": ["стирай и открывай", "сотри и узнай", "стереть покрытие", "скретч игра", "scratch reveal", "scratch game", "wipe reveal", "стереть краску"]
+    },
+    {
+      "id": "clean-object",
+      "queries": ["очисти предмет", "чистка вещей", "почисти телефон", "чистка гаджетов", "clean objects", "clean gadget", "clean phone", "satisfying cleaning"]
+    },
+    {
+      "id": "restore-makeover-object",
+      "queries": ["восстанови предмет", "реставрация вещей", "реставрация техники", "ремонт старой техники", "restore object", "restore gadget", "repair old things", "object makeover"]
+    },
+    {
+      "id": "decorate-personalize",
+      "queries": ["укрась телефон", "кастомизация телефона", "укрась наушники", "укрась камеру", "decorate phone", "decorate headphones", "customize gadget", "phone stickers", "bedazzle", "decorate tech"]
+    },
+    {
+      "id": "assemble-build-object",
+      "queries": ["собери гаджет", "собери телефон", "собери компьютер", "собери приставку", "assemble gadget", "build gadget", "build handheld", "build computer", "cyberdeck"]
+    },
+    {
+      "id": "activate-boot-charge",
+      "queries": ["включи гаджет", "заряди телефон", "заряди устройство", "вставь батарейку", "activate gadget", "charge device", "boot computer", "turn on device"]
+    },
+    {
+      "id": "vending-capsule-gacha",
+      "queries": ["автомат с игрушками", "капсульный автомат", "игрушки в капсулах", "автомат сюрпризов", "gacha machine", "capsule toys", "toy vending machine", "vending toys"]
+    },
+    {
+      "id": "hatch-grow-transform",
+      "queries": ["вылупи питомца", "вырасти питомца", "эволюция питомца", "трансформация предмета", "hatch egg", "grow creature", "evolve creature", "transform object"]
+    },
+    {
+      "id": "mix-combine-generate",
+      "queries": ["смешивай предметы", "соединяй предметы", "создай предмет", "создай гаджет", "mix objects", "combine items", "create gadget", "generate item"]
+    },
+    {
+      "id": "shelf-display-filling",
+      "queries": ["заполни полку", "коллекционная полка", "расставь предметы", "укрась полку", "shelf collection", "fill the shelf", "desk setup", "display collection", "collect and display"]
+    },
+    {
+      "id": "scan-xray-identify",
+      "queries": ["сканер предметов", "просканируй предмет", "рентген предметов", "сканируй коробки", "scanner game", "scan objects", "x ray game", "scan mystery box"]
+    },
+    {
+      "id": "click-charge-transformation",
+      "queries": ["кликер трансформация", "кликай и открывай", "кликай и улучшай", "заряжай кликами", "click to transform", "click to unlock", "charge meter game", "click evolution"]
+    },
+    {
+      "id": "merge-lite-evolution",
+      "queries": ["мердж предметы", "мердж игрушки", "мердж гаджеты", "объединяй предметы", "merge objects", "merge toys", "merge gadgets", "merge evolution"]
+    },
+    {
+      "id": "pack-sort-fit-organize",
+      "queries": ["разложи предметы", "сортировка вещей", "органайзер", "разложи по местам", "собери пенал", "pack items", "organize drawer", "sort items", "fit items", "organizing game"]
+    }
+  ]
+}

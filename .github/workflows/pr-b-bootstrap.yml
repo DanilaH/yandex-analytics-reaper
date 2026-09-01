@@ -32,7 +32,6 @@ jobs:
           bootstrap = Path("scripts/pr_b_bootstrap.py")
           text = bootstrap.read_text(encoding="utf-8")
 
-          # Existing comparable-set fixtures are authoritative; remove the stale invented block.
           text, count = re.subn(
               r'\n    # Narrow probe lookup \+ validator coverage extends existing fixtures without source I/O\..*?    test_path\.write_text\(text, encoding="utf-8"\)\n',
               '\n',
@@ -43,7 +42,6 @@ jobs:
           if count != 1:
               raise RuntimeError("could not remove stale invented comparable fixture block")
 
-          # PR A failure formatting is line-oriented now; patch only its signature here.
           text, count = re.subn(
               r'\n    replace_once\(\n        path,\n        "    parts\.append\(f\\"workdir=\{workdir\}\\"\)\\n    return \\"; \\"\.join\(parts\)\\n",.*?\n    \)\n',
               '\n',
@@ -60,8 +58,6 @@ jobs:
               raise RuntimeError("expected one stale timing-report indentation patch")
           text = text.replace(old_timing, new_timing, 1)
 
-          # Current main places package_workdir before finalize_verified_artifact.
-          # Match the finalizer to the next stable function boundary instead of helper ordering.
           lines = text.splitlines()
           in_helpers = False
           pattern_fixed = False
@@ -105,7 +101,6 @@ jobs:
           workflow = Path("src/yandex_analytics_reaper/analyst_workflow.py")
           text = workflow.read_text(encoding="utf-8")
 
-          # Never label a page count as a listing count on reused evidence.
           text, count = re.subn(
               r'\n\s*listing_count=_organic_listing_count\(reusable, raw_store\),',
               '',
@@ -124,28 +119,43 @@ jobs:
           if count != 1:
               raise RuntimeError("expected pseudo listing-count helper")
 
-          # Public API normalizes all resume setup/recovery failures.
           text = text.replace(
               '        except (ExperimentRecoveryError, OSError, ValueError) as exc:\n',
               '        except Exception as exc:\n',
               1,
           )
           text = text.replace('    ExperimentRecoveryError,\n', '', 1)
-
-          # Corrupt/mismatched final ZIPs fail closed and are never overwritten.
           text = text.replace(
               '    except (BadZipFile, KeyError, OSError, ValueError) as exc:\n',
               '    except (AnalystExperimentError, BadZipFile, KeyError, OSError, ValueError) as exc:\n',
+              1,
+          )
+          if text.count('repository_root = _repository_root()') != 1:
+              raise RuntimeError("expected generated stale repository-root helper call")
+          text = text.replace(
+              'repository_root = _repository_root()',
+              'repository_root = find_repository_root(workdir)',
               1,
           )
           workflow.write_text(text, encoding="utf-8")
           PY
 
           python -m compileall -q src
+          rm -f scripts/pr_b_bootstrap.py
       - name: Install exact dev environment
         run: |
           python -m pip install "pip==26.2.1"
           pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Format generated files
+        run: |
+          ruff format \
+            src/yandex_analytics_reaper/storage/probes.py \
+            src/yandex_analytics_reaper/comparables/yandex_search.py \
+            src/yandex_analytics_reaper/experiment_runtime.py \
+            src/yandex_analytics_reaper/experiment_recovery.py \
+            src/yandex_analytics_reaper/analyst_workflow.py \
+            src/yandex_analytics_reaper/experiment_cli.py \
+            tests/test_experiment_recovery.py
       - name: Ruff
         run: ruff check .
       - name: Mypy

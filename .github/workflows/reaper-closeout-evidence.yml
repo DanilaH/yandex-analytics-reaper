@@ -1,0 +1,57 @@
+name: Reaper closeout evidence handoff
+
+on:
+  push:
+    branches:
+      - docs/reaper-0.2.0-closeout-final
+    paths:
+      - .github/workflows/reaper-closeout-evidence.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  persist-evidence:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: docs/reaper-0.2.0-closeout-final
+
+      - name: Download verified acceptance artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: reaper-0.2.0-mystery-sweep
+          path: .closeout-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 33477467946
+
+      - name: Persist compressed listing provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          inner=.closeout-artifact/20260901T062453Z.zip
+          test -f "$inner"
+          out=research/mystery-unboxing-collection-sweep-v1
+          mkdir -p "$out"
+          unzip -p "$inner" csv/listings.csv > /tmp/listings.csv
+          unzip -p "$inner" csv/comparable_memberships.csv > /tmp/comparable_memberships.csv
+          test "$(($(wc -l < /tmp/listings.csv) - 1))" -eq 665
+          gzip -9 -n -c /tmp/listings.csv > "$out/listings.csv.gz"
+          gzip -9 -n -c /tmp/comparable_memberships.csv > "$out/comparable_memberships.csv.gz"
+          gzip -t "$out/listings.csv.gz"
+          gzip -t "$out/comparable_memberships.csv.gz"
+          rm -rf .closeout-artifact
+
+      - name: Commit evidence and remove helper
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/reaper-closeout-evidence.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'research: preserve compressed sweep evidence'
+          git push origin HEAD:docs/reaper-0.2.0-closeout-final

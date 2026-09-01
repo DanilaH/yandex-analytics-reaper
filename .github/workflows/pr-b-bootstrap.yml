@@ -54,6 +54,12 @@ jobs:
           )
           if count != 1:
               raise RuntimeError('could not remove stale formatter-body patch')
+
+          old_timing_patch = "replace_once(path, '                invocation_mode=\"run\",\\n', '                invocation_mode=invocation_mode,\\n')"
+          new_timing_patch = "replace_once(path, '            invocation_mode=\"run\",\\n', '            invocation_mode=invocation_mode,\\n')"
+          if text.count(old_timing_patch) != 1:
+              raise RuntimeError('expected one stale timing-report indentation patch')
+          text = text.replace(old_timing_patch, new_timing_patch, 1)
           bootstrap.write_text(text, encoding='utf-8')
           PY
 

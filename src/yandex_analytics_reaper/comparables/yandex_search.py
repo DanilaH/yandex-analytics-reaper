@@ -14,7 +14,9 @@ from yandex_analytics_reaper.domain import (
     ProbeKind,
     ProbePage,
     ProbeRunStatus,
+    QueryFamilyMember,
     QueryFamilyVersion,
+    QueryVariantKind,
     SessionProfile,
 )
 from yandex_analytics_reaper.sources.yandex.parsers import YandexFeedParser
@@ -47,6 +49,52 @@ class YandexSearchComparableSetBuilder:
     ) -> None:
         self.raw_store = raw_store
         self.probe_store = probe_store
+
+    def validate_reusable_run(
+        self,
+        run_id: str,
+        *,
+        query_text: str,
+        expected_context: ProbeContext,
+        requested_page_limit: int,
+    ) -> ProbeRunRecord:
+        record = self.probe_store.get_run(run_id)
+        if record is None:
+            raise ComparableSetConstructionError(f"probe run does not exist: {run_id}")
+        if record.run.query_text != query_text:
+            raise ComparableSetConstructionError(
+                f"search run {run_id} query_text does not match recovery request"
+            )
+        if record.context != expected_context:
+            raise ComparableSetConstructionError(
+                f"search run {run_id} ProbeContext does not match recovery request"
+            )
+        if record.run.requested_page_limit != requested_page_limit:
+            raise ComparableSetConstructionError(
+                f"search run {run_id} page limit does not match recovery request"
+            )
+        completed_at = record.run.completed_at
+        if completed_at is None:
+            raise ComparableSetConstructionError(
+                f"search run {run_id} is not a completed reusable run"
+            )
+        validation_family = QueryFamilyVersion(
+            family_id="recovery-validation",
+            version=1,
+            label="Recovery validation",
+            source_id=_SOURCE_ID,
+            language=expected_context.language,
+            created_at=record.run.started_at,
+            members=(QueryFamilyMember(query_text=query_text, kind=QueryVariantKind.SEED),),
+        )
+        self.build(
+            validation_family,
+            (run_id,),
+            set_id=f"recovery-validation:{run_id}",
+            version=1,
+            created_at=completed_at,
+        )
+        return record
 
     def build(
         self,

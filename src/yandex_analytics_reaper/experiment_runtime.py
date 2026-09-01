@@ -13,9 +13,7 @@ from typing import IO, Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _WORKFLOW_VERSION: Literal["analyst-experiment-v1.2"] = "analyst-experiment-v1.2"
-_TIMINGS_SPEC_VERSION: Literal["analyst-experiment-timings-v1"] = (
-    "analyst-experiment-timings-v1"
-)
+_TIMINGS_SPEC_VERSION: Literal["analyst-experiment-timings-v1"] = "analyst-experiment-timings-v1"
 
 
 class ExperimentRuntimeError(RuntimeError):
@@ -330,9 +328,7 @@ class ExperimentEventEmitter:
         self.wall_clock = wall_clock or _utc_now
         self.output = output
         self.heartbeat_interval_seconds = heartbeat_interval_seconds
-        self._started_monotonic = (
-            monotonic() if started_monotonic is None else started_monotonic
-        )
+        self._started_monotonic = monotonic() if started_monotonic is None else started_monotonic
         self._last_emit_monotonic = self._started_monotonic
         self._lock = threading.RLock()
         self._stop = threading.Event()
@@ -340,8 +336,12 @@ class ExperimentEventEmitter:
         self._last_context: dict[str, object] = {"stage": "initialization"}
         logs = workdir / "logs"
         logs.mkdir(parents=True, exist_ok=True)
-        self._human = (logs / "run.log").open("a", encoding="utf-8")
-        self._jsonl = (logs / "events.jsonl").open("a", encoding="utf-8")
+        human_path = logs / "run.log"
+        jsonl_path = logs / "events.jsonl"
+        _ensure_append_boundary(human_path)
+        _ensure_append_boundary(jsonl_path)
+        self._human = human_path.open("a", encoding="utf-8")
+        self._jsonl = jsonl_path.open("a", encoding="utf-8")
 
     def __enter__(self) -> Self:
         self.start_heartbeat()
@@ -454,6 +454,13 @@ class ExperimentEventEmitter:
             self.emit_heartbeat_if_due()
 
 
+def read_run_state(path: Path) -> AnalystExperimentRunState:
+    try:
+        return AnalystExperimentRunState.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ExperimentRuntimeError("run-state.json is missing or invalid") from exc
+
+
 def write_run_state(path: Path, state: AnalystExperimentRunState) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
@@ -476,6 +483,7 @@ def format_failure_summary(
     context: dict[str, object],
     elapsed_seconds: float,
     workdir: str,
+    resume_command: str | None = None,
 ) -> str:
     lines = ["EXPERIMENT FAILED"]
     ordered = (
@@ -491,6 +499,7 @@ def format_failure_summary(
         ("elapsed_seconds", f"{max(0.0, elapsed_seconds):.3f}"),
         ("last_raw_snapshot", context.get("raw_snapshot_id")),
         ("workdir_preserved", workdir),
+        ("resume", resume_command),
     )
     for label, value in ordered:
         if value is not None:
@@ -538,6 +547,25 @@ def _human_event_line(event: AnalystExecutionEvent) -> str:
     if event.error_message:
         parts.append(f"error_message={event.error_message}")
     return " ".join(parts)
+
+
+def _ensure_append_boundary(path: Path) -> None:
+    if not path.exists():
+        return
+    if not path.is_file():
+        raise ExperimentRuntimeError(f"log path is not a regular file: {path}")
+    with path.open("r+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        if size == 0:
+            return
+        handle.seek(-1, os.SEEK_END)
+        if handle.read(1) == b"\n":
+            return
+        handle.seek(0, os.SEEK_END)
+        handle.write(b"\n")
+        handle.flush()
+        os.fsync(handle.fileno())
 
 
 def _lock_file(handle: IO[bytes]) -> None:

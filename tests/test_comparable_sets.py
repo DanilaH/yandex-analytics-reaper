@@ -182,14 +182,9 @@ def test_builder_uses_family_order_unions_organic_results_and_keeps_evidence(
         "yandex_games:50",
     ]
     assert len(comparable_set.evidence) == 7
-    assert all(
-        item.platform_listing_id != "yandex_games:9999"
-        for item in comparable_set.evidence
-    )
+    assert all(item.platform_listing_id != "yandex_games:9999" for item in comparable_set.evidence)
     duplicate_evidence = [
-        item
-        for item in comparable_set.evidence
-        if item.platform_listing_id == "yandex_games:20"
+        item for item in comparable_set.evidence if item.platform_listing_id == "yandex_games:20"
     ]
     assert len(duplicate_evidence) == 3
 
@@ -260,9 +255,7 @@ def test_store_rejects_frozen_method_family_or_raw_page_provenance_mismatch(
     wrong_runs = comparable_set.model_copy(
         update={
             "runs": (
-                comparable_set.runs[0].model_copy(
-                    update={"query_text": "not-the-family-query"}
-                ),
+                comparable_set.runs[0].model_copy(update={"query_text": "not-the-family-query"}),
                 comparable_set.runs[1],
             )
         }
@@ -318,3 +311,86 @@ def test_store_fails_closed_when_referenced_probe_page_drifts(tmp_path: Path) ->
 
     with pytest.raises(RuntimeError, match="stored comparable-set provenance is invalid"):
         store.get(comparable_set.set_id, comparable_set.version)
+
+
+def test_recovery_lookup_and_validator_reuse_exact_completed_run(tmp_path: Path) -> None:
+    family, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
+    first_ref = comparable_set.runs[0]
+    first = probe_store.get_run(first_ref.probe_run_id)
+    assert first is not None
+
+    candidates = probe_store.find_search_runs(
+        query_text=first_ref.query_text,
+        context=first.context,
+        requested_page_limit=first.run.requested_page_limit,
+    )
+    assert [item.run.id for item in candidates] == [first_ref.probe_run_id]
+
+    validated = YandexSearchComparableSetBuilder(
+        raw_store=raw_store,
+        probe_store=probe_store,
+    ).validate_reusable_run(
+        first_ref.probe_run_id,
+        query_text=first_ref.query_text,
+        expected_context=first.context,
+        requested_page_limit=first.run.requested_page_limit,
+    )
+    assert validated == first
+    assert family.members[0].query_text == first_ref.query_text
+
+
+def test_recovery_validator_rejects_completed_run_with_tampered_raw_query(
+    tmp_path: Path,
+) -> None:
+    raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
+    probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    run_id = _persist_search_run(
+        raw_store=raw_store,
+        probe_store=probe_store,
+        query="merge",
+        raw_query="different",
+        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
+        pages=((10,),),
+        requested_page_limit=1,
+    )
+    record = probe_store.get_run(run_id)
+    assert record is not None
+
+    with pytest.raises(ComparableSetConstructionError, match="raw query"):
+        YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=probe_store,
+        ).validate_reusable_run(
+            run_id,
+            query_text="merge",
+            expected_context=record.context,
+            requested_page_limit=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("expected_context", "requested_page_limit", "message"),
+    [
+        (ProbeContext(device_type="mobile", profile_age_days=0), 2, "ProbeContext"),
+        (ProbeContext(profile_age_days=0), 1, "page limit"),
+    ],
+)
+def test_recovery_validator_rejects_context_or_page_limit_mismatch(
+    tmp_path: Path,
+    expected_context: ProbeContext,
+    requested_page_limit: int,
+    message: str,
+) -> None:
+    _, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
+    first_ref = comparable_set.runs[0]
+
+    with pytest.raises(ComparableSetConstructionError, match=message):
+        YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=probe_store,
+        ).validate_reusable_run(
+            first_ref.probe_run_id,
+            query_text=first_ref.query_text,
+            expected_context=expected_context,
+            requested_page_limit=requested_page_limit,
+        )

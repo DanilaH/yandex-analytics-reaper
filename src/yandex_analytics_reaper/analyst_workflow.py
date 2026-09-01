@@ -33,15 +33,25 @@ from yandex_analytics_reaper.analyst import (
     validate_analyst_snapshot_report,
     write_analyst_export_csv,
 )
-from yandex_analytics_reaper.comparables import YandexSearchComparableSetBuilder
+from yandex_analytics_reaper.comparables import (
+    ComparableSetConstructionError,
+    YandexSearchComparableSetBuilder,
+)
 from yandex_analytics_reaper.config import load_settings
 from yandex_analytics_reaper.domain import (
     ComparableSetVersion,
     ProbeContext,
+    ProbeRunStatus,
     QueryFamilyMember,
     QueryFamilyVersion,
     QueryVariantKind,
     SessionProfile,
+)
+from yandex_analytics_reaper.experiment_recovery import (
+    clear_derived_outputs,
+    load_resume_preflight,
+    prepare_temporary_artifact,
+    publish_artifact_create_only,
 )
 from yandex_analytics_reaper.experiment_runtime import (
     AnalystExperimentRunState,
@@ -70,9 +80,7 @@ from yandex_analytics_reaper.storage import (
 )
 
 ANALYST_EXPERIMENT_SCHEMA_VERSION: Literal[1] = 1
-ANALYST_EXPERIMENT_WORKFLOW_VERSION: Literal["analyst-experiment-v1.2"] = (
-    "analyst-experiment-v1.2"
-)
+ANALYST_EXPERIMENT_WORKFLOW_VERSION: Literal["analyst-experiment-v1.2"] = "analyst-experiment-v1.2"
 _VERIFICATION_SPEC_VERSION: Literal["analyst-experiment-verification-v1"] = (
     "analyst-experiment-verification-v1"
 )
@@ -429,6 +437,10 @@ class AnalystExperimentRunner:
                                 context=failure_context,
                                 elapsed_seconds=events.elapsed_seconds,
                                 workdir=_relative_display(workdir, self.repository_root),
+                                resume_command=(
+                                    "yandex-reaper-experiment resume "
+                                    + _relative_display(workdir, self.repository_root)
+                                ),
                             )
                         ) from exc
                     events.emit(
@@ -443,7 +455,141 @@ class AnalystExperimentRunner:
         except Exception as exc:
             raise AnalystExperimentError(
                 f"{type(exc).__name__}: {exc}; workdir preserved at "
+                f"{_relative_display(workdir, self.repository_root)}; resume="
+                "yandex-reaper-experiment resume "
                 f"{_relative_display(workdir, self.repository_root)}"
+            ) from exc
+
+    def resume(
+        self,
+        workdir: Path,
+        *,
+        invocation_started_monotonic: float | None = None,
+    ) -> AnalystExperimentResult:
+        invocation_started_at = datetime.now(UTC)
+        invocation_mono = (
+            self.monotonic()
+            if invocation_started_monotonic is None
+            else invocation_started_monotonic
+        )
+        resolved_workdir = workdir.resolve()
+        lock = WorkdirLock(resolved_workdir / "run.lock")
+        try:
+            with lock:
+                validation_started = self.monotonic()
+                preflight = load_resume_preflight(self.repository_root, resolved_workdir)
+                try:
+                    manifest = AnalystExperimentManifest.model_validate_json(
+                        preflight.manifest_bytes
+                    )
+                except ValueError as exc:
+                    raise AnalystExperimentError(
+                        "persisted input/manifest.json is not a valid experiment manifest"
+                    ) from exc
+                if manifest.experiment_id != preflight.state.experiment_id:
+                    raise AnalystExperimentError(
+                        "persisted manifest experiment_id disagrees with run-state.json"
+                    )
+                validation_elapsed = max(0.0, self.monotonic() - validation_started)
+
+                if preflight.artifact_path.exists():
+                    result = _result_from_existing_artifact(
+                        preflight.artifact_path,
+                        repository_root=self.repository_root,
+                        state=preflight.state,
+                        invocation_elapsed_seconds=max(0.0, self.monotonic() - invocation_mono),
+                    )
+                    self.output(
+                        "resume recovered already-published verified artifact "
+                        + _relative_display(preflight.artifact_path, self.repository_root)
+                    )
+                else:
+                    initialization_started = self.monotonic()
+                    clear_derived_outputs(preflight.workdir)
+                    timings = ExperimentTimingRecorder(monotonic=self.monotonic)
+                    timings.record_stage("manifest_validation", validation_elapsed)
+                    timings.record_stage(
+                        "workdir_initialization",
+                        max(0.0, self.monotonic() - initialization_started),
+                    )
+                    with ExperimentEventEmitter(
+                        preflight.workdir,
+                        monotonic=self.monotonic,
+                        experiment_id=preflight.state.experiment_id,
+                        run_id=preflight.state.run_id,
+                        output=self.output,
+                        heartbeat_interval_seconds=self.heartbeat_interval_seconds,
+                        started_monotonic=invocation_mono,
+                    ) as events:
+                        query_total = sum(len(item.queries) for item in manifest.families)
+                        events.emit(
+                            "resume_started",
+                            stage="workdir_initialization",
+                            query_total=query_total,
+                        )
+                        events.emit(
+                            "stage_completed",
+                            stage="manifest_validation",
+                        )
+                        events.emit(
+                            "stage_completed",
+                            stage="workdir_initialization",
+                        )
+                        try:
+                            result = self._run_in_workdir(
+                                manifest,
+                                started_at=preflight.state.started_at,
+                                invocation_started_at=invocation_started_at,
+                                manifest_sha256=preflight.state.manifest_sha256,
+                                run_id=preflight.state.run_id,
+                                workdir=preflight.workdir,
+                                artifact_path=preflight.artifact_path,
+                                events=events,
+                                timings=timings,
+                                invocation_mode="resume",
+                                allow_reuse=True,
+                            )
+                        except Exception as exc:
+                            failure_context = events.last_context
+                            stage = str(failure_context.get("stage", "unknown"))
+                            events.emit(
+                                "experiment_failed",
+                                stage=stage,
+                                error_type=type(exc).__name__,
+                                error_message=str(exc).strip() or type(exc).__name__,
+                                **{
+                                    key: value
+                                    for key, value in failure_context.items()
+                                    if key != "stage"
+                                },
+                            )
+                            resume_target = _relative_display(
+                                preflight.workdir, self.repository_root
+                            )
+                            raise AnalystExperimentError(
+                                format_failure_summary(
+                                    exc,
+                                    context=failure_context,
+                                    elapsed_seconds=events.elapsed_seconds,
+                                    workdir=resume_target,
+                                    resume_command=(
+                                        "yandex-reaper-experiment resume " + resume_target
+                                    ),
+                                )
+                            ) from exc
+                        events.emit(
+                            "experiment_completed",
+                            stage="complete",
+                            query_total=query_total,
+                        )
+            shutil.rmtree(resolved_workdir)
+            return result
+        except AnalystExperimentError:
+            raise
+        except Exception as exc:
+            raise AnalystExperimentError(
+                f"{type(exc).__name__}: {exc}; workdir preserved at "
+                f"{_relative_display(resolved_workdir, self.repository_root)}"
             ) from exc
 
     def _run_in_workdir(
@@ -458,6 +604,8 @@ class AnalystExperimentRunner:
         artifact_path: Path,
         events: ExperimentEventEmitter,
         timings: ExperimentTimingRecorder,
+        invocation_mode: Literal["run", "resume"] = "run",
+        allow_reuse: bool = False,
     ) -> AnalystExperimentResult:
         report_dir = workdir / "reports"
         csv_dir = workdir / "csv"
@@ -477,9 +625,23 @@ class AnalystExperimentRunner:
             user_agent=self.settings.user_agent,
         )
 
-        families: list[tuple[AnalystExperimentFamily, QueryFamilyVersion, list[str]]] = []
+        families: list[
+            tuple[
+                AnalystExperimentFamily,
+                QueryFamilyVersion,
+                list[str],
+                ComparableSetVersion | None,
+            ]
+        ] = []
         query_total = sum(len(item.queries) for item in manifest.families)
         query_index = 0
+        reused_query_count = 0
+        collected_query_count = 0
+        expected_context = _effective_clean_context(context)
+        comparable_builder = YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=probe_store,
+        )
 
         with _stage(events, timings, self.monotonic, "search_collection"):
             for family_input in manifest.families:
@@ -488,70 +650,185 @@ class AnalystExperimentRunner:
                     language=manifest.context.lang,
                     created_at=started_at,
                 )
-                query_store.persist(family)
+                family = query_store.persist(family)
+                set_id = f"{manifest.experiment_id}--{family_input.id}"
+                existing_comparable = comparable_store.get(set_id, 1) if allow_reuse else None
                 family_run_ids: list[str] = []
-                for query in family_input.queries:
-                    query_index += 1
-                    query_started = self.monotonic()
-                    events.emit(
-                        "query_started",
-                        stage="search_collection",
-                        family_id=family_input.id,
-                        query=query,
-                        query_index=query_index,
-                        query_total=query_total,
-                    )
-                    search_result = self._collect_search(
-                        query,
-                        context=context,
-                        page_limit=manifest.context.pages,
-                        raw_store=raw_store,
-                        probe_store=probe_store,
-                        schema_registry=schema_registry,
-                        session_manager=session_manager,
-                        family_id=family_input.id,
-                        query_index=query_index,
-                        query_total=query_total,
-                        events=events,
-                        timings=timings,
-                    )
-                    family_run_ids.append(search_result.record.run.id)
-                    elapsed = max(0.0, self.monotonic() - query_started)
-                    timings.record_query(
-                        family_id=family_input.id,
-                        query=query,
-                        query_index=query_index,
-                        query_total=query_total,
-                        action="collected",
-                        elapsed_seconds=elapsed,
-                    )
-                    events.emit(
-                        "query_completed",
-                        stage="search_collection",
-                        family_id=family_input.id,
-                        query=query,
-                        query_index=query_index,
-                        query_total=query_total,
-                        probe_run_id=search_result.record.run.id,
-                        listing_count=sum(len(page.games) for page in search_result.parsed_pages),
-                        duration_seconds=elapsed,
-                    )
-                families.append((family_input, family, family_run_ids))
+
+                if existing_comparable is not None:
+                    existing_queries = tuple(run.query_text for run in existing_comparable.runs)
+                    if existing_queries != family_input.queries:
+                        raise AnalystExperimentError(
+                            f"existing comparable {set_id}@1 does not match declared queries"
+                        )
+                    for query, run_ref in zip(
+                        family_input.queries,
+                        existing_comparable.runs,
+                        strict=True,
+                    ):
+                        comparable_builder.validate_reusable_run(
+                            run_ref.probe_run_id,
+                            query_text=query,
+                            expected_context=expected_context,
+                            requested_page_limit=manifest.context.pages,
+                        )
+                        query_index += 1
+                        family_run_ids.append(run_ref.probe_run_id)
+                        reused_query_count += 1
+                        timings.record_query(
+                            family_id=family_input.id,
+                            query=query,
+                            query_index=query_index,
+                            query_total=query_total,
+                            action="reused",
+                            elapsed_seconds=None,
+                        )
+                        events.emit(
+                            "query_reused",
+                            stage="search_collection",
+                            family_id=family_input.id,
+                            query=query,
+                            query_index=query_index,
+                            query_total=query_total,
+                            probe_run_id=run_ref.probe_run_id,
+                        )
+                else:
+                    for query in family_input.queries:
+                        query_index += 1
+                        reusable = None
+                        if allow_reuse:
+                            candidates = probe_store.find_search_runs(
+                                query_text=query,
+                                context=expected_context,
+                                requested_page_limit=manifest.context.pages,
+                            )
+                            for candidate in candidates:
+                                status = candidate.run.status
+                                if status is ProbeRunStatus.RUNNING:
+                                    events.emit(
+                                        "stale_probe_ignored",
+                                        stage="search_collection",
+                                        family_id=family_input.id,
+                                        query=query,
+                                        query_index=query_index,
+                                        query_total=query_total,
+                                        probe_run_id=candidate.run.id,
+                                    )
+                                    continue
+                                if status is not ProbeRunStatus.COMPLETED:
+                                    continue
+                                try:
+                                    reusable = comparable_builder.validate_reusable_run(
+                                        candidate.run.id,
+                                        query_text=query,
+                                        expected_context=expected_context,
+                                        requested_page_limit=manifest.context.pages,
+                                    )
+                                except ComparableSetConstructionError as exc:
+                                    events.emit(
+                                        "probe_reuse_rejected",
+                                        stage="search_collection",
+                                        family_id=family_input.id,
+                                        query=query,
+                                        query_index=query_index,
+                                        query_total=query_total,
+                                        probe_run_id=candidate.run.id,
+                                        error_type=type(exc).__name__,
+                                        error_message=str(exc),
+                                    )
+                                    continue
+                                break
+
+                        if reusable is not None:
+                            family_run_ids.append(reusable.run.id)
+                            reused_query_count += 1
+                            timings.record_query(
+                                family_id=family_input.id,
+                                query=query,
+                                query_index=query_index,
+                                query_total=query_total,
+                                action="reused",
+                                elapsed_seconds=None,
+                            )
+                            events.emit(
+                                "query_reused",
+                                stage="search_collection",
+                                family_id=family_input.id,
+                                query=query,
+                                query_index=query_index,
+                                query_total=query_total,
+                                probe_run_id=reusable.run.id,
+                            )
+                            continue
+
+                        query_started = self.monotonic()
+                        events.emit(
+                            "query_started",
+                            stage="search_collection",
+                            family_id=family_input.id,
+                            query=query,
+                            query_index=query_index,
+                            query_total=query_total,
+                        )
+                        search_result = self._collect_search(
+                            query,
+                            context=context,
+                            page_limit=manifest.context.pages,
+                            raw_store=raw_store,
+                            probe_store=probe_store,
+                            schema_registry=schema_registry,
+                            session_manager=session_manager,
+                            family_id=family_input.id,
+                            query_index=query_index,
+                            query_total=query_total,
+                            events=events,
+                            timings=timings,
+                        )
+                        family_run_ids.append(search_result.record.run.id)
+                        collected_query_count += 1
+                        elapsed = max(0.0, self.monotonic() - query_started)
+                        timings.record_query(
+                            family_id=family_input.id,
+                            query=query,
+                            query_index=query_index,
+                            query_total=query_total,
+                            action="collected",
+                            elapsed_seconds=elapsed,
+                        )
+                        events.emit(
+                            "query_completed",
+                            stage="search_collection",
+                            family_id=family_input.id,
+                            query=query,
+                            query_index=query_index,
+                            query_total=query_total,
+                            probe_run_id=search_result.record.run.id,
+                            listing_count=sum(
+                                len(page.games) for page in search_result.parsed_pages
+                            ),
+                            duration_seconds=elapsed,
+                        )
+                families.append((family_input, family, family_run_ids, existing_comparable))
 
         comparable_sets: list[ComparableSetVersion] = []
         with _stage(events, timings, self.monotonic, "comparable_construction"):
-            for family_input, family, family_run_ids in families:
-                comparable = YandexSearchComparableSetBuilder(
-                    raw_store=raw_store,
-                    probe_store=probe_store,
-                ).build(
+            for family_input, family, family_run_ids, existing in families:
+                comparable = comparable_builder.build(
                     family,
                     family_run_ids,
                     set_id=f"{manifest.experiment_id}--{family_input.id}",
                     version=1,
-                    created_at=datetime.now(UTC),
+                    created_at=(existing.created_at if existing is not None else datetime.now(UTC)),
                 )
-                comparable_sets.append(comparable_store.persist(comparable))
+                if existing is not None:
+                    if comparable != existing:
+                        raise AnalystExperimentError(
+                            f"existing comparable {existing.set_id}@{existing.version} "
+                            "does not replay exactly from its selected run IDs"
+                        )
+                    comparable_sets.append(existing)
+                else:
+                    comparable_sets.append(comparable_store.persist(comparable))
 
         with _stage(events, timings, self.monotonic, "family_coherence"):
             coherence_reports = [_coherence_report(item) for item in comparable_sets]
@@ -678,12 +955,12 @@ class AnalystExperimentRunner:
             snapshot_content_hash=snapshot.content_hash,
             market_export_content_hash=market_export.content_hash,
             market_features_content_hash=market_features.content_hash,
-            final_invocation_mode="run",
+            final_invocation_mode=invocation_mode,
             final_invocation_started_at=invocation_started_at,
             final_invocation_workers=1,
-            was_resumed=False,
-            reused_query_count=0,
-            collected_query_count=query_total,
+            was_resumed=invocation_mode == "resume",
+            reused_query_count=reused_query_count,
+            collected_query_count=collected_query_count,
             verifier_status="pass",
         )
         _write_model(workdir / "execution-summary.json", summary)
@@ -691,7 +968,7 @@ class AnalystExperimentRunner:
         timing_report = timings.report(
             experiment_id=manifest.experiment_id,
             run_id=run_id,
-            invocation_mode="run",
+            invocation_mode=invocation_mode,
             query_workers=1,
         )
         _write_model(report_dir / "execution-timings.json", timing_report)
@@ -705,13 +982,13 @@ class AnalystExperimentRunner:
             _write_model(workdir / "artifact-manifest.json", artifact_manifest)
             artifact_manifest_sha256 = _sha256_file(workdir / "artifact-manifest.json")
 
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_artifact = prepare_temporary_artifact(artifact_path)
         try:
             with _stage(events, timings, self.monotonic, "package_write"):
-                package_workdir(workdir, artifact_path)
+                package_workdir(workdir, temporary_artifact)
             with _stage(events, timings, self.monotonic, "package_verification"):
                 verified_manifest = verify_packaged_artifact(
-                    artifact_path,
+                    temporary_artifact,
                     expected_experiment_id=artifact_manifest.experiment_id,
                     expected_run_id=artifact_manifest.run_id,
                 )
@@ -721,9 +998,10 @@ class AnalystExperimentRunner:
                         "from the workdir"
                     )
             with _stage(events, timings, self.monotonic, "final_hashing"):
-                artifact_sha256 = _sha256_file(artifact_path)
+                artifact_sha256 = _sha256_file(temporary_artifact)
+                publish_artifact_create_only(temporary_artifact, artifact_path)
         except Exception:
-            _discard_artifact(artifact_path)
+            _discard_artifact(temporary_artifact)
             raise
 
         return AnalystExperimentResult(
@@ -947,6 +1225,77 @@ class AnalystExperimentRunner:
                 )
                 raise
         raise RuntimeError("unreachable rich-metadata retry state")
+
+
+def _effective_clean_context(context: ProbeContext) -> ProbeContext:
+    return ProbeContext.model_validate(
+        context.model_copy(
+            update={
+                "session_instance_id": None,
+                "cookie_state_hash": None,
+                "profile_age_days": 0,
+            }
+        ).model_dump()
+    )
+
+
+def _result_from_existing_artifact(
+    artifact_path: Path,
+    *,
+    repository_root: Path,
+    state: AnalystExperimentRunState,
+    invocation_elapsed_seconds: float,
+) -> AnalystExperimentResult:
+    if not artifact_path.is_file():
+        raise AnalystExperimentError(
+            f"existing final artifact is not a regular file: {artifact_path}"
+        )
+    try:
+        artifact_manifest = verify_packaged_artifact(
+            artifact_path,
+            expected_experiment_id=state.experiment_id,
+            expected_run_id=state.run_id,
+        )
+        with ZipFile(artifact_path, "r") as archive:
+            summary_bytes = archive.read("execution-summary.json")
+            manifest_bytes = archive.read("artifact-manifest.json")
+            input_manifest_bytes = archive.read("input/manifest.json")
+        summary = AnalystExperimentExecutionSummary.model_validate_json(summary_bytes)
+    except (AnalystExperimentError, BadZipFile, KeyError, OSError, ValueError) as exc:
+        raise AnalystExperimentError(
+            "existing final artifact is invalid and will not be overwritten"
+        ) from exc
+    if (
+        summary.experiment_id != state.experiment_id
+        or summary.run_id != state.run_id
+        or summary.manifest_sha256 != state.manifest_sha256
+        or artifact_manifest.experiment_id != state.experiment_id
+        or artifact_manifest.run_id != state.run_id
+        or _sha256_bytes(input_manifest_bytes) != state.manifest_sha256
+    ):
+        raise AnalystExperimentError(
+            "existing final artifact identity does not match resume state; refusing overwrite"
+        )
+    return AnalystExperimentResult(
+        experiment_id=state.experiment_id,
+        run_id=state.run_id,
+        artifact_path=_relative_display(artifact_path, repository_root),
+        artifact_sha256=_sha256_file(artifact_path),
+        artifact_manifest_sha256=_sha256_bytes(manifest_bytes),
+        verifier="PASS",
+        family_count=summary.family_count,
+        query_count=summary.query_count,
+        comparable_unique_listing_count=summary.comparable_unique_listing_count,
+        rich_requested_listing_count=summary.rich_requested_listing_count,
+        rich_observed_listing_count=summary.rich_observed_listing_count,
+        invocation_elapsed_seconds=max(0.0, invocation_elapsed_seconds),
+    )
+
+
+def resume_analyst_experiment(workdir: Path) -> AnalystExperimentResult:
+    """Resume one preserved v1.2 experiment workdir after strict local preflight."""
+    repository_root = find_repository_root(workdir)
+    return AnalystExperimentRunner(repository_root=repository_root).resume(workdir)
 
 
 def run_analyst_experiment(manifest_path: Path) -> AnalystExperimentResult:
@@ -1181,9 +1530,7 @@ def verify_packaged_artifact(
             for name in names:
                 path = PurePosixPath(name)
                 if path.is_absolute() or ".." in path.parts or name != path.as_posix():
-                    raise AnalystExperimentError(
-                        f"packaged artifact contains unsafe path: {name}"
-                    )
+                    raise AnalystExperimentError(f"packaged artifact contains unsafe path: {name}")
             if "artifact-manifest.json" not in names:
                 raise AnalystExperimentError("packaged artifact is missing artifact-manifest.json")
             artifact_manifest = AnalystArtifactManifest.model_validate_json(
@@ -1222,21 +1569,23 @@ def finalize_verified_artifact(
     *,
     expected_manifest: AnalystArtifactManifest,
 ) -> str:
-    """Publish, verify, identify, and hash one package or leave no final ZIP behind."""
+    temporary = prepare_temporary_artifact(artifact_path)
     try:
-        package_workdir(workdir, artifact_path)
-        verified_manifest = verify_packaged_artifact(
-            artifact_path,
+        package_workdir(workdir, temporary)
+        verified = verify_packaged_artifact(
+            temporary,
             expected_experiment_id=expected_manifest.experiment_id,
             expected_run_id=expected_manifest.run_id,
         )
-        if verified_manifest != expected_manifest:
+        if verified != expected_manifest:
             raise AnalystExperimentError(
-                "packaged artifact manifest does not match the manifest built from the workdir"
+                "packaged artifact manifest does not match expected manifest"
             )
-        return _sha256_file(artifact_path)
+        digest = _sha256_file(temporary)
+        publish_artifact_create_only(temporary, artifact_path)
+        return digest
     except Exception:
-        _discard_artifact(artifact_path)
+        _discard_artifact(temporary)
         raise
 
 

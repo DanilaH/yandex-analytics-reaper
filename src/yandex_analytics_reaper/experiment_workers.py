@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
+from queue import SimpleQueue
 
 _MIN_QUERY_WORKERS = 1
 _MAX_QUERY_WORKERS = 4
@@ -37,12 +38,13 @@ def run_bounded_query_workers(
     workers: int,
     collect: Callable[[ExactQueryWorkItem], ExactQueryWorkResult],
 ) -> tuple[ExactQueryWorkResult, ...]:
-    """Run at most ``workers`` independent exact queries without pre-queuing the tail.
+    """Run a bounded exact-query schedule without pre-queuing the unscheduled tail.
 
-    Only the first bounded wave is submitted eagerly. A successful completion opens one
-    new scheduling slot. Once any active query fails, no new query is submitted; already
-    active siblings are allowed to reach a terminal state before the first failure is
-    re-raised. Results are returned in manifest/query-index order, never completion order.
+    Only the initial bounded wave is submitted eagerly. Each successful completion opens
+    one new slot. Completion callbacks feed a FIFO queue, so the first observed terminal
+    failure becomes authoritative: after it is observed no new query is submitted, while
+    already active siblings are allowed to reach a terminal state. Successful results are
+    returned in manifest/query-index order, never completion order.
     """
     worker_count = validate_query_workers(workers)
     if not items:
@@ -50,45 +52,45 @@ def run_bounded_query_workers(
 
     pending = iter(items)
     active: dict[Future[ExactQueryWorkResult], ExactQueryWorkItem] = {}
+    completed: SimpleQueue[Future[ExactQueryWorkResult]] = SimpleQueue()
     results: dict[int, ExactQueryWorkResult] = {}
     first_error: Exception | None = None
+
+    def submit(executor: ThreadPoolExecutor, item: ExactQueryWorkItem) -> None:
+        future = executor.submit(collect, item)
+        active[future] = item
+        future.add_done_callback(completed.put)
 
     with ThreadPoolExecutor(
         max_workers=worker_count,
         thread_name_prefix="query-worker",
     ) as executor:
         for _ in range(min(worker_count, len(items))):
-            item = next(pending)
-            active[executor.submit(collect, item)] = item
+            submit(executor, next(pending))
 
         while active:
-            done, _ = wait(tuple(active), return_when=FIRST_COMPLETED)
-            completed = sorted(done, key=lambda future: active[future].query_index)
-            for future in completed:
-                item = active.pop(future)
-                try:
-                    result = future.result()
-                except Exception as exc:
-                    if first_error is None:
-                        first_error = exc
-                    continue
-                if result.query_index != item.query_index:
-                    raise RuntimeError(
-                        "query worker returned a result for a different query index"
-                    )
-                if result.query_index in results:
-                    raise RuntimeError("query worker returned a duplicate query index")
-                results[result.query_index] = result
+            future = completed.get()
+            item = active.pop(future)
+            try:
+                result = future.result()
+            except Exception as exc:
+                if first_error is None:
+                    first_error = exc
+                continue
+
+            if result.query_index != item.query_index:
+                raise RuntimeError("query worker returned a result for a different query index")
+            if result.query_index in results:
+                raise RuntimeError("query worker returned a duplicate query index")
+            results[result.query_index] = result
 
             if first_error is not None:
                 continue
-
-            while len(active) < worker_count:
-                try:
-                    item = next(pending)
-                except StopIteration:
-                    break
-                active[executor.submit(collect, item)] = item
+            try:
+                next_item = next(pending)
+            except StopIteration:
+                continue
+            submit(executor, next_item)
 
     if first_error is not None:
         raise first_error

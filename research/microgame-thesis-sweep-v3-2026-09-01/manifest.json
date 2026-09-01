@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "experiment_id": "microgame-thesis-sweep-v3-2026-09-01",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "custom-headphones",
+      "queries": [
+        "укрась наушники",
+        "кастом наушников",
+        "кастомизация наушников",
+        "наушники со стразами",
+        "наушники с подвесками",
+        "раскрась наушники",
+        "decorate headphones",
+        "bedazzle headphones",
+        "headphone charms",
+        "paint headphones"
+      ]
+    },
+    {
+      "id": "custom-digicam",
+      "queries": [
+        "укрась фотоаппарат",
+        "кастомизация фотоаппарата",
+        "укрась камеру",
+        "камера со стразами",
+        "наклейки на фотоаппарат",
+        "подвески на камеру",
+        "decorate camera",
+        "decorate digicam",
+        "bedazzle camera",
+        "camera charms"
+      ]
+    },
+    {
+      "id": "custom-retro-player",
+      "queries": [
+        "укрась мп3 плеер",
+        "кастомизация мп3 плеера",
+        "укрась плеер",
+        "плеер со стразами",
+        "наклейки на плеер",
+        "decorate mp3 player",
+        "customize mp3 player",
+        "bedazzle mp3 player",
+        "decorate music player",
+        "music player charms"
+      ]
+    },
+    {
+      "id": "restore-retro-pocket-tech",
+      "queries": [
+        "почини старый телефон",
+        "почини старый плеер",
+        "реставрация мп3 плеера",
+        "реставрация фотоаппарата",
+        "восстанови старый телефон",
+        "восстанови старую камеру",
+        "почисти старый плеер",
+        "почисти старый фотоаппарат",
+        "restore old phone",
+        "restore mp3 player",
+        "restore old camera",
+        "repair retro gadget",
+        "restore retro tech",
+        "clean retro gadget"
+      ]
+    },
+    {
+      "id": "peel-collectible-reveal",
+      "queries": [
+        "сорви пленку сюрприз",
+        "отклей пленку сюрприз",
+        "сними пленку и открой",
+        "сними пленку с игрушки",
+        "сними пленку с гаджета",
+        "распаковка сюрприза пленка",
+        "peel surprise",
+        "peel collectible",
+        "peel reveal collectible",
+        "peel mystery toy",
+        "peel mystery pack",
+        "tear film reveal"
+      ]
+    },
+    {
+      "id": "cyberdeck-pocket-computer-assembly",
+      "queries": [
+        "собери кибердек",
+        "кибердек конструктор",
+        "собери карманный компьютер",
+        "собери портативный компьютер",
+        "собери ретро компьютер",
+        "конструктор карманного компьютера",
+        "assemble cyberdeck",
+        "build cyberdeck",
+        "cyberdeck builder",
+        "build pocket computer",
+        "assemble pocket computer",
+        "build handheld computer",
+        "assemble retro computer"
+      ]
+    },
+    {
+      "id": "vending-tiny-collectibles",
+      "queries": [
+        "автомат с мини игрушками",
+        "капсульный автомат миниатюры",
+        "автомат с брелоками",
+        "автомат с мини гаджетами",
+        "капсулы с миниатюрами",
+        "капсулы с брелоками",
+        "vending machine mini toys",
+        "capsule machine miniatures",
+        "vending machine keychains",
+        "capsule machine gadgets",
+        "gacha tiny collectibles",
+        "tiny collectible vending"
+      ]
+    },
+    {
+      "id": "functional-mini-media",
+      "queries": [
+        "мини проигрыватель",
+        "мини винил",
+        "мини кассета",
+        "мини телевизор игрушка",
+        "мини радио игрушка",
+        "включи мини телевизор",
+        "мини техника коллекция",
+        "mini record player game",
+        "mini vinyl collectible",
+        "tiny tv game",
+        "tiny radio game",
+        "functional miniature game",
+        "mini media collectible"
+      ]
+    }
+  ]
+}

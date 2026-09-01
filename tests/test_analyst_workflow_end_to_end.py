@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 from zipfile import ZipFile
 
 import pytest
@@ -11,6 +13,7 @@ import pytest
 import yandex_analytics_reaper.analyst_workflow as workflow
 from yandex_analytics_reaper.domain import ProbeContext
 from yandex_analytics_reaper.ingestion import (
+    ProbePersistenceGate,
     YandexNormalizationPersistence,
     YandexPaginatedProbeRunner,
     YandexRichMetadataCollector,
@@ -22,6 +25,9 @@ from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLitePr
 
 class FakeSearchClient:
     source_id = "yandex_public"
+    _barrier = threading.Barrier(2)
+    _seen_lock = threading.Lock()
+    _seen: ClassVar[set[str]] = set()
 
     def collect_search(
         self,
@@ -32,6 +38,11 @@ class FakeSearchClient:
         rtx_reqid: str | None = None,
     ) -> CollectedResponse:
         del page_id, rtx_reqid
+        with type(self)._seen_lock:
+            first_for_query = query not in type(self)._seen
+            type(self)._seen.add(query)
+        if first_for_query:
+            type(self)._barrier.wait(timeout=2.0)
         app_ids = {
             "clean": [10, 20],
             "break": [20, 30],
@@ -135,19 +146,22 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         session_manager: object,
+        persistence_gate: ProbePersistenceGate,
         family_id: str,
         query_index: int,
         query_total: int,
+        worker: str,
         events: object,
         timings: object,
     ):
-        del session_manager, family_id, query_index, query_total, events, timings
+        del session_manager, family_id, query_index, query_total, worker, events, timings
         effective_context = context.model_copy(update={"profile_age_days": 0})
         return YandexPaginatedProbeRunner(
             client=FakeSearchClient(),
             raw_store=raw_store,
             probe_store=probe_store,
             schema_registry=schema_registry,
+            persistence_gate=persistence_gate,
         ).run_search(query, effective_context, page_limit=page_limit)
 
     def collect_rich_batch(
@@ -182,9 +196,7 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
     assert result.rich_requested_listing_count == 3
     assert result.rich_observed_listing_count == 3
     assert result.invocation_elapsed_seconds >= 0.0
-    assert not (
-        tmp_path / "artifacts" / "work" / result.experiment_id / result.run_id
-    ).exists()
+    assert not (tmp_path / "artifacts" / "work" / result.experiment_id / result.run_id).exists()
 
     packaged_manifest = workflow.verify_packaged_artifact(
         artifact_path,

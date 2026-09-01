@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yandex-analytics-reaper"
-version = "0.1.1"
+version = "0.2.0"
 description = "Private market-intelligence tooling for Yandex Games opportunity discovery and candidate evaluation."
 readme = "README.md"
 requires-python = ">=3.12"

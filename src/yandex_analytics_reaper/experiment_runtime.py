@@ -290,8 +290,24 @@ class ExperimentTimingRecorder:
         with self._lock:
             stages = tuple(self._stages)
             queries = tuple(sorted(self._queries, key=lambda item: item.query_index))
-            pages = tuple(self._pages)
-            retries = tuple(self._retries)
+            query_order = {item.query: item.query_index for item in queries}
+            pages = tuple(
+                sorted(
+                    self._pages,
+                    key=lambda item: (query_order.get(item.query, 10**9), item.page),
+                )
+            )
+            retries = tuple(
+                sorted(
+                    self._retries,
+                    key=lambda item: (
+                        0 if item.query is not None else 1,
+                        query_order.get(item.query or "", 10**9),
+                        item.batch_index or 0,
+                        item.attempt,
+                    ),
+                )
+            )
             rich_batches = tuple(self._rich_batches)
         return AnalystExperimentTimings(
             experiment_id=experiment_id,

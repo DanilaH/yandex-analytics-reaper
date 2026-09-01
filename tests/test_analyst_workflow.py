@@ -329,9 +329,10 @@ def test_resume_preserves_identity_and_cleans_workdir_only_after_success(
         heartbeat_interval_seconds=0,
     )
 
-    result = runner.resume(workdir)
+    result = runner.resume(workdir, query_workers=3)
 
     assert observed
+    assert observed["query_workers"] == 3
     assert result.run_id == state.run_id
     assert not workdir.exists()
 

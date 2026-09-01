@@ -7,8 +7,8 @@ import platform
 import shutil
 import subprocess
 import time
-from collections.abc import Callable, Iterable, Sequence
-from contextlib import suppress
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Literal, Self
@@ -43,7 +43,16 @@ from yandex_analytics_reaper.domain import (
     QueryVariantKind,
     SessionProfile,
 )
+from yandex_analytics_reaper.experiment_runtime import (
+    AnalystExperimentRunState,
+    ExperimentEventEmitter,
+    ExperimentTimingRecorder,
+    WorkdirLock,
+    format_failure_summary,
+    write_run_state,
+)
 from yandex_analytics_reaper.ingestion import (
+    PaginatedProbePageEvent,
     PaginatedProbeResult,
     RichMetadataCollectionResult,
     YandexNormalizationPersistence,
@@ -61,8 +70,8 @@ from yandex_analytics_reaper.storage import (
 )
 
 ANALYST_EXPERIMENT_SCHEMA_VERSION: Literal[1] = 1
-ANALYST_EXPERIMENT_WORKFLOW_VERSION: Literal["analyst-experiment-v1.1"] = (
-    "analyst-experiment-v1.1"
+ANALYST_EXPERIMENT_WORKFLOW_VERSION: Literal["analyst-experiment-v1.2"] = (
+    "analyst-experiment-v1.2"
 )
 _VERIFICATION_SPEC_VERSION: Literal["analyst-experiment-verification-v1"] = (
     "analyst-experiment-verification-v1"
@@ -196,7 +205,7 @@ class AnalystRuntimeProvenance(BaseModel):
 class AnalystExperimentExecutionSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    workflow_version: Literal["analyst-experiment-v1.1"]
+    workflow_version: Literal["analyst-experiment-v1.2"]
     status: Literal["completed"]
     experiment_id: str
     run_id: str
@@ -213,6 +222,12 @@ class AnalystExperimentExecutionSummary(BaseModel):
     snapshot_content_hash: str
     market_export_content_hash: str
     market_features_content_hash: str
+    final_invocation_mode: Literal["run", "resume"]
+    final_invocation_started_at: datetime
+    final_invocation_workers: int = Field(ge=1)
+    was_resumed: bool
+    reused_query_count: int = Field(ge=0)
+    collected_query_count: int = Field(ge=0)
     verifier_status: Literal["pass"]
 
     @field_validator(
@@ -283,6 +298,7 @@ class AnalystExperimentResult(BaseModel):
     comparable_unique_listing_count: int
     rich_requested_listing_count: int
     rich_observed_listing_count: int
+    invocation_elapsed_seconds: float = Field(ge=0.0)
 
     @field_validator("artifact_sha256", "artifact_manifest_sha256")
     @classmethod
@@ -299,9 +315,15 @@ class AnalystExperimentRunner:
         *,
         repository_root: Path,
         sleeper: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
+        output: Callable[[str], None] = print,
+        heartbeat_interval_seconds: float = 15.0,
     ) -> None:
         self.repository_root = repository_root.resolve()
         self.sleeper = sleeper
+        self.monotonic = monotonic
+        self.output = output
+        self.heartbeat_interval_seconds = heartbeat_interval_seconds
         self.settings = load_settings()
 
     def run(
@@ -309,22 +331,115 @@ class AnalystExperimentRunner:
         manifest: AnalystExperimentManifest,
         *,
         manifest_bytes: bytes,
+        manifest_validation_elapsed_seconds: float = 0.0,
+        invocation_started_monotonic: float | None = None,
     ) -> AnalystExperimentResult:
-        started_at = datetime.now(UTC)
+        invocation_started_at = datetime.now(UTC)
+        started_at = invocation_started_at
+        invocation_mono = (
+            self.monotonic()
+            if invocation_started_monotonic is None
+            else invocation_started_monotonic
+        )
         run_id, workdir, artifact_path = _allocate_run_paths(
             self.repository_root,
             manifest.experiment_id,
             started_at,
         )
+        initialization_started = self.monotonic()
+        lock = WorkdirLock(workdir / "run.lock")
         try:
-            return self._run_in_workdir(
-                manifest,
-                manifest_bytes=manifest_bytes,
-                started_at=started_at,
-                run_id=run_id,
-                workdir=workdir,
-                artifact_path=artifact_path,
-            )
+            with lock:
+                input_dir = workdir / "input"
+                report_dir = workdir / "reports"
+                input_dir.mkdir(parents=True)
+                report_dir.mkdir(parents=True)
+                (input_dir / "manifest.json").write_bytes(manifest_bytes)
+                manifest_sha256 = _sha256_bytes(manifest_bytes)
+                write_run_state(
+                    workdir / "run-state.json",
+                    AnalystExperimentRunState(
+                        experiment_id=manifest.experiment_id,
+                        run_id=run_id,
+                        started_at=started_at,
+                        manifest_sha256=manifest_sha256,
+                    ),
+                )
+                timings = ExperimentTimingRecorder(monotonic=self.monotonic)
+                timings.record_stage(
+                    "manifest_validation",
+                    max(0.0, manifest_validation_elapsed_seconds),
+                )
+                timings.record_stage(
+                    "workdir_initialization",
+                    max(0.0, self.monotonic() - initialization_started),
+                )
+                with ExperimentEventEmitter(
+                    workdir,
+                    monotonic=self.monotonic,
+                    experiment_id=manifest.experiment_id,
+                    run_id=run_id,
+                    output=self.output,
+                    heartbeat_interval_seconds=self.heartbeat_interval_seconds,
+                    started_monotonic=invocation_mono,
+                ) as events:
+                    query_total = sum(len(item.queries) for item in manifest.families)
+                    events.emit(
+                        "run_started",
+                        stage="workdir_initialization",
+                        query_total=query_total,
+                    )
+                    events.emit(
+                        "stage_completed",
+                        stage="manifest_validation",
+                    )
+                    events.emit(
+                        "stage_completed",
+                        stage="workdir_initialization",
+                    )
+                    try:
+                        result = self._run_in_workdir(
+                            manifest,
+                            started_at=started_at,
+                            invocation_started_at=invocation_started_at,
+                            manifest_sha256=manifest_sha256,
+                            run_id=run_id,
+                            workdir=workdir,
+                            artifact_path=artifact_path,
+                            events=events,
+                            timings=timings,
+                        )
+                    except Exception as exc:
+                        failure_context = events.last_context
+                        stage = str(failure_context.get("stage", "unknown"))
+                        events.emit(
+                            "experiment_failed",
+                            stage=stage,
+                            error_type=type(exc).__name__,
+                            error_message=str(exc).strip() or type(exc).__name__,
+                            **{
+                                key: value
+                                for key, value in failure_context.items()
+                                if key != "stage"
+                            },
+                        )
+                        raise AnalystExperimentError(
+                            format_failure_summary(
+                                exc,
+                                context=failure_context,
+                                elapsed_seconds=events.elapsed_seconds,
+                                workdir=_relative_display(workdir, self.repository_root),
+                            )
+                        ) from exc
+                    events.emit(
+                        "experiment_completed",
+                        stage="complete",
+                        query_total=query_total,
+                    )
+            shutil.rmtree(workdir)
+            return result
+        except AnalystExperimentError:
+            raise
         except Exception as exc:
             raise AnalystExperimentError(
                 f"{type(exc).__name__}: {exc}; workdir preserved at "
@@ -335,21 +450,19 @@ class AnalystExperimentRunner:
         self,
         manifest: AnalystExperimentManifest,
         *,
-        manifest_bytes: bytes,
         started_at: datetime,
+        invocation_started_at: datetime,
+        manifest_sha256: str,
         run_id: str,
         workdir: Path,
         artifact_path: Path,
+        events: ExperimentEventEmitter,
+        timings: ExperimentTimingRecorder,
     ) -> AnalystExperimentResult:
-        input_dir = workdir / "input"
         report_dir = workdir / "reports"
         csv_dir = workdir / "csv"
         raw_store = FilesystemRawSnapshotStore(workdir / "raw")
         database_path = workdir / "market.sqlite3"
-        input_dir.mkdir(parents=True)
-        report_dir.mkdir(parents=True)
-        (input_dir / "manifest.json").write_bytes(manifest_bytes)
-        manifest_sha256 = _sha256_bytes(manifest_bytes)
 
         context = _probe_context(manifest.context)
         query_store = SQLiteQueryFamilyStore(database_path)
@@ -364,47 +477,88 @@ class AnalystExperimentRunner:
             user_agent=self.settings.user_agent,
         )
 
-        comparable_sets: list[ComparableSetVersion] = []
-        coherence_reports: list[AnalystFamilyCoherence] = []
+        families: list[tuple[AnalystExperimentFamily, QueryFamilyVersion, list[str]]] = []
+        query_total = sum(len(item.queries) for item in manifest.families)
+        query_index = 0
 
-        for family_input in manifest.families:
-            family = _query_family(
-                family_input,
-                language=manifest.context.lang,
-                created_at=started_at,
-            )
-            query_store.persist(family)
-            family_run_ids: list[str] = []
-            for query in family_input.queries:
-                search_result = self._collect_search(
-                    query,
-                    context=context,
-                    page_limit=manifest.context.pages,
+        with _stage(events, timings, self.monotonic, "search_collection"):
+            for family_input in manifest.families:
+                family = _query_family(
+                    family_input,
+                    language=manifest.context.lang,
+                    created_at=started_at,
+                )
+                query_store.persist(family)
+                family_run_ids: list[str] = []
+                for query in family_input.queries:
+                    query_index += 1
+                    query_started = self.monotonic()
+                    events.emit(
+                        "query_started",
+                        stage="search_collection",
+                        family_id=family_input.id,
+                        query=query,
+                        query_index=query_index,
+                        query_total=query_total,
+                    )
+                    search_result = self._collect_search(
+                        query,
+                        context=context,
+                        page_limit=manifest.context.pages,
+                        raw_store=raw_store,
+                        probe_store=probe_store,
+                        schema_registry=schema_registry,
+                        session_manager=session_manager,
+                        family_id=family_input.id,
+                        query_index=query_index,
+                        query_total=query_total,
+                        events=events,
+                        timings=timings,
+                    )
+                    family_run_ids.append(search_result.record.run.id)
+                    elapsed = max(0.0, self.monotonic() - query_started)
+                    timings.record_query(
+                        family_id=family_input.id,
+                        query=query,
+                        query_index=query_index,
+                        query_total=query_total,
+                        action="collected",
+                        elapsed_seconds=elapsed,
+                    )
+                    events.emit(
+                        "query_completed",
+                        stage="search_collection",
+                        family_id=family_input.id,
+                        query=query,
+                        query_index=query_index,
+                        query_total=query_total,
+                        probe_run_id=search_result.record.run.id,
+                        listing_count=sum(len(page.games) for page in search_result.parsed_pages),
+                        duration_seconds=elapsed,
+                    )
+                families.append((family_input, family, family_run_ids))
+
+        comparable_sets: list[ComparableSetVersion] = []
+        with _stage(events, timings, self.monotonic, "comparable_construction"):
+            for family_input, family, family_run_ids in families:
+                comparable = YandexSearchComparableSetBuilder(
                     raw_store=raw_store,
                     probe_store=probe_store,
-                    schema_registry=schema_registry,
-                    session_manager=session_manager,
+                ).build(
+                    family,
+                    family_run_ids,
+                    set_id=f"{manifest.experiment_id}--{family_input.id}",
+                    version=1,
+                    created_at=datetime.now(UTC),
                 )
-                family_run_ids.append(search_result.record.run.id)
+                comparable_sets.append(comparable_store.persist(comparable))
 
-            comparable = YandexSearchComparableSetBuilder(
-                raw_store=raw_store,
-                probe_store=probe_store,
-            ).build(
-                family,
-                family_run_ids,
-                set_id=f"{manifest.experiment_id}--{family_input.id}",
-                version=1,
-                created_at=datetime.now(UTC),
+        with _stage(events, timings, self.monotonic, "family_coherence"):
+            coherence_reports = [_coherence_report(item) for item in comparable_sets]
+            _write_json(
+                report_dir / "family-coherence.json",
+                [report.model_dump(mode="json") for report in coherence_reports],
             )
-            comparable = comparable_store.persist(comparable)
-            comparable_sets.append(comparable)
-            coherence_reports.append(_coherence_report(comparable))
-
-        _write_json(
-            report_dir / "family-coherence.json",
-            [report.model_dump(mode="json") for report in coherence_reports],
-        )
 
         listing_ids = _ordered_unique(
             member.platform_listing_id
@@ -414,15 +568,21 @@ class AnalystExperimentRunner:
         listing_id_set = set(listing_ids)
         requested_app_ids = tuple(_yandex_app_id(listing_id) for listing_id in listing_ids)
         rich_results: list[RichMetadataCollectionResult] = []
-        for batch in _batches(requested_app_ids, _MAX_RICH_BATCH_SIZE):
-            rich_results.append(
-                self._collect_rich_batch(
-                    batch,
-                    raw_store=raw_store,
-                    schema_registry=schema_registry,
-                    persistence=persistence,
+        rich_batches = tuple(_batches(requested_app_ids, _MAX_RICH_BATCH_SIZE))
+        with _stage(events, timings, self.monotonic, "rich_metadata"):
+            for batch_index, batch in enumerate(rich_batches, start=1):
+                rich_results.append(
+                    self._collect_rich_batch(
+                        batch,
+                        raw_store=raw_store,
+                        schema_registry=schema_registry,
+                        persistence=persistence,
+                        batch_index=batch_index,
+                        batch_total=len(rich_batches),
+                        events=events,
+                        timings=timings,
+                    )
                 )
-            )
 
         observed_listing_ids = {
             listing_id
@@ -444,46 +604,52 @@ class AnalystExperimentRunner:
                 "rich metadata collection returned no comparable listing; snapshot cannot be frozen"
             )
 
-        snapshot_declaration = AnalystSnapshotDeclaration(
-            spec_version="analyst-snapshot-v1",
-            snapshot_id=f"experiment:{manifest.experiment_id}:{run_id}",
-            created_at=datetime.now(UTC),
-            collection_parameters_status="provisional_uncalibrated",
-            comparable_sets=tuple(
-                AnalystComparableSetReference(set_id=item.set_id, version=item.version)
-                for item in comparable_sets
-            ),
-            feed_run_ids=(),
-            rich_metadata_snapshots=rich_references,
-        )
-        snapshot = AnalystSnapshotBuilder(
-            raw_store=raw_store,
-            database_path=database_path,
-        ).build(snapshot_declaration)
-        snapshot = validate_analyst_snapshot_report(snapshot)
-        _write_model(report_dir / "analyst-snapshot.json", snapshot)
+        with _stage(events, timings, self.monotonic, "analyst_snapshot"):
+            snapshot_declaration = AnalystSnapshotDeclaration(
+                spec_version="analyst-snapshot-v1",
+                snapshot_id=f"experiment:{manifest.experiment_id}:{run_id}",
+                created_at=datetime.now(UTC),
+                collection_parameters_status="provisional_uncalibrated",
+                comparable_sets=tuple(
+                    AnalystComparableSetReference(set_id=item.set_id, version=item.version)
+                    for item in comparable_sets
+                ),
+                feed_run_ids=(),
+                rich_metadata_snapshots=rich_references,
+            )
+            snapshot = AnalystSnapshotBuilder(
+                raw_store=raw_store,
+                database_path=database_path,
+            ).build(snapshot_declaration)
+            snapshot = validate_analyst_snapshot_report(snapshot)
+            _write_model(report_dir / "analyst-snapshot.json", snapshot)
 
-        market_export = AnalystMarketExporter(
-            raw_store=raw_store,
-            database_path=database_path,
-        ).build(snapshot)
-        market_export = validate_analyst_market_export(market_export)
-        _write_model(report_dir / "market-export.json", market_export)
-        write_analyst_export_csv(market_export, csv_dir)
+        with _stage(events, timings, self.monotonic, "market_export"):
+            market_export = AnalystMarketExporter(
+                raw_store=raw_store,
+                database_path=database_path,
+            ).build(snapshot)
+            market_export = validate_analyst_market_export(market_export)
+            _write_model(report_dir / "market-export.json", market_export)
 
-        market_features = AnalystMarketFeatureBuilder().build(snapshot, market_export)
-        market_features = validate_analyst_market_features(market_features)
-        _write_model(report_dir / "market-features.json", market_features)
+        with _stage(events, timings, self.monotonic, "csv_export"):
+            write_analyst_export_csv(market_export, csv_dir)
 
-        verification = _verify_working_chain(
-            raw_store=raw_store,
-            database_path=database_path,
-            declaration=snapshot_declaration,
-            snapshot=snapshot,
-            market_export=market_export,
-            market_features=market_features,
-        )
-        _write_model(report_dir / "verification.json", verification)
+        with _stage(events, timings, self.monotonic, "market_features"):
+            market_features = AnalystMarketFeatureBuilder().build(snapshot, market_export)
+            market_features = validate_analyst_market_features(market_features)
+            _write_model(report_dir / "market-features.json", market_features)
+
+        with _stage(events, timings, self.monotonic, "evidence_verification"):
+            verification = _verify_working_chain(
+                raw_store=raw_store,
+                database_path=database_path,
+                declaration=snapshot_declaration,
+                snapshot=snapshot,
+                market_export=market_export,
+                market_features=market_features,
+            )
+            _write_model(report_dir / "verification.json", verification)
 
         missing_listing_ids = tuple(
             listing_id for listing_id in listing_ids if listing_id not in observed_listing_ids
@@ -504,7 +670,7 @@ class AnalystExperimentRunner:
                 platform=platform.platform(),
             ),
             family_count=len(manifest.families),
-            query_count=sum(len(family.queries) for family in manifest.families),
+            query_count=query_total,
             comparable_unique_listing_count=len(listing_ids),
             rich_requested_listing_count=len(listing_ids),
             rich_observed_listing_count=len(observed_listing_ids),
@@ -512,26 +678,55 @@ class AnalystExperimentRunner:
             snapshot_content_hash=snapshot.content_hash,
             market_export_content_hash=market_export.content_hash,
             market_features_content_hash=market_features.content_hash,
+            final_invocation_mode="run",
+            final_invocation_started_at=invocation_started_at,
+            final_invocation_workers=1,
+            was_resumed=False,
+            reused_query_count=0,
+            collected_query_count=query_total,
             verifier_status="pass",
         )
         _write_model(workdir / "execution-summary.json", summary)
 
-        artifact_manifest = build_artifact_manifest(
-            workdir,
+        timing_report = timings.report(
             experiment_id=manifest.experiment_id,
             run_id=run_id,
+            invocation_mode="run",
+            query_workers=1,
         )
-        _write_model(workdir / "artifact-manifest.json", artifact_manifest)
-        artifact_manifest_sha256 = _sha256_file(workdir / "artifact-manifest.json")
+        _write_model(report_dir / "execution-timings.json", timing_report)
+
+        with _stage(events, timings, self.monotonic, "artifact_manifest_preparation"):
+            artifact_manifest = build_artifact_manifest(
+                workdir,
+                experiment_id=manifest.experiment_id,
+                run_id=run_id,
+            )
+            _write_model(workdir / "artifact-manifest.json", artifact_manifest)
+            artifact_manifest_sha256 = _sha256_file(workdir / "artifact-manifest.json")
 
         artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        artifact_sha256 = finalize_verified_artifact(
-            workdir,
-            artifact_path,
-            expected_manifest=artifact_manifest,
-        )
+        try:
+            with _stage(events, timings, self.monotonic, "package_write"):
+                package_workdir(workdir, artifact_path)
+            with _stage(events, timings, self.monotonic, "package_verification"):
+                verified_manifest = verify_packaged_artifact(
+                    artifact_path,
+                    expected_experiment_id=artifact_manifest.experiment_id,
+                    expected_run_id=artifact_manifest.run_id,
+                )
+                if verified_manifest != artifact_manifest:
+                    raise AnalystExperimentError(
+                        "packaged artifact manifest does not match the manifest built "
+                        "from the workdir"
+                    )
+            with _stage(events, timings, self.monotonic, "final_hashing"):
+                artifact_sha256 = _sha256_file(artifact_path)
+        except Exception:
+            _discard_artifact(artifact_path)
+            raise
 
-        final_result = AnalystExperimentResult(
+        return AnalystExperimentResult(
             experiment_id=manifest.experiment_id,
             run_id=run_id,
             artifact_path=_relative_display(artifact_path, self.repository_root),
@@ -543,9 +738,8 @@ class AnalystExperimentRunner:
             comparable_unique_listing_count=summary.comparable_unique_listing_count,
             rich_requested_listing_count=summary.rich_requested_listing_count,
             rich_observed_listing_count=summary.rich_observed_listing_count,
+            invocation_elapsed_seconds=events.elapsed_seconds,
         )
-        shutil.rmtree(workdir)
-        return final_result
 
     def _collect_search(
         self,
@@ -557,7 +751,38 @@ class AnalystExperimentRunner:
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         session_manager: YandexSessionManager,
+        family_id: str,
+        query_index: int,
+        query_total: int,
+        events: ExperimentEventEmitter,
+        timings: ExperimentTimingRecorder,
     ) -> PaginatedProbeResult:
+        last_raw_snapshot_id: str | None = None
+
+        def page_observer(page_event: PaginatedProbePageEvent) -> None:
+            nonlocal last_raw_snapshot_id
+            last_raw_snapshot_id = page_event.raw_snapshot_id
+            timings.record_page(
+                query=query,
+                page=page_event.page_index + 1,
+                page_limit=page_event.page_limit,
+                elapsed_seconds=page_event.elapsed_seconds,
+            )
+            events.emit(
+                "page_completed",
+                stage="search_collection",
+                family_id=family_id,
+                query=query,
+                query_index=query_index,
+                query_total=query_total,
+                page=page_event.page_index + 1,
+                page_limit=page_event.page_limit,
+                probe_run_id=page_event.probe_run_id,
+                listing_count=page_event.listing_count,
+                raw_snapshot_id=page_event.raw_snapshot_id,
+                duration_seconds=page_event.elapsed_seconds,
+            )
+
         for attempt in range(1, _MAX_TRANSPORT_ATTEMPTS + 1):
             try:
                 with session_manager.open(context) as session:
@@ -566,15 +791,65 @@ class AnalystExperimentRunner:
                         raw_store=raw_store,
                         probe_store=probe_store,
                         schema_registry=schema_registry,
+                        monotonic=self.monotonic,
+                        page_observer=page_observer,
                     ).run_search(
                         query,
                         session.context,
                         page_limit=page_limit,
                     )
-            except _TRANSPORT_ERRORS:
+            except _TRANSPORT_ERRORS as exc:
                 if attempt >= _MAX_TRANSPORT_ATTEMPTS:
+                    events.emit(
+                        "query_failed",
+                        stage="search_collection",
+                        family_id=family_id,
+                        query=query,
+                        query_index=query_index,
+                        query_total=query_total,
+                        attempt=attempt,
+                        max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc).strip() or type(exc).__name__,
+                        raw_snapshot_id=last_raw_snapshot_id,
+                    )
                     raise
-                self.sleeper(float(attempt))
+                delay = float(attempt)
+                timings.record_retry(
+                    unit="query",
+                    attempt=attempt,
+                    delay_seconds=delay,
+                    query=query,
+                )
+                events.emit(
+                    "query_retry",
+                    stage="search_collection",
+                    family_id=family_id,
+                    query=query,
+                    query_index=query_index,
+                    query_total=query_total,
+                    attempt=attempt,
+                    max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc).strip() or type(exc).__name__,
+                    retry_delay_seconds=delay,
+                )
+                self.sleeper(delay)
+            except Exception as exc:
+                events.emit(
+                    "query_failed",
+                    stage="search_collection",
+                    family_id=family_id,
+                    query=query,
+                    query_index=query_index,
+                    query_total=query_total,
+                    attempt=attempt,
+                    max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc).strip() or type(exc).__name__,
+                    raw_snapshot_id=last_raw_snapshot_id,
+                )
+                raise
         raise RuntimeError("unreachable search retry state")
 
     def _collect_rich_batch(
@@ -584,7 +859,19 @@ class AnalystExperimentRunner:
         raw_store: FilesystemRawSnapshotStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         persistence: YandexNormalizationPersistence,
+        batch_index: int,
+        batch_total: int,
+        events: ExperimentEventEmitter,
+        timings: ExperimentTimingRecorder,
     ) -> RichMetadataCollectionResult:
+        batch_started = self.monotonic()
+        events.emit(
+            "rich_batch_started",
+            stage="rich_metadata",
+            batch_index=batch_index,
+            batch_total=batch_total,
+            listing_count=len(app_ids),
+        )
         for attempt in range(1, _MAX_TRANSPORT_ATTEMPTS + 1):
             try:
                 with YandexPublicClient(
@@ -592,21 +879,80 @@ class AnalystExperimentRunner:
                     timeout_seconds=self.settings.http_timeout_seconds,
                     user_agent=self.settings.user_agent,
                 ) as client:
-                    return YandexRichMetadataCollector(
+                    result = YandexRichMetadataCollector(
                         client=client,
                         raw_store=raw_store,
                         schema_registry=schema_registry,
                         persistence=persistence,
                     ).collect(app_ids)
-            except _TRANSPORT_ERRORS:
+                elapsed = max(0.0, self.monotonic() - batch_started)
+                timings.record_rich_batch(
+                    batch_index=batch_index,
+                    batch_total=batch_total,
+                    listing_count=len(app_ids),
+                    elapsed_seconds=elapsed,
+                )
+                events.emit(
+                    "rich_batch_completed",
+                    stage="rich_metadata",
+                    batch_index=batch_index,
+                    batch_total=batch_total,
+                    listing_count=len(result.parsed_listing_ids),
+                    raw_snapshot_id=result.raw_snapshot.id,
+                    duration_seconds=elapsed,
+                )
+                return result
+            except _TRANSPORT_ERRORS as exc:
                 if attempt >= _MAX_TRANSPORT_ATTEMPTS:
+                    events.emit(
+                        "rich_batch_failed",
+                        stage="rich_metadata",
+                        batch_index=batch_index,
+                        batch_total=batch_total,
+                        attempt=attempt,
+                        max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc).strip() or type(exc).__name__,
+                    )
                     raise
-                self.sleeper(float(attempt))
+                delay = float(attempt)
+                timings.record_retry(
+                    unit="rich_batch",
+                    attempt=attempt,
+                    delay_seconds=delay,
+                    batch_index=batch_index,
+                )
+                events.emit(
+                    "rich_batch_retry",
+                    stage="rich_metadata",
+                    batch_index=batch_index,
+                    batch_total=batch_total,
+                    attempt=attempt,
+                    max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc).strip() or type(exc).__name__,
+                    retry_delay_seconds=delay,
+                )
+                self.sleeper(delay)
+            except Exception as exc:
+                events.emit(
+                    "rich_batch_failed",
+                    stage="rich_metadata",
+                    batch_index=batch_index,
+                    batch_total=batch_total,
+                    attempt=attempt,
+                    max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc).strip() or type(exc).__name__,
+                )
+                raise
         raise RuntimeError("unreachable rich-metadata retry state")
 
 
 def run_analyst_experiment(manifest_path: Path) -> AnalystExperimentResult:
     """Validate a manifest before network I/O, then execute it inside the repository."""
+    invocation_started_monotonic = time.monotonic()
+    validation_started = invocation_started_monotonic
     try:
         manifest_bytes = manifest_path.read_bytes()
     except OSError as exc:
@@ -616,9 +962,12 @@ def run_analyst_experiment(manifest_path: Path) -> AnalystExperimentResult:
     except ValueError as exc:
         raise AnalystExperimentError(f"invalid experiment manifest: {exc}") from exc
     repository_root = find_repository_root(manifest_path)
+    validation_elapsed = max(0.0, time.monotonic() - validation_started)
     return AnalystExperimentRunner(repository_root=repository_root).run(
         manifest,
         manifest_bytes=manifest_bytes,
+        manifest_validation_elapsed_seconds=validation_elapsed,
+        invocation_started_monotonic=invocation_started_monotonic,
     )
 
 
@@ -761,37 +1110,58 @@ def _verify_working_chain(
     )
 
 
+def select_artifact_payload(workdir: Path) -> tuple[Path, ...]:
+    """Select only stable analytical payload paths; exclude live/recovery state."""
+    exact = {
+        "input/manifest.json",
+        "market.sqlite3",
+        "reports/analyst-snapshot.json",
+        "reports/market-export.json",
+        "reports/market-features.json",
+        "reports/family-coherence.json",
+        "reports/verification.json",
+        "reports/execution-timings.json",
+        "execution-summary.json",
+    }
+    selected: list[Path] = []
+    for path in workdir.rglob("*"):
+        if not path.is_file():
+            continue
+        relative = path.relative_to(workdir).as_posix()
+        if relative in exact or relative.startswith(("raw/", "csv/")):
+            selected.append(path)
+    return tuple(sorted(selected, key=lambda item: item.relative_to(workdir).as_posix()))
+
+
 def build_artifact_manifest(
     workdir: Path,
     *,
     experiment_id: str,
     run_id: str,
 ) -> AnalystArtifactManifest:
-    files: list[AnalystArtifactFile] = []
-    for path in sorted(item for item in workdir.rglob("*") if item.is_file()):
-        relative = path.relative_to(workdir).as_posix()
-        if relative == "artifact-manifest.json":
-            continue
-        files.append(
-            AnalystArtifactFile(
-                path=relative,
-                size=path.stat().st_size,
-                sha256=_sha256_file(path),
-            )
+    files = tuple(
+        AnalystArtifactFile(
+            path=path.relative_to(workdir).as_posix(),
+            size=path.stat().st_size,
+            sha256=_sha256_file(path),
         )
+        for path in select_artifact_payload(workdir)
+    )
     return AnalystArtifactManifest(
         spec_version=_ARTIFACT_MANIFEST_SPEC_VERSION,
         experiment_id=experiment_id,
         run_id=run_id,
-        files=tuple(files),
+        files=files,
     )
 
 
 def package_workdir(workdir: Path, artifact_path: Path) -> None:
+    manifest_path = workdir / "artifact-manifest.json"
     try:
         with ZipFile(artifact_path, mode="x", compression=ZIP_DEFLATED) as archive:
-            for path in sorted(item for item in workdir.rglob("*") if item.is_file()):
+            for path in select_artifact_payload(workdir):
                 archive.write(path, path.relative_to(workdir).as_posix())
+            archive.write(manifest_path, "artifact-manifest.json")
     except Exception:
         _discard_artifact(artifact_path)
         raise
@@ -868,6 +1238,26 @@ def finalize_verified_artifact(
     except Exception:
         _discard_artifact(artifact_path)
         raise
+
+
+@contextmanager
+def _stage(
+    events: ExperimentEventEmitter,
+    timings: ExperimentTimingRecorder,
+    monotonic: Callable[[], float],
+    name: str,
+) -> Iterator[None]:
+    events.emit("stage_started", stage=name)
+    started = monotonic()
+    try:
+        yield
+    except Exception:
+        timings.record_stage(name, max(0.0, monotonic() - started))
+        raise
+    else:
+        elapsed = max(0.0, monotonic() - started)
+        timings.record_stage(name, elapsed)
+        events.emit("stage_completed", stage=name, duration_seconds=elapsed)
 
 
 def _allocate_run_paths(

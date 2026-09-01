@@ -138,7 +138,7 @@ def test_artifact_manifest_package_and_reopen_verification(tmp_path: Path) -> No
         '{"schema_version":1}\n',
         encoding="utf-8",
     )
-    (workdir / "reports" / "result.json").write_text(
+    (workdir / "reports" / "execution-timings.json").write_text(
         '{"ok":true}\n',
         encoding="utf-8",
     )
@@ -161,14 +161,14 @@ def test_artifact_manifest_package_and_reopen_verification(tmp_path: Path) -> No
     assert verified == artifact_manifest
     assert {item.path for item in verified.files} == {
         "input/manifest.json",
-        "reports/result.json",
+        "reports/execution-timings.json",
     }
 
 
 def test_packaged_artifact_verifier_detects_payload_tampering(tmp_path: Path) -> None:
     workdir = tmp_path / "work"
-    workdir.mkdir()
-    payload = workdir / "payload.txt"
+    (workdir / "input").mkdir(parents=True)
+    payload = workdir / "input" / "manifest.json"
     payload.write_text("original", encoding="utf-8")
     artifact_manifest = workflow.build_artifact_manifest(
         workdir,
@@ -178,7 +178,7 @@ def test_packaged_artifact_verifier_detects_payload_tampering(tmp_path: Path) ->
 
     artifact = tmp_path / "tampered.zip"
     with ZipFile(artifact, mode="w", compression=ZIP_DEFLATED) as archive:
-        archive.writestr("payload.txt", "changed")
+        archive.writestr("input/manifest.json", "changed")
         archive.writestr(
             "artifact-manifest.json",
             artifact_manifest.model_dump_json(indent=2),

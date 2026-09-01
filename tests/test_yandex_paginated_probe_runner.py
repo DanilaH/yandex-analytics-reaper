@@ -309,3 +309,30 @@ def test_search_runner_preserves_query_and_follows_same_cursor_chain(tmp_path: P
         ("merge", None, None),
         ("merge", "search-1", "sreq-1"),
     ]
+
+def test_page_observer_reports_the_persisted_page_boundary(tmp_path: Path) -> None:
+    client = FakeYandexClient(search_responses=[(200, _page(10, has_next=False))])
+    raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
+    probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    observed = []
+    ticks = iter((10.0, 10.25))
+    runner = YandexPaginatedProbeRunner(
+        client=client,
+        raw_store=raw_store,
+        probe_store=probe_store,
+        schema_registry=SQLiteSchemaDriftRegistry(tmp_path / "market.sqlite3"),
+        clock=lambda: datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
+        monotonic=lambda: next(ticks),
+        page_observer=observed.append,
+    )
+
+    result = runner.run_search("clean", _clean_context(language="ru"), page_limit=1)
+
+    assert len(observed) == 1
+    event = observed[0]
+    assert event.probe_run_id == result.record.run.id
+    assert event.page_index == 0
+    assert event.page_limit == 1
+    assert event.raw_snapshot_id == result.record.pages[0].raw_snapshot_id
+    assert event.listing_count == 1
+    assert event.elapsed_seconds == pytest.approx(0.25)

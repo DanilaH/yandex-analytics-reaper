@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -59,6 +60,18 @@ class PaginatedProbeResult:
     parsed_pages: tuple[FeedPage, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class PaginatedProbePageEvent:
+    """Narrow ingestion-owned page completion signal for runner observability."""
+
+    probe_run_id: str
+    page_index: int
+    page_limit: int
+    raw_snapshot_id: str
+    listing_count: int
+    elapsed_seconds: float
+
+
 class YandexPaginatedProbeRunner:
     """Own one feed/search collection run from raw capture through page grouping."""
 
@@ -70,12 +83,16 @@ class YandexPaginatedProbeRunner:
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         clock: Callable[[], datetime] | None = None,
+        monotonic: Callable[[], float] = time.monotonic,
+        page_observer: Callable[[PaginatedProbePageEvent], None] | None = None,
     ) -> None:
         self.client = client
         self.raw_store = raw_store
         self.probe_store = probe_store
         self.schema_registry = schema_registry
         self.clock = clock or _utc_now
+        self.monotonic = monotonic
+        self.page_observer = page_observer
 
     def run_feed(
         self,
@@ -156,6 +173,7 @@ class YandexPaginatedProbeRunner:
 
         try:
             for page_index in range(page_limit):
+                page_started = self.monotonic()
                 error_raw_snapshot_id = None
                 response = collect(page_id, rtx_reqid)
                 metadata = self.raw_store.persist(response)
@@ -200,6 +218,17 @@ class YandexPaginatedProbeRunner:
                 )
                 self.probe_store.append_page(page)
                 parsed_pages.append(parsed)
+                if self.page_observer is not None:
+                    self.page_observer(
+                        PaginatedProbePageEvent(
+                            probe_run_id=run.id,
+                            page_index=page_index,
+                            page_limit=page_limit,
+                            raw_snapshot_id=metadata.id,
+                            listing_count=len(parsed.games),
+                            elapsed_seconds=max(0.0, self.monotonic() - page_started),
+                        )
+                    )
 
                 if not parsed.page_info.has_next_page:
                     break

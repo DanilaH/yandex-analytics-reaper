@@ -22,17 +22,17 @@ jobs:
           cache-dependency-path: |
             pyproject.toml
             constraints-dev.txt
-      - name: Repair bootstrap assumptions and generate PR B tree
+      - name: Generate PR B tree
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
 
-          bootstrap = Path('scripts/pr_b_bootstrap.py')
-          text = bootstrap.read_text(encoding='utf-8')
+          bootstrap = Path("scripts/pr_b_bootstrap.py")
+          text = bootstrap.read_text(encoding="utf-8")
 
-          # The real builder fixtures live in tests/test_comparable_sets.py.
+          # Existing comparable-set fixtures are authoritative; remove the stale invented block.
           text, count = re.subn(
               r'\n    # Narrow probe lookup \+ validator coverage extends existing fixtures without source I/O\..*?    test_path\.write_text\(text, encoding="utf-8"\)\n',
               '\n',
@@ -41,10 +41,9 @@ jobs:
               flags=re.DOTALL,
           )
           if count != 1:
-              raise RuntimeError('could not remove stale invented comparable fixture block')
+              raise RuntimeError("could not remove stale invented comparable fixture block")
 
-          # PR A's formatter is line-oriented; keep only the signature patch here and
-          # add the resume line structurally after generation.
+          # PR A failure formatting is line-oriented now; patch only its signature here.
           text, count = re.subn(
               r'\n    replace_once\(\n        path,\n        "    parts\.append\(f\\"workdir=\{workdir\}\\"\)\\n    return \\"; \\"\.join\(parts\)\\n",.*?\n    \)\n',
               '\n',
@@ -53,14 +52,40 @@ jobs:
               flags=re.DOTALL,
           )
           if count != 1:
-              raise RuntimeError('could not remove stale formatter-body patch')
+              raise RuntimeError("could not remove stale formatter-body patch")
 
-          old_timing_patch = "replace_once(path, '                invocation_mode=\"run\",\\n', '                invocation_mode=invocation_mode,\\n')"
-          new_timing_patch = "replace_once(path, '            invocation_mode=\"run\",\\n', '            invocation_mode=invocation_mode,\\n')"
-          if text.count(old_timing_patch) != 1:
-              raise RuntimeError('expected one stale timing-report indentation patch')
-          text = text.replace(old_timing_patch, new_timing_patch, 1)
-          bootstrap.write_text(text, encoding='utf-8')
+          old_timing = "replace_once(path, '                invocation_mode=\"run\",\\n', '                invocation_mode=invocation_mode,\\n')"
+          new_timing = "replace_once(path, '            invocation_mode=\"run\",\\n', '            invocation_mode=invocation_mode,\\n')"
+          if text.count(old_timing) != 1:
+              raise RuntimeError("expected one stale timing-report indentation patch")
+          text = text.replace(old_timing, new_timing, 1)
+
+          # Current main places package_workdir before finalize_verified_artifact.
+          # Match the finalizer to the next stable function boundary instead of helper ordering.
+          lines = text.splitlines()
+          in_helpers = False
+          pattern_fixed = False
+          replacement_fixed = False
+          for index, line in enumerate(lines):
+              if line.startswith("def patch_workflow_helpers"):
+                  in_helpers = True
+              if not in_helpers:
+                  continue
+              if 'r"def finalize_verified_artifact\\(' in line and "def package_workdir" in line:
+                  lines[index] = '        r"def finalize_verified_artifact\\(.*?\\n\\n@contextmanager\\ndef _stage\\(",'
+                  pattern_fixed = True
+                  continue
+              if pattern_fixed and "\\n\\ndef package_workdir(" in line:
+                  lines[index] = line.replace(
+                      "\\n\\ndef package_workdir(",
+                      "\\n\\n@contextmanager\\ndef _stage(",
+                      1,
+                  )
+                  replacement_fixed = True
+                  break
+          if not pattern_fixed or not replacement_fixed:
+              raise RuntimeError("could not adapt standalone-finalizer patch boundary")
+          bootstrap.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
 
           python scripts/pr_b_bootstrap.py
@@ -69,18 +94,18 @@ jobs:
           from pathlib import Path
           import re
 
-          runtime = Path('src/yandex_analytics_reaper/experiment_runtime.py')
-          runtime_text = runtime.read_text(encoding='utf-8')
+          runtime = Path("src/yandex_analytics_reaper/experiment_runtime.py")
+          runtime_text = runtime.read_text(encoding="utf-8")
           old = '        ("workdir_preserved", workdir),\n    )\n'
           new = '        ("workdir_preserved", workdir),\n        ("resume", resume_command),\n    )\n'
           if runtime_text.count(old) != 1:
-              raise RuntimeError('expected one line-oriented failure formatter tuple')
-          runtime.write_text(runtime_text.replace(old, new, 1), encoding='utf-8')
+              raise RuntimeError("expected one line-oriented failure formatter tuple")
+          runtime.write_text(runtime_text.replace(old, new, 1), encoding="utf-8")
 
-          workflow = Path('src/yandex_analytics_reaper/analyst_workflow.py')
-          text = workflow.read_text(encoding='utf-8')
+          workflow = Path("src/yandex_analytics_reaper/analyst_workflow.py")
+          text = workflow.read_text(encoding="utf-8")
 
-          # Do not mislabel page count as listing count on a reused query.
+          # Never label a page count as a listing count on reused evidence.
           text, count = re.subn(
               r'\n\s*listing_count=_organic_listing_count\(reusable, raw_store\),',
               '',
@@ -88,7 +113,7 @@ jobs:
               count=1,
           )
           if count != 1:
-              raise RuntimeError('expected reused-query pseudo listing count')
+              raise RuntimeError("expected reused-query pseudo listing count")
           text, count = re.subn(
               r'\n\ndef _organic_listing_count\(record: object, raw_store: FilesystemRawSnapshotStore\) -> int:.*?\n\ndef _result_from_existing_artifact',
               '\n\ndef _result_from_existing_artifact',
@@ -97,9 +122,9 @@ jobs:
               flags=re.DOTALL,
           )
           if count != 1:
-              raise RuntimeError('expected pseudo listing-count helper')
+              raise RuntimeError("expected pseudo listing-count helper")
 
-          # Normalize all recovery/runtime setup errors into the public experiment error.
+          # Public API normalizes all resume setup/recovery failures.
           text = text.replace(
               '        except (ExperimentRecoveryError, OSError, ValueError) as exc:\n',
               '        except Exception as exc:\n',
@@ -107,20 +132,13 @@ jobs:
           )
           text = text.replace('    ExperimentRecoveryError,\n', '', 1)
 
-          # Existing final ZIP corruption must fail closed with an explicit no-overwrite message.
+          # Corrupt/mismatched final ZIPs fail closed and are never overwritten.
           text = text.replace(
               '    except (BadZipFile, KeyError, OSError, ValueError) as exc:\n',
               '    except (AnalystExperimentError, BadZipFile, KeyError, OSError, ValueError) as exc:\n',
               1,
           )
-          workflow.write_text(text, encoding='utf-8')
-
-          tests = Path('tests/test_comparable_sets.py')
-          tests.write_text(
-              tests.read_text(encoding='utf-8').rstrip()
-              + '''\n\n\ndef test_recovery_lookup_and_validator_reuse_exact_completed_run(tmp_path: Path) -> None:\n    family, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)\n    first_ref = comparable_set.runs[0]\n    first = probe_store.get_run(first_ref.probe_run_id)\n    assert first is not None\n\n    candidates = probe_store.find_search_runs(\n        query_text=first_ref.query_text,\n        context=first.context,\n        requested_page_limit=first.run.requested_page_limit,\n    )\n    assert [item.run.id for item in candidates] == [first_ref.probe_run_id]\n\n    validated = YandexSearchComparableSetBuilder(\n        raw_store=raw_store,\n        probe_store=probe_store,\n    ).validate_reusable_run(\n        first_ref.probe_run_id,\n        query_text=first_ref.query_text,\n        expected_context=first.context,\n        requested_page_limit=first.run.requested_page_limit,\n    )\n    assert validated == first\n    assert family.members[0].query_text == first_ref.query_text\n\n\ndef test_recovery_validator_rejects_completed_run_with_tampered_raw_query(\n    tmp_path: Path,\n) -> None:\n    raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")\n    probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")\n    run_id = _persist_search_run(\n        raw_store=raw_store,\n        probe_store=probe_store,\n        query="merge",\n        raw_query="different",\n        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),\n        pages=((10,),),\n        requested_page_limit=1,\n    )\n    record = probe_store.get_run(run_id)\n    assert record is not None\n\n    with pytest.raises(ComparableSetConstructionError, match="raw query"):\n        YandexSearchComparableSetBuilder(\n            raw_store=raw_store,\n            probe_store=probe_store,\n        ).validate_reusable_run(\n            run_id,\n            query_text="merge",\n            expected_context=record.context,\n            requested_page_limit=1,\n        )\n''',
-              encoding='utf-8',
-          )
+          workflow.write_text(text, encoding="utf-8")
           PY
 
           python -m compileall -q src

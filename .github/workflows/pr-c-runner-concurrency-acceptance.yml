@@ -30,14 +30,18 @@ jobs:
 
           path = Path("tests/test_analyst_workflow_end_to_end.py")
           text = path.read_text(encoding="utf-8")
-          text = text.replace("import json\n", "import json\nimport threading\n", 1)
+          text = text.replace(
+              "import json\n",
+              "import json\nimport threading\nfrom typing import ClassVar\n",
+              1,
+          )
           marker = "class FakeSearchClient:\n    source_id = \"yandex_public\"\n"
           replacement = (
               "class FakeSearchClient:\n"
               "    source_id = \"yandex_public\"\n"
               "    _barrier = threading.Barrier(2)\n"
               "    _seen_lock = threading.Lock()\n"
-              "    _seen: set[str] = set()\n"
+              "    _seen: ClassVar[set[str]] = set()\n"
           )
           if text.count(marker) != 1:
               raise RuntimeError("expected FakeSearchClient declaration")

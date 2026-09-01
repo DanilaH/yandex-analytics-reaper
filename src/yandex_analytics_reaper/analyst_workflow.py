@@ -666,6 +666,12 @@ class AnalystExperimentRunner:
                         existing_comparable.runs,
                         strict=True,
                     ):
+                        comparable_builder.validate_reusable_run(
+                            run_ref.probe_run_id,
+                            query_text=query,
+                            expected_context=expected_context,
+                            requested_page_limit=manifest.context.pages,
+                        )
                         query_index += 1
                         family_run_ids.append(run_ref.probe_run_id)
                         reused_query_count += 1

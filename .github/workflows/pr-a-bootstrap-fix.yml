@@ -69,6 +69,9 @@ jobs:
           if runtime_text.count(old_runtime) != 1:
               raise RuntimeError('expected one typed event constructor')
           runtime.write_text(runtime_text.replace(old_runtime, new_runtime, 1), encoding='utf-8')
+
+          test_file = Path('tests/test_yandex_paginated_probe_runner.py')
+          test_file.write_text(test_file.read_text(encoding='utf-8').rstrip() + '\n', encoding='utf-8')
           PY
       - name: Install exact dev environment
         run: |

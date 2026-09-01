@@ -30,26 +30,28 @@ jobs:
 
           workflow = Path("src/yandex_analytics_reaper/analyst_workflow.py")
           text = workflow.read_text(encoding="utf-8")
-          old = '''                    for query, run_ref in zip(
-                        family_input.queries,
-                        existing_comparable.runs,
-                        strict=True,
-                    ):
-                        query_index += 1
-'''
-          new = '''                    for query, run_ref in zip(
-                        family_input.queries,
-                        existing_comparable.runs,
-                        strict=True,
-                    ):
-                        comparable_builder.validate_reusable_run(
-                            run_ref.probe_run_id,
-                            query_text=query,
-                            expected_context=expected_context,
-                            requested_page_limit=manifest.context.pages,
-                        )
-                        query_index += 1
-'''
+          old = (
+              "                    for query, run_ref in zip(\n"
+              "                        family_input.queries,\n"
+              "                        existing_comparable.runs,\n"
+              "                        strict=True,\n"
+              "                    ):\n"
+              "                        query_index += 1\n"
+          )
+          new = (
+              "                    for query, run_ref in zip(\n"
+              "                        family_input.queries,\n"
+              "                        existing_comparable.runs,\n"
+              "                        strict=True,\n"
+              "                    ):\n"
+              "                        comparable_builder.validate_reusable_run(\n"
+              "                            run_ref.probe_run_id,\n"
+              "                            query_text=query,\n"
+              "                            expected_context=expected_context,\n"
+              "                            requested_page_limit=manifest.context.pages,\n"
+              "                        )\n"
+              "                        query_index += 1\n"
+          )
           if text.count(old) != 1:
               raise RuntimeError("expected one comparable-first recovery loop")
           workflow.write_text(text.replace(old, new, 1), encoding="utf-8")
@@ -59,92 +61,82 @@ jobs:
           marker = "def test_recovery_lookup_and_validator_reuse_exact_completed_run"
           if marker in test_text:
               raise RuntimeError("recovery validator tests already exist")
-          test_text += '''
-
-
-def test_recovery_lookup_and_validator_reuse_exact_completed_run(tmp_path: Path) -> None:
-    family, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
-    first_ref = comparable_set.runs[0]
-    first = probe_store.get_run(first_ref.probe_run_id)
-    assert first is not None
-
-    candidates = probe_store.find_search_runs(
-        query_text=first_ref.query_text,
-        context=first.context,
-        requested_page_limit=first.run.requested_page_limit,
-    )
-    assert [item.run.id for item in candidates] == [first_ref.probe_run_id]
-
-    validated = YandexSearchComparableSetBuilder(
-        raw_store=raw_store,
-        probe_store=probe_store,
-    ).validate_reusable_run(
-        first_ref.probe_run_id,
-        query_text=first_ref.query_text,
-        expected_context=first.context,
-        requested_page_limit=first.run.requested_page_limit,
-    )
-    assert validated == first
-    assert family.members[0].query_text == first_ref.query_text
-
-
-def test_recovery_validator_rejects_completed_run_with_tampered_raw_query(
-    tmp_path: Path,
-) -> None:
-    raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
-    probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
-    run_id = _persist_search_run(
-        raw_store=raw_store,
-        probe_store=probe_store,
-        query="merge",
-        raw_query="different",
-        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
-        pages=((10,),),
-        requested_page_limit=1,
-    )
-    record = probe_store.get_run(run_id)
-    assert record is not None
-
-    with pytest.raises(ComparableSetConstructionError, match="raw query"):
-        YandexSearchComparableSetBuilder(
-            raw_store=raw_store,
-            probe_store=probe_store,
-        ).validate_reusable_run(
-            run_id,
-            query_text="merge",
-            expected_context=record.context,
-            requested_page_limit=1,
-        )
-
-
-@pytest.mark.parametrize(
-    ("expected_context", "requested_page_limit", "message"),
-    [
-        (ProbeContext(device_type="mobile", profile_age_days=0), 2, "ProbeContext"),
-        (ProbeContext(profile_age_days=0), 1, "page limit"),
-    ],
-)
-def test_recovery_validator_rejects_context_or_page_limit_mismatch(
-    tmp_path: Path,
-    expected_context: ProbeContext,
-    requested_page_limit: int,
-    message: str,
-) -> None:
-    _, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
-    first_ref = comparable_set.runs[0]
-
-    with pytest.raises(ComparableSetConstructionError, match=message):
-        YandexSearchComparableSetBuilder(
-            raw_store=raw_store,
-            probe_store=probe_store,
-        ).validate_reusable_run(
-            first_ref.probe_run_id,
-            query_text=first_ref.query_text,
-            expected_context=expected_context,
-            requested_page_limit=requested_page_limit,
-        )
-'''
-          tests.write_text(test_text + "\n", encoding="utf-8")
+          addition = (
+              "\n\n\ndef test_recovery_lookup_and_validator_reuse_exact_completed_run(tmp_path: Path) -> None:\n"
+              "    family, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)\n"
+              "    first_ref = comparable_set.runs[0]\n"
+              "    first = probe_store.get_run(first_ref.probe_run_id)\n"
+              "    assert first is not None\n\n"
+              "    candidates = probe_store.find_search_runs(\n"
+              "        query_text=first_ref.query_text,\n"
+              "        context=first.context,\n"
+              "        requested_page_limit=first.run.requested_page_limit,\n"
+              "    )\n"
+              "    assert [item.run.id for item in candidates] == [first_ref.probe_run_id]\n\n"
+              "    validated = YandexSearchComparableSetBuilder(\n"
+              "        raw_store=raw_store,\n"
+              "        probe_store=probe_store,\n"
+              "    ).validate_reusable_run(\n"
+              "        first_ref.probe_run_id,\n"
+              "        query_text=first_ref.query_text,\n"
+              "        expected_context=first.context,\n"
+              "        requested_page_limit=first.run.requested_page_limit,\n"
+              "    )\n"
+              "    assert validated == first\n"
+              "    assert family.members[0].query_text == first_ref.query_text\n\n\n"
+              "def test_recovery_validator_rejects_completed_run_with_tampered_raw_query(\n"
+              "    tmp_path: Path,\n"
+              ") -> None:\n"
+              "    raw_store = FilesystemRawSnapshotStore(tmp_path / \"raw\")\n"
+              "    probe_store = SQLiteProbeRunStore(tmp_path / \"market.sqlite3\")\n"
+              "    run_id = _persist_search_run(\n"
+              "        raw_store=raw_store,\n"
+              "        probe_store=probe_store,\n"
+              "        query=\"merge\",\n"
+              "        raw_query=\"different\",\n"
+              "        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),\n"
+              "        pages=((10,),),\n"
+              "        requested_page_limit=1,\n"
+              "    )\n"
+              "    record = probe_store.get_run(run_id)\n"
+              "    assert record is not None\n\n"
+              "    with pytest.raises(ComparableSetConstructionError, match=\"raw query\"):\n"
+              "        YandexSearchComparableSetBuilder(\n"
+              "            raw_store=raw_store,\n"
+              "            probe_store=probe_store,\n"
+              "        ).validate_reusable_run(\n"
+              "            run_id,\n"
+              "            query_text=\"merge\",\n"
+              "            expected_context=record.context,\n"
+              "            requested_page_limit=1,\n"
+              "        )\n\n\n"
+              "@pytest.mark.parametrize(\n"
+              "    (\"expected_context\", \"requested_page_limit\", \"message\"),\n"
+              "    [\n"
+              "        (ProbeContext(device_type=\"mobile\", profile_age_days=0), 2, \"ProbeContext\"),\n"
+              "        (ProbeContext(profile_age_days=0), 1, \"page limit\"),\n"
+              "    ],\n"
+              ")\n"
+              "def test_recovery_validator_rejects_context_or_page_limit_mismatch(\n"
+              "    tmp_path: Path,\n"
+              "    expected_context: ProbeContext,\n"
+              "    requested_page_limit: int,\n"
+              "    message: str,\n"
+              ") -> None:\n"
+              "    _, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)\n"
+              "    first_ref = comparable_set.runs[0]\n\n"
+              "    with pytest.raises(ComparableSetConstructionError, match=message):\n"
+              "        YandexSearchComparableSetBuilder(\n"
+              "            raw_store=raw_store,\n"
+              "            probe_store=probe_store,\n"
+              "        ).validate_reusable_run(\n"
+              "            first_ref.probe_run_id,\n"
+              "            query_text=first_ref.query_text,\n"
+              "            expected_context=expected_context,\n"
+              "            requested_page_limit=requested_page_limit,\n"
+              "        )\n"
+          )
+          tests.write_text(test_text + addition + "\n", encoding="utf-8")
           PY
       - name: Install exact dev environment
         run: |

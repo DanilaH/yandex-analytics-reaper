@@ -138,9 +138,32 @@ jobs:
               1,
           )
           workflow.write_text(text, encoding="utf-8")
+
+          recovery_test = Path("tests/test_experiment_recovery.py")
+          test_text = recovery_test.read_text(encoding="utf-8")
+          long_manifest = (
+              '    manifest = b\'{"schema_version":1,"experiment_id":"demo",'
+              '"context":{"pages":1,"session_profile":"clean_anonymous","lang":"ru",'
+              '"device":"desktop","platform":"desktop_other"},'
+              '"families":[{"id":"f","queries":["q"]}]}\'\n'
+          )
+          split_manifest = (
+              '    manifest = (\n'
+              '        b\'{"schema_version":1,"experiment_id":"demo",\'\n'
+              '        b\'"context":{"pages":1,"session_profile":"clean_anonymous",\'\n'
+              '        b\'"lang":"ru","device":"desktop","platform":"desktop_other"},\'\n'
+              '        b\'"families":[{"id":"f","queries":["q"]}]}\'\n'
+              '    )\n'
+          )
+          if test_text.count(long_manifest) != 1:
+              raise RuntimeError("expected one generated long manifest fixture")
+          recovery_test.write_text(
+              test_text.replace(long_manifest, split_manifest, 1),
+              encoding="utf-8",
+          )
           PY
 
-          python -m compileall -q src
+          python -m compileall -q src tests/test_experiment_recovery.py
           rm -f scripts/pr_b_bootstrap.py
       - name: Install exact dev environment
         run: |

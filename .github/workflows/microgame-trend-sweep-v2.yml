@@ -24,7 +24,9 @@ jobs:
           python-version: '3.12'
 
       - name: Install Reaper
-        run: python -m pip install -e .
+        run: |
+          python -m pip install -e .
+          python -m pip install pytest
 
       - name: Verify remote protocol retry handling
         run: python -m pytest tests/test_yandex_client_transport_retry.py -q

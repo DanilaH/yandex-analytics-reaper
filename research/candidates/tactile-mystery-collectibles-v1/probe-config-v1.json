@@ -1,0 +1,124 @@
+{
+  "schema": "tactile-mystery-probe-config-v1",
+  "candidate_id": "tactile-mystery-collectibles-v1",
+  "candidate_version": 2,
+  "theme": "Pocket Gremlins: Mystery Desk Toys",
+  "starting_soft_currency": 0,
+  "rarities": {
+    "common": {
+      "duplicate_value": 4,
+      "catalog_count": 10
+    },
+    "rare": {
+      "duplicate_value": 8,
+      "catalog_count": 7
+    },
+    "epic": {
+      "duplicate_value": 18,
+      "catalog_count": 5
+    },
+    "legendary": {
+      "duplicate_value": 45,
+      "catalog_count": 2
+    }
+  },
+  "packages": [
+    {
+      "id": "paper_pouch",
+      "label": "Paper Pouch",
+      "cost": 0,
+      "probabilities": {
+        "common": 0.74,
+        "rare": 0.22,
+        "epic": 0.035,
+        "legendary": 0.005
+      }
+    },
+    {
+      "id": "foil_pack",
+      "label": "Foil Pack",
+      "cost": 20,
+      "probabilities": {
+        "common": 0.45,
+        "rare": 0.4,
+        "epic": 0.13,
+        "legendary": 0.02
+      }
+    },
+    {
+      "id": "prism_box",
+      "label": "Prism Box",
+      "cost": 50,
+      "probabilities": {
+        "common": 0.15,
+        "rare": 0.45,
+        "epic": 0.32,
+        "legendary": 0.08
+      }
+    }
+  ],
+  "rewarded_ad": {
+    "reward_soft_currency": 20,
+    "unlock_after_total_reveals": 3,
+    "cooldown_reveals_after_reward": 5,
+    "grant_only_on_rewarded_callback": true
+  },
+  "interaction": {
+    "type": "deterministic_pull_tab",
+    "commit_threshold_ratio": 0.6,
+    "pointer_distance_css_px": 56,
+    "physics": false,
+    "keyboard_commit_keys": [
+      "Enter",
+      "Space"
+    ]
+  },
+  "reveal_timing_ms": {
+    "package_finish": 180,
+    "anticipation_end": 450,
+    "silhouette_end": 800,
+    "collectible_visible": 1000,
+    "result_controls_enabled": 1200,
+    "legendary_result_controls_enabled": 1500
+  },
+  "catalog": [
+    {"id": "binder_bug", "name": "Binder Bug", "rarity": "common"},
+    {"id": "cable_nibbler", "name": "Cable Nibbler", "rarity": "common"},
+    {"id": "sticky_note_sprout", "name": "Sticky Note Sprout", "rarity": "common"},
+    {"id": "pen_cap_goblin", "name": "Pen Cap Goblin", "rarity": "common"},
+    {"id": "crumb_hoarder", "name": "Crumb Hoarder", "rarity": "common"},
+    {"id": "keyboard_peeker", "name": "Keyboard Peeker", "rarity": "common"},
+    {"id": "mug_warmer", "name": "Mug Warmer", "rarity": "common"},
+    {"id": "staple_sneak", "name": "Staple Sneak", "rarity": "common"},
+    {"id": "eraser_eater", "name": "Eraser Eater", "rarity": "common"},
+    {"id": "paperclip_imp", "name": "Paperclip Imp", "rarity": "common"},
+    {"id": "neon_marker_munch", "name": "Neon Marker Munch", "rarity": "rare"},
+    {"id": "desk_lamp_bat", "name": "Desk Lamp Bat", "rarity": "rare"},
+    {"id": "tape_roll_toad", "name": "Tape Roll Toad", "rarity": "rare"},
+    {"id": "clockwork_crumbler", "name": "Clockwork Crumbler", "rarity": "rare"},
+    {"id": "usb_gremlin", "name": "USB Gremlin", "rarity": "rare"},
+    {"id": "scissor_sprite", "name": "Scissor Sprite", "rarity": "rare"},
+    {"id": "coffee_foam_fiend", "name": "Coffee Foam Fiend", "rarity": "rare"},
+    {"id": "hologram_hoarder", "name": "Hologram Hoarder", "rarity": "epic"},
+    {"id": "chrome_clip_claw", "name": "Chrome Clip Claw", "rarity": "epic"},
+    {"id": "lava_lamp_lurker", "name": "Lava Lamp Lurker", "rarity": "epic"},
+    {"id": "pixel_plant_phantom", "name": "Pixel Plant Phantom", "rarity": "epic"},
+    {"id": "golden_keyboard_gremlin", "name": "Golden Keyboard Gremlin", "rarity": "epic"},
+    {"id": "prism_crown_gremlin", "name": "Prism Crown Gremlin", "rarity": "legendary"},
+    {"id": "midnight_desk_dragon", "name": "Midnight Desk Dragon", "rarity": "legendary"}
+  ],
+  "analytics_goal_ids": [
+    "tm_session_start",
+    "tm_package_select",
+    "tm_interaction_start",
+    "tm_interaction_done",
+    "tm_collectible_reveal",
+    "tm_rarity_reveal",
+    "tm_album_open",
+    "tm_duplicate_convert",
+    "tm_next_package",
+    "tm_reward_offer",
+    "tm_reward_done",
+    "tm_session_end"
+  ]
+}

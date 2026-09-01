@@ -1,0 +1,166 @@
+name: PR B resume lifecycle
+
+on:
+  push:
+    branches:
+      - feat/analyst-runner-v1.2-resume
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/analyst-runner-v1.2-resume
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Add resume lifecycle tests
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          tests = Path("tests/test_analyst_workflow.py")
+          text = tests.read_text(encoding="utf-8").rstrip()
+          if "test_resume_preserves_identity_and_cleans_workdir_only_after_success" in text:
+              raise RuntimeError("resume lifecycle tests already exist")
+          addition = (
+              "\n\n\ndef _resume_fixture(tmp_path: Path) -> tuple[Path, workflow.AnalystExperimentManifest, workflow.AnalystExperimentRunState]:\n"
+              "    manifest = _manifest()\n"
+              "    run_id = \"20260901T000000Z\"\n"
+              "    workdir = (\n"
+              "        tmp_path\n"
+              "        / \"artifacts\"\n"
+              "        / \"work\"\n"
+              "        / manifest.experiment_id\n"
+              "        / run_id\n"
+              "    )\n"
+              "    manifest_bytes = manifest.model_dump_json().encode()\n"
+              "    (workdir / \"input\").mkdir(parents=True)\n"
+              "    (workdir / \"input\" / \"manifest.json\").write_bytes(manifest_bytes)\n"
+              "    state = workflow.AnalystExperimentRunState(\n"
+              "        experiment_id=manifest.experiment_id,\n"
+              "        run_id=run_id,\n"
+              "        started_at=datetime(2026, 9, 1, tzinfo=UTC),\n"
+              "        manifest_sha256=workflow._sha256_bytes(manifest_bytes),\n"
+              "    )\n"
+              "    workflow.write_run_state(workdir / \"run-state.json\", state)\n"
+              "    (workdir / \"reports\").mkdir()\n"
+              "    (workdir / \"reports\" / \"stale.json\").write_text(\"stale\", encoding=\"utf-8\")\n"
+              "    (workdir / \"csv\").mkdir()\n"
+              "    (workdir / \"csv\" / \"stale.csv\").write_text(\"stale\", encoding=\"utf-8\")\n"
+              "    return workdir, manifest, state\n\n\n"
+              "def test_resume_preserves_identity_and_cleans_workdir_only_after_success(\n"
+              "    tmp_path: Path,\n"
+              "    monkeypatch: pytest.MonkeyPatch,\n"
+              ") -> None:\n"
+              "    workdir, expected_manifest, state = _resume_fixture(tmp_path)\n"
+              "    observed: dict[str, object] = {}\n\n"
+              "    def fake_run_in_workdir(\n"
+              "        _self: object,\n"
+              "        manifest: workflow.AnalystExperimentManifest,\n"
+              "        **kwargs: object,\n"
+              "    ) -> workflow.AnalystExperimentResult:\n"
+              "        observed.update(kwargs)\n"
+              "        assert manifest == expected_manifest\n"
+              "        assert kwargs[\"started_at\"] == state.started_at\n"
+              "        assert kwargs[\"run_id\"] == state.run_id\n"
+              "        assert kwargs[\"manifest_sha256\"] == state.manifest_sha256\n"
+              "        assert kwargs[\"invocation_mode\"] == \"resume\"\n"
+              "        assert kwargs[\"allow_reuse\"] is True\n"
+              "        assert (workdir / \"reports\").is_dir()\n"
+              "        assert list((workdir / \"reports\").iterdir()) == []\n"
+              "        assert not (workdir / \"csv\").exists()\n"
+              "        return workflow.AnalystExperimentResult(\n"
+              "            experiment_id=state.experiment_id,\n"
+              "            run_id=state.run_id,\n"
+              "            artifact_path=f\"artifacts/exports/{state.experiment_id}/{state.run_id}.zip\",\n"
+              "            artifact_sha256=\"0\" * 64,\n"
+              "            artifact_manifest_sha256=\"1\" * 64,\n"
+              "            verifier=\"PASS\",\n"
+              "            family_count=len(manifest.families),\n"
+              "            query_count=sum(len(item.queries) for item in manifest.families),\n"
+              "            comparable_unique_listing_count=0,\n"
+              "            rich_requested_listing_count=0,\n"
+              "            rich_observed_listing_count=0,\n"
+              "            invocation_elapsed_seconds=0.0,\n"
+              "        )\n\n"
+              "    monkeypatch.setattr(\n"
+              "        workflow.AnalystExperimentRunner,\n"
+              "        \"_run_in_workdir\",\n"
+              "        fake_run_in_workdir,\n"
+              "    )\n"
+              "    runner = workflow.AnalystExperimentRunner(\n"
+              "        repository_root=tmp_path,\n"
+              "        output=lambda _: None,\n"
+              "        heartbeat_interval_seconds=0,\n"
+              "    )\n\n"
+              "    result = runner.resume(workdir)\n\n"
+              "    assert observed\n"
+              "    assert result.run_id == state.run_id\n"
+              "    assert not workdir.exists()\n\n\n"
+              "def test_resume_failure_preserves_workdir_and_repeatable_target(\n"
+              "    tmp_path: Path,\n"
+              "    monkeypatch: pytest.MonkeyPatch,\n"
+              ") -> None:\n"
+              "    workdir, _, state = _resume_fixture(tmp_path)\n\n"
+              "    def fail_run_in_workdir(\n"
+              "        _self: object,\n"
+              "        _manifest_value: workflow.AnalystExperimentManifest,\n"
+              "        **_kwargs: object,\n"
+              "    ) -> workflow.AnalystExperimentResult:\n"
+              "        raise RuntimeError(\"boom\")\n\n"
+              "    monkeypatch.setattr(\n"
+              "        workflow.AnalystExperimentRunner,\n"
+              "        \"_run_in_workdir\",\n"
+              "        fail_run_in_workdir,\n"
+              "    )\n"
+              "    runner = workflow.AnalystExperimentRunner(\n"
+              "        repository_root=tmp_path,\n"
+              "        output=lambda _: None,\n"
+              "        heartbeat_interval_seconds=0,\n"
+              "    )\n\n"
+              "    with pytest.raises(workflow.AnalystExperimentError) as raised:\n"
+              "        runner.resume(workdir)\n\n"
+              "    expected_target = (\n"
+              "        f\"yandex-reaper-experiment resume artifacts/work/\"\n"
+              "        f\"{state.experiment_id}/{state.run_id}\"\n"
+              "    )\n"
+              "    assert expected_target in str(raised.value)\n"
+              "    assert workdir.is_dir()\n"
+              "    assert (workdir / \"run-state.json\").is_file()\n"
+              "    assert (workdir / \"input\" / \"manifest.json\").is_file()\n"
+              "    assert (workdir / \"logs\" / \"events.jsonl\").is_file()\n"
+          )
+          tests.write_text(text + addition + "\n", encoding="utf-8")
+          PY
+      - name: Install exact dev environment
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Format
+        run: ruff format tests/test_analyst_workflow.py
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy src
+      - name: Pytest and coverage
+        run: pytest --cov=yandex_analytics_reaper --cov-report=term-missing --cov-fail-under=80
+      - name: Commit verified lifecycle coverage
+        shell: bash
+        run: |
+          rm -f .github/workflows/pr-b-resume-lifecycle.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "test: cover resume coordinator lifecycle"
+          git push origin HEAD:feat/analyst-runner-v1.2-resume

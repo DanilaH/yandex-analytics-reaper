@@ -1,0 +1,23 @@
+{
+  "release": "0.2.0",
+  "workflow_version": "analyst-experiment-v1.2",
+  "experiment_id": "mystery-unboxing-collection-sweep-v1",
+  "run_id": "20260901T062453Z",
+  "status": "completed",
+  "verifier_status": "pass",
+  "family_count": 15,
+  "query_count": 36,
+  "unique_listings": 665,
+  "rich_requested": 665,
+  "rich_observed": 665,
+  "final_invocation_mode": "resume",
+  "final_invocation_workers": 4,
+  "was_resumed": true,
+  "reused_query_count": 4,
+  "collected_query_count": 32,
+  "artifact_sha256": "ea82be46229b63ac7a4966692c4d01ad6e24e1e58e7c13a9b5176f2a80d9342b",
+  "artifact_manifest_sha256": "91f9a4b74e5cde45f21f9ed08cc0bff0ef0e8b65a9f0717de020cae88d971c07",
+  "actions_run_id": 33477467946,
+  "actions_artifact_id": 9788694982,
+  "actions_artifact_retention_days": 14
+}

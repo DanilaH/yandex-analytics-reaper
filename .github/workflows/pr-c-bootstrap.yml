@@ -43,6 +43,38 @@ jobs:
           if text.count(dead) != 1:
               raise RuntimeError("expected one pre-worker shared session manager")
           workflow.write_text(text.replace(dead, "", 1), encoding="utf-8")
+
+          e2e = Path("tests/test_analyst_workflow_end_to_end.py")
+          test_text = e2e.read_text(encoding="utf-8")
+          old_signature = (
+              "            schema_registry: SQLiteSchemaDriftRegistry,\n"
+              "            session_manager: object,\n"
+              "            family_id: str,\n"
+              "            query_index: int,\n"
+              "            query_total: int,\n"
+              "            events: object,\n"
+          )
+          new_signature = (
+              "            schema_registry: SQLiteSchemaDriftRegistry,\n"
+              "            session_manager: object,\n"
+              "            persistence_gate: object,\n"
+              "            family_id: str,\n"
+              "            query_index: int,\n"
+              "            query_total: int,\n"
+              "            worker: str,\n"
+              "            events: object,\n"
+          )
+          if test_text.count(old_signature) != 1:
+              raise RuntimeError("expected one end-to-end collect_search fixture signature")
+          test_text = test_text.replace(old_signature, new_signature, 1)
+          old_del = "            del session_manager, family_id, query_index, query_total, events, timings\n"
+          new_del = (
+              "            del session_manager, persistence_gate, family_id, query_index, "
+              "query_total, worker, events, timings\n"
+          )
+          if test_text.count(old_del) != 1:
+              raise RuntimeError("expected one end-to-end collect_search fixture del statement")
+          e2e.write_text(test_text.replace(old_del, new_del, 1), encoding="utf-8")
           PY
           python -m compileall -q src tests
           rm -f scripts/pr_c_bootstrap.py scripts/pr_c_bootstrap_fix.py
@@ -60,6 +92,7 @@ jobs:
             src/yandex_analytics_reaper/ingestion/yandex_probes.py \
             src/yandex_analytics_reaper/ingestion/__init__.py \
             tests/test_analyst_workflow.py \
+            tests/test_analyst_workflow_end_to_end.py \
             tests/test_experiment_cli_workers.py \
             tests/test_experiment_workers.py \
             tests/test_probe_persistence_gate.py
@@ -71,6 +104,7 @@ jobs:
             src/yandex_analytics_reaper/ingestion/yandex_probes.py \
             src/yandex_analytics_reaper/ingestion/__init__.py \
             tests/test_analyst_workflow.py \
+            tests/test_analyst_workflow_end_to_end.py \
             tests/test_experiment_cli_workers.py \
             tests/test_experiment_workers.py \
             tests/test_probe_persistence_gate.py
@@ -85,7 +119,7 @@ jobs:
         run: |
           rm -f .github/workflows/pr-c-bootstrap.yml scripts/pr_c_bootstrap.py scripts/pr_c_bootstrap_fix.py
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+DanilaH@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
           git commit -m "feat: add bounded analyst query workers"

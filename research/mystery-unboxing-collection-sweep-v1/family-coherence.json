@@ -1,0 +1,197 @@
+[
+  {
+    "family_id": "unboxing",
+    "query_diagnostics": [
+      {"query": "unboxing", "selected_run_id": "probe:1c3b4f0f67854caca2d06f2401b325ec", "unique_organic_listings": 36},
+      {"query": "распаковка", "selected_run_id": "probe:085956cb1753488687ed222caed5b8ca", "unique_organic_listings": 36}
+    ],
+    "union_count": 52,
+    "all_query_intersection_count": 20,
+    "all_query_jaccard": 0.38461538461538464,
+    "pairwise": [{"left_query": "unboxing", "right_query": "распаковка", "intersection_count": 20, "union_count": 52, "jaccard": 0.38461538461538464}]
+  },
+  {
+    "family_id": "surprise",
+    "query_diagnostics": [
+      {"query": "surprise", "selected_run_id": "probe:b698d7a3577c4d74a48b23bea452d5e7", "unique_organic_listings": 36},
+      {"query": "сюрприз", "selected_run_id": "probe:ca59fdaf35114764a7564b0e8072eb14", "unique_organic_listings": 36}
+    ],
+    "union_count": 46,
+    "all_query_intersection_count": 26,
+    "all_query_jaccard": 0.5652173913043478,
+    "pairwise": [{"left_query": "surprise", "right_query": "сюрприз", "intersection_count": 26, "union_count": 46, "jaccard": 0.5652173913043478}]
+  },
+  {
+    "family_id": "mystery-box",
+    "query_diagnostics": [
+      {"query": "mystery box", "selected_run_id": "probe:7e2c90ca637741a48a5e165421860132", "unique_organic_listings": 36},
+      {"query": "мистери бокс", "selected_run_id": "probe:d144a25e957f4b9c8a697dc3f4649d7f", "unique_organic_listings": 36}
+    ],
+    "union_count": 64,
+    "all_query_intersection_count": 8,
+    "all_query_jaccard": 0.125,
+    "pairwise": [{"left_query": "mystery box", "right_query": "мистери бокс", "intersection_count": 8, "union_count": 64, "jaccard": 0.125}]
+  },
+  {
+    "family_id": "surprise-box",
+    "query_diagnostics": [
+      {"query": "surprise box", "selected_run_id": "probe:9b9a6e3764b54d6b82df91a9b69cfc02", "unique_organic_listings": 36},
+      {"query": "сюрприз бокс", "selected_run_id": "probe:2b8e67d271d04f268678f0b855d9895b", "unique_organic_listings": 36}
+    ],
+    "union_count": 54,
+    "all_query_intersection_count": 18,
+    "all_query_jaccard": 0.3333333333333333,
+    "pairwise": [{"left_query": "surprise box", "right_query": "сюрприз бокс", "intersection_count": 18, "union_count": 54, "jaccard": 0.3333333333333333}]
+  },
+  {
+    "family_id": "blind-box",
+    "query_diagnostics": [
+      {"query": "blind box", "selected_run_id": "probe:e8d34c1673b6470fad9a3c61e642566c", "unique_organic_listings": 36},
+      {"query": "блайнд бокс", "selected_run_id": "probe:1da39ed8f41240ab889b0d0f00d0e438", "unique_organic_listings": 36}
+    ],
+    "union_count": 64,
+    "all_query_intersection_count": 8,
+    "all_query_jaccard": 0.125,
+    "pairwise": [{"left_query": "blind box", "right_query": "блайнд бокс", "intersection_count": 8, "union_count": 64, "jaccard": 0.125}]
+  },
+  {
+    "family_id": "open-box",
+    "query_diagnostics": [
+      {"query": "open box", "selected_run_id": "probe:af901ca928574eb8b94ae15c37065498", "unique_organic_listings": 36},
+      {"query": "открой коробку", "selected_run_id": "probe:b01b460345e4478b9021250a116be249", "unique_organic_listings": 36},
+      {"query": "открывай коробки", "selected_run_id": "probe:80d8f501041243d38f27523b601264ab", "unique_organic_listings": 36}
+    ],
+    "union_count": 76,
+    "all_query_intersection_count": 6,
+    "all_query_jaccard": 0.07894736842105263,
+    "pairwise": [
+      {"left_query": "open box", "right_query": "открой коробку", "intersection_count": 6, "union_count": 66, "jaccard": 0.09090909090909091},
+      {"left_query": "open box", "right_query": "открывай коробки", "intersection_count": 13, "union_count": 59, "jaccard": 0.22033898305084745},
+      {"left_query": "открой коробку", "right_query": "открывай коробки", "intersection_count": 19, "union_count": 53, "jaccard": 0.3584905660377358}
+    ]
+  },
+  {
+    "family_id": "what-inside",
+    "query_diagnostics": [
+      {"query": "what's inside", "selected_run_id": "probe:7be944050de549c3ac6e4d563833290b", "unique_organic_listings": 36},
+      {"query": "что внутри", "selected_run_id": "probe:fe6011dd249d4f48b9c5819240db98a0", "unique_organic_listings": 36}
+    ],
+    "union_count": 64,
+    "all_query_intersection_count": 8,
+    "all_query_jaccard": 0.125,
+    "pairwise": [{"left_query": "what's inside", "right_query": "что внутри", "intersection_count": 8, "union_count": 64, "jaccard": 0.125}]
+  },
+  {
+    "family_id": "case-opening",
+    "query_diagnostics": [
+      {"query": "case opening", "selected_run_id": "probe:2aae9a59d120406594f9548ae1c1fd7e", "unique_organic_listings": 36},
+      {"query": "открытие кейсов", "selected_run_id": "probe:e009a16faabc42db9cfbebc4cf69534a", "unique_organic_listings": 36},
+      {"query": "открывай кейсы", "selected_run_id": "probe:5554f01aa8934b6e9aa6287fab22b588", "unique_organic_listings": 36}
+    ],
+    "union_count": 48,
+    "all_query_intersection_count": 24,
+    "all_query_jaccard": 0.5,
+    "pairwise": [
+      {"left_query": "case opening", "right_query": "открытие кейсов", "intersection_count": 24, "union_count": 48, "jaccard": 0.5},
+      {"left_query": "case opening", "right_query": "открывай кейсы", "intersection_count": 27, "union_count": 45, "jaccard": 0.6},
+      {"left_query": "открытие кейсов", "right_query": "открывай кейсы", "intersection_count": 33, "union_count": 39, "jaccard": 0.8461538461538461}
+    ]
+  },
+  {
+    "family_id": "pack-opening",
+    "query_diagnostics": [
+      {"query": "pack opening", "selected_run_id": "probe:bca6ffd1965c483da6c029d7be597c58", "unique_organic_listings": 36},
+      {"query": "открытие паков", "selected_run_id": "probe:b8f59e62232f4548820602d1f3c3a7a7", "unique_organic_listings": 36},
+      {"query": "открывай паки", "selected_run_id": "probe:fed4b31311d0407f832d76ea30d07f86", "unique_organic_listings": 36}
+    ],
+    "union_count": 99,
+    "all_query_intersection_count": 1,
+    "all_query_jaccard": 0.010101010101010102,
+    "pairwise": [
+      {"left_query": "pack opening", "right_query": "открытие паков", "intersection_count": 2, "union_count": 70, "jaccard": 0.02857142857142857},
+      {"left_query": "pack opening", "right_query": "открывай паки", "intersection_count": 4, "union_count": 68, "jaccard": 0.058823529411764705},
+      {"left_query": "открытие паков", "right_query": "открывай паки", "intersection_count": 4, "union_count": 68, "jaccard": 0.058823529411764705}
+    ]
+  },
+  {
+    "family_id": "loot-box",
+    "query_diagnostics": [
+      {"query": "loot box", "selected_run_id": "probe:8823e39cea2a4713b380fa1f91427571", "unique_organic_listings": 36},
+      {"query": "лутбокс", "selected_run_id": "probe:2593912ca0a4484ea3ec29359476ef95", "unique_organic_listings": 36}
+    ],
+    "union_count": 65,
+    "all_query_intersection_count": 7,
+    "all_query_jaccard": 0.1076923076923077,
+    "pairwise": [{"left_query": "loot box", "right_query": "лутбокс", "intersection_count": 7, "union_count": 65, "jaccard": 0.1076923076923077}]
+  },
+  {
+    "family_id": "collection",
+    "query_diagnostics": [
+      {"query": "collection", "selected_run_id": "probe:0b17b3cb70654896935d15981cf8028b", "unique_organic_listings": 36},
+      {"query": "коллекция", "selected_run_id": "probe:bef4e89526a048e7ba9643abb57db638", "unique_organic_listings": 36}
+    ],
+    "union_count": 62,
+    "all_query_intersection_count": 10,
+    "all_query_jaccard": 0.16129032258064516,
+    "pairwise": [{"left_query": "collection", "right_query": "коллекция", "intersection_count": 10, "union_count": 62, "jaccard": 0.16129032258064516}]
+  },
+  {
+    "family_id": "collect-all",
+    "query_diagnostics": [
+      {"query": "collect them all", "selected_run_id": "probe:f1041cc9a349478386ded2237afd7b8a", "unique_organic_listings": 36},
+      {"query": "собери всех", "selected_run_id": "probe:320606d495e34cfda1220c32c2b34286", "unique_organic_listings": 36},
+      {"query": "собери всю коллекцию", "selected_run_id": "probe:b4fd6b4ccc8d4eb38fdb5200eaac2e64", "unique_organic_listings": 36}
+    ],
+    "union_count": 85,
+    "all_query_intersection_count": 5,
+    "all_query_jaccard": 0.058823529411764705,
+    "pairwise": [
+      {"left_query": "collect them all", "right_query": "собери всех", "intersection_count": 7, "union_count": 65, "jaccard": 0.1076923076923077},
+      {"left_query": "collect them all", "right_query": "собери всю коллекцию", "intersection_count": 8, "union_count": 64, "jaccard": 0.125},
+      {"left_query": "собери всех", "right_query": "собери всю коллекцию", "intersection_count": 13, "union_count": 59, "jaccard": 0.22033898305084745}
+    ]
+  },
+  {
+    "family_id": "rarity",
+    "query_diagnostics": [
+      {"query": "rarity", "selected_run_id": "probe:8386f80f357e418797db2c4817dfec42", "unique_organic_listings": 36},
+      {"query": "редкость", "selected_run_id": "probe:276ce4f718d34babac6d32eab59e80f1", "unique_organic_listings": 36},
+      {"query": "редкий", "selected_run_id": "probe:6c94c665d76b4ffeab9dbf2494f054b1", "unique_organic_listings": 36}
+    ],
+    "union_count": 89,
+    "all_query_intersection_count": 3,
+    "all_query_jaccard": 0.033707865168539325,
+    "pairwise": [
+      {"left_query": "rarity", "right_query": "редкость", "intersection_count": 16, "union_count": 56, "jaccard": 0.2857142857142857},
+      {"left_query": "rarity", "right_query": "редкий", "intersection_count": 3, "union_count": 69, "jaccard": 0.043478260869565216},
+      {"left_query": "редкость", "right_query": "редкий", "intersection_count": 3, "union_count": 69, "jaccard": 0.043478260869565216}
+    ]
+  },
+  {
+    "family_id": "capsule-surprise",
+    "query_diagnostics": [
+      {"query": "capsule toy", "selected_run_id": "probe:1122b146769842bbb04f5ac7fd8eb761", "unique_organic_listings": 36},
+      {"query": "капсула сюрприз", "selected_run_id": "probe:6b914689933545d4b663cc45034b808f", "unique_organic_listings": 36},
+      {"query": "игрушка в капсуле", "selected_run_id": "probe:a9f973334343410caa8e26c211e7009b", "unique_organic_listings": 36}
+    ],
+    "union_count": 94,
+    "all_query_intersection_count": 2,
+    "all_query_jaccard": 0.02127659574468085,
+    "pairwise": [
+      {"left_query": "capsule toy", "right_query": "капсула сюрприз", "intersection_count": 3, "union_count": 69, "jaccard": 0.043478260869565216},
+      {"left_query": "capsule toy", "right_query": "игрушка в капсуле", "intersection_count": 9, "union_count": 63, "jaccard": 0.14285714285714285},
+      {"left_query": "капсула сюрприз", "right_query": "игрушка в капсуле", "intersection_count": 4, "union_count": 68, "jaccard": 0.058823529411764705}
+    ]
+  },
+  {
+    "family_id": "lucky-block",
+    "query_diagnostics": [
+      {"query": "lucky block", "selected_run_id": "probe:751e86cca2864cda93c3ff2fae5aeb03", "unique_organic_listings": 36},
+      {"query": "лаки блок", "selected_run_id": "probe:64707419a18d496d8c91bd9a8cfb461e", "unique_organic_listings": 36}
+    ],
+    "union_count": 44,
+    "all_query_intersection_count": 28,
+    "all_query_jaccard": 0.6363636363636364,
+    "pairwise": [{"left_query": "lucky block", "right_query": "лаки блок", "intersection_count": 28, "union_count": 44, "jaccard": 0.6363636363636364}]
+  }
+]

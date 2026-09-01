@@ -1,0 +1,94 @@
+{
+  "schema": "candidate-decision-v1",
+  "candidate_id": "tactile-mystery-collectibles-v1",
+  "candidate_version": 1,
+  "decision": "BUILD",
+  "decision_scope": "small_probe",
+  "decision_validation_status": "heuristic",
+  "market_prior": "favorable",
+  "production_fit": "acceptable",
+  "evidence_coverage": "medium",
+  "production_assessment": {
+    "assessment_version": "tactile-mystery-production-rubric-v1",
+    "tooling_profile": "single-screen web/Yandex game; pointer/touch interaction; AI-assisted original asset family",
+    "dev_complexity": "s",
+    "asset_burden": "medium",
+    "content_burden": "low",
+    "backend_burden": "none",
+    "balancing_burden": "low",
+    "liveops_burden": "low",
+    "qa_burden": "medium",
+    "mobile_adaptation_burden": "low",
+    "ai_assisted_fit": "strong",
+    "estimated_mvp_days_low": 5.0,
+    "estimated_mvp_days_high": 7.0,
+    "reusable_systems_available": [],
+    "major_technical_risks": [
+      "tactile unwrap interaction expands into bespoke physics/animation",
+      "reveal presentation requires more polish time than budgeted",
+      "AI-assisted collectible family lacks sufficient visual consistency",
+      "save/rewarded-ad edge cases corrupt the small progression loop"
+    ]
+  },
+  "why_build": "A current close structural reference and the broader case-opening reward grammar provide enough market evidence to justify a cheap real probe, while the frozen one-screen scope remains within the portfolio production envelope.",
+  "top_supporting_evidence": [
+    "listing 533677: 867 ratingCount at ~71.8 days, nine exact-query exposures across six families, best observed rank 2, compact four-box/random-rarity/collection loop",
+    "case-opening family: 48 observed members, median ratingCount 6609, p75 22454.75, all-query Jaccard 0.5, supporting anticipation+rarity reward strength",
+    "candidate avoids the 3D/meta/backend burden present in many high-traction benchmark games"
+  ],
+  "top_counter_evidence": [
+    "multiple near-minimal pack-opening/reskin games in the same sweep have weak or zero ratingCount traction",
+    "generic real-object case simulators are weak long-run references despite larger content/meta burden",
+    "search exposure/rank does not imply demand: listing 550787 had 14 exact-query exposures and best rank 1 but ratingCount 0 at ~42 days",
+    "working Pocket Gremlins theme is original and production-friendly but not independently market-validated"
+  ],
+  "unknowns": [
+    "competitor DAU and retention",
+    "competitor ad revenue and monetization efficiency",
+    "store-card CTR and acquisition-source mix",
+    "historical trajectory before the current sweep",
+    "theme-specific click appeal",
+    "portfolio-calibrated post-launch success thresholds"
+  ],
+  "expected_mvp_scope": {
+    "collectibles": 24,
+    "rarities": 4,
+    "package_tiers": 3,
+    "album": 1,
+    "soft_currencies": 1,
+    "rewarded_ad_acceleration_points": 1,
+    "explicit_non_goals": [
+      "shop economy",
+      "second currency",
+      "daily quests",
+      "season pass",
+      "live events",
+      "multiplayer",
+      "3D world",
+      "combat",
+      "base builder",
+      "marketplace"
+    ]
+  },
+  "pre_build_kill_conditions": [
+    "credible implementation plan exceeds seven focused person-days",
+    "24-item original asset family requires substantial bespoke illustration or 3D work",
+    "unwrap/reveal requires physics or complex animation tooling",
+    "core unwrap/reveal/album prototype is not satisfying without a second gameplay system",
+    "creative direction requires recognizable third-party IP to become appealing"
+  ],
+  "post_launch_falsification_conditions": [
+    "real sessions are predominantly one-reveal-and-exit instead of repeat opening",
+    "album usage and collection progress show no meaningful continuation signal",
+    "rewarded monetization is necessary merely to make the base loop progress",
+    "heavy secondary systems are proposed as the primary remedy for weak reveal/repeat behavior",
+    "meaningful discovery depends on unrelated trend or third-party-IP keywords"
+  ],
+  "evidence_binding": {
+    "experiment_id": "mystery-unboxing-collection-sweep-v1",
+    "run_id": "20260901T062453Z",
+    "artifact_sha256": "ea82be46229b63ac7a4966692c4d01ad6e24e1e58e7c13a9b5176f2a80d9342b",
+    "primary_reference_listing_id": "533677",
+    "dossier": "research/candidates/tactile-mystery-collectibles-v1/dossier-v1.md"
+  }
+}

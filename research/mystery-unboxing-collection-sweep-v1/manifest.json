@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "experiment_id": "mystery-unboxing-collection-sweep-v1",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "unboxing",
+      "queries": [
+        "unboxing",
+        "распаковка"
+      ]
+    },
+    {
+      "id": "surprise",
+      "queries": [
+        "surprise",
+        "сюрприз"
+      ]
+    },
+    {
+      "id": "mystery-box",
+      "queries": [
+        "mystery box",
+        "мистери бокс"
+      ]
+    },
+    {
+      "id": "surprise-box",
+      "queries": [
+        "surprise box",
+        "сюрприз бокс"
+      ]
+    },
+    {
+      "id": "blind-box",
+      "queries": [
+        "blind box",
+        "блайнд бокс"
+      ]
+    },
+    {
+      "id": "open-box",
+      "queries": [
+        "open box",
+        "открой коробку",
+        "открывай коробки"
+      ]
+    },
+    {
+      "id": "what-inside",
+      "queries": [
+        "what's inside",
+        "что внутри"
+      ]
+    },
+    {
+      "id": "case-opening",
+      "queries": [
+        "case opening",
+        "открытие кейсов",
+        "открывай кейсы"
+      ]
+    },
+    {
+      "id": "pack-opening",
+      "queries": [
+        "pack opening",
+        "открытие паков",
+        "открывай паки"
+      ]
+    },
+    {
+      "id": "loot-box",
+      "queries": [
+        "loot box",
+        "лутбокс"
+      ]
+    },
+    {
+      "id": "collection",
+      "queries": [
+        "collection",
+        "коллекция"
+      ]
+    },
+    {
+      "id": "collect-all",
+      "queries": [
+        "collect them all",
+        "собери всех",
+        "собери всю коллекцию"
+      ]
+    },
+    {
+      "id": "rarity",
+      "queries": [
+        "rarity",
+        "редкость",
+        "редкий"
+      ]
+    },
+    {
+      "id": "capsule-surprise",
+      "queries": [
+        "capsule toy",
+        "капсула сюрприз",
+        "игрушка в капсуле"
+      ]
+    },
+    {
+      "id": "lucky-block",
+      "queries": [
+        "lucky block",
+        "лаки блок"
+      ]
+    }
+  ]
+}

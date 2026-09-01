@@ -6,6 +6,10 @@ on:
       - research/microgame-trend-sweep-v2-2026-09-01
   workflow_dispatch:
 
+permissions:
+  actions: read
+  contents: read
+
 jobs:
   sweep:
     runs-on: ubuntu-latest
@@ -22,10 +26,21 @@ jobs:
       - name: Install Reaper
         run: python -m pip install -e .
 
-      - name: Run microgame trend sweep v2
+      - name: Verify remote protocol retry handling
+        run: python -m pytest tests/test_yandex_client_transport_retry.py -q
+
+      - name: Restore failed sweep workdir
+        uses: actions/download-artifact@v4
+        with:
+          name: microgame-trend-sweep-v2-2026-09-01
+          run-id: 33509590899
+          github-token: ${{ github.token }}
+          path: .
+
+      - name: Resume microgame trend sweep v2
         run: |
           set -o pipefail
-          yandex-reaper-experiment run research/microgame-trend-sweep-v2-2026-09-01/manifest.json --workers 4 | tee sweep-result.json
+          yandex-reaper-experiment resume artifacts/work/microgame-trend-sweep-v2-2026-09-01/20260901T124723Z --workers 4 | tee sweep-result.json
 
       - name: Upload sweep evidence
         if: always()

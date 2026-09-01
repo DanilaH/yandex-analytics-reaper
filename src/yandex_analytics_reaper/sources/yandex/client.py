@@ -11,6 +11,10 @@ from yandex_analytics_reaper.domain.models import ProbeContext
 from yandex_analytics_reaper.sources.capabilities import CollectedResponse
 
 
+class YandexTransientProtocolError(httpx.ConnectError):
+    """Retryable peer-side protocol interruption normalized for the runner retry contract."""
+
+
 class YandexPublicClient:
     """Small explicit client for currently observed Yandex Games frontend endpoints."""
 
@@ -139,13 +143,22 @@ class YandexPublicClient:
         json_body: Mapping[str, Any] | None = None,
         headers: Mapping[str, str] | None = None,
     ) -> CollectedResponse:
-        response = self._client.request(
-            method,
-            url,
-            params=params,
-            json=json_body,
-            headers=headers,
-        )
+        try:
+            response = self._client.request(
+                method,
+                url,
+                params=params,
+                json=json_body,
+                headers=headers,
+            )
+        except httpx.RemoteProtocolError as exc:
+            # The analyst runner retries ConnectError subclasses with the existing
+            # max-3-attempt policy. An incomplete chunked read is a transient peer-side
+            # transport interruption, so normalize it without adding a second retry loop.
+            raise YandexTransientProtocolError(
+                str(exc),
+                request=exc.request,
+            ) from exc
         return CollectedResponse(
             source_id=self.source_id,
             request_key=request_key,

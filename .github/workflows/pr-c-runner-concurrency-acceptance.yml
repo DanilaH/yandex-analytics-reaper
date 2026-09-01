@@ -1,0 +1,80 @@
+name: PR C runner concurrency acceptance
+
+on:
+  push:
+    branches:
+      - feat/analyst-runner-v1.2-workers
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/analyst-runner-v1.2-workers
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Add runner-level concurrency assertion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/test_analyst_workflow_end_to_end.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace("import json\n", "import json\nimport threading\n", 1)
+          marker = "class FakeSearchClient:\n    source_id = \"yandex_public\"\n"
+          replacement = (
+              "class FakeSearchClient:\n"
+              "    source_id = \"yandex_public\"\n"
+              "    _barrier = threading.Barrier(2)\n"
+              "    _seen_lock = threading.Lock()\n"
+              "    _seen: set[str] = set()\n"
+          )
+          if text.count(marker) != 1:
+              raise RuntimeError("expected FakeSearchClient declaration")
+          text = text.replace(marker, replacement, 1)
+          needle = "        del page_id, rtx_reqid\n        app_ids = {\n"
+          replacement = (
+              "        del page_id, rtx_reqid\n"
+              "        with type(self)._seen_lock:\n"
+              "            first_for_query = query not in type(self)._seen\n"
+              "            type(self)._seen.add(query)\n"
+              "        if first_for_query:\n"
+              "            type(self)._barrier.wait(timeout=2.0)\n"
+              "        app_ids = {\n"
+          )
+          if text.count(needle) != 1:
+              raise RuntimeError("expected FakeSearchClient collection body")
+          text = text.replace(needle, replacement, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          python -m compileall -q tests/test_analyst_workflow_end_to_end.py
+      - name: Install exact dev environment
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Format and lint temporary assertion
+        run: |
+          ruff format tests/test_analyst_workflow_end_to_end.py
+          ruff check tests/test_analyst_workflow_end_to_end.py
+      - name: Run runner-level concurrency acceptance
+        run: pytest -q tests/test_analyst_workflow_end_to_end.py::test_runner_executes_full_local_evidence_chain_and_cleans_workdir
+      - name: Commit verified assertion and remove workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/pr-c-runner-concurrency-acceptance.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "test: assert runner executes exact queries concurrently"
+          git push origin HEAD:feat/analyst-runner-v1.2-workers

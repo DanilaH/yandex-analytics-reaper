@@ -904,6 +904,16 @@ class AnalystExperimentRunner:
                 return result
             except _TRANSPORT_ERRORS as exc:
                 if attempt >= _MAX_TRANSPORT_ATTEMPTS:
+                    events.emit(
+                        "rich_batch_failed",
+                        stage="rich_metadata",
+                        batch_index=batch_index,
+                        batch_total=batch_total,
+                        attempt=attempt,
+                        max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc).strip() or type(exc).__name__,
+                    )
                     raise
                 delay = float(attempt)
                 timings.record_retry(
@@ -924,6 +934,18 @@ class AnalystExperimentRunner:
                     retry_delay_seconds=delay,
                 )
                 self.sleeper(delay)
+            except Exception as exc:
+                events.emit(
+                    "rich_batch_failed",
+                    stage="rich_metadata",
+                    batch_index=batch_index,
+                    batch_total=batch_total,
+                    attempt=attempt,
+                    max_attempts=_MAX_TRANSPORT_ATTEMPTS,
+                    error_type=type(exc).__name__,
+                    error_message=str(exc).strip() or type(exc).__name__,
+                )
+                raise
         raise RuntimeError("unreachable rich-metadata retry state")
 
 

@@ -1,0 +1,188 @@
+name: Reaper 0.2.0 Mystery acceptance
+
+on:
+  push:
+    branches:
+      - acceptance/reaper-0.2.0-mystery-sweep
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Install exact environment
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Prepare Mystery / Unboxing / Collection manifest
+        shell: bash
+        run: |
+          mkdir -p artifacts/input
+          cat > artifacts/input/mystery-unboxing-collection-sweep-v1.json <<'JSON'
+          {
+            "schema_version": 1,
+            "experiment_id": "mystery-unboxing-collection-sweep-v1",
+            "context": {
+              "pages": 3,
+              "session_profile": "clean_anonymous",
+              "lang": "ru",
+              "device": "desktop",
+              "platform": "desktop_other"
+            },
+            "families": [
+              {"id": "unboxing", "queries": ["unboxing", "распаковка"]},
+              {"id": "surprise", "queries": ["surprise", "сюрприз"]},
+              {"id": "mystery-box", "queries": ["mystery box", "мистери бокс"]},
+              {"id": "surprise-box", "queries": ["surprise box", "сюрприз бокс"]},
+              {"id": "blind-box", "queries": ["blind box", "блайнд бокс"]},
+              {"id": "open-box", "queries": ["open box", "открой коробку", "открывай коробки"]},
+              {"id": "what-inside", "queries": ["what's inside", "что внутри"]},
+              {"id": "case-opening", "queries": ["case opening", "открытие кейсов", "открывай кейсы"]},
+              {"id": "pack-opening", "queries": ["pack opening", "открытие паков", "открывай паки"]},
+              {"id": "loot-box", "queries": ["loot box", "лутбокс"]},
+              {"id": "collection", "queries": ["collection", "коллекция"]},
+              {"id": "collect-all", "queries": ["collect them all", "собери всех", "собери всю коллекцию"]},
+              {"id": "rarity", "queries": ["rarity", "редкость", "редкий"]},
+              {"id": "capsule-surprise", "queries": ["capsule toy", "капсула сюрприз", "игрушка в капсуле"]},
+              {"id": "lucky-block", "queries": ["lucky block", "лаки блок"]}
+            ]
+          }
+          JSON
+      - name: Controlled hard kill then deterministic resume
+        shell: bash
+        run: |
+          set -euo pipefail
+          experiment="mystery-unboxing-collection-sweep-v1"
+          manifest="artifacts/input/${experiment}.json"
+          mkdir -p acceptance-evidence
+
+          set +e
+          yandex-reaper-experiment run "$manifest" --workers 4 > acceptance-evidence/first-run.stdout.log 2>&1 &
+          pid=$!
+          set -e
+
+          workdir=""
+          for _ in $(seq 1 60); do
+            workdir="$(find "artifacts/work/${experiment}" -mindepth 1 -maxdepth 1 -type d -print -quit 2>/dev/null || true)"
+            if [[ -n "$workdir" && -f "$workdir/run-state.json" ]]; then
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "Initial run exited before allocating a resumable workdir" >&2
+              cat acceptance-evidence/first-run.stdout.log >&2 || true
+              wait "$pid" || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ -z "$workdir" || ! -f "$workdir/run-state.json" ]]; then
+            echo "No resumable workdir appeared" >&2
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" || true
+            exit 1
+          fi
+
+          completed=0
+          for _ in $(seq 1 180); do
+            if [[ -f "$workdir/logs/events.jsonl" ]]; then
+              completed="$(grep -c '"event":"query_completed"' "$workdir/logs/events.jsonl" || true)"
+            fi
+            if (( completed >= 4 )); then
+              break
+            fi
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "Initial run exited before the controlled kill threshold (completed=${completed})" >&2
+              cat acceptance-evidence/first-run.stdout.log >&2 || true
+              wait "$pid" || true
+              exit 1
+            fi
+            sleep 1
+          done
+          if (( completed < 4 )); then
+            echo "Timed out waiting for four completed exact queries" >&2
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" || true
+            exit 1
+          fi
+
+          kill -KILL "$pid"
+          set +e
+          wait "$pid"
+          killed_status=$?
+          set -e
+          if (( killed_status == 0 )); then
+            echo "Controlled kill unexpectedly returned success" >&2
+            exit 1
+          fi
+
+          cp "$workdir/run-state.json" acceptance-evidence/pre-resume-run-state.json
+          cp "$manifest" acceptance-evidence/input-manifest.json
+          cp -a "$workdir/logs" acceptance-evidence/pre-resume-logs
+          printf '{"query_completed_before_kill":%s,"kill_exit_status":%s,"workdir":"%s"}\n' \
+            "$completed" "$killed_status" "$workdir" \
+            > acceptance-evidence/pre-resume-summary.json
+
+          yandex-reaper-experiment resume "$workdir" --workers 4 \
+            | tee acceptance-evidence/resume.stdout.log
+
+          if [[ -d "$workdir" ]]; then
+            echo "Successful resume did not clean the workdir" >&2
+            exit 1
+          fi
+
+          artifact="$(find "artifacts/exports/${experiment}" -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [[ -z "$artifact" || ! -f "$artifact" ]]; then
+            echo "Final artifact ZIP was not published" >&2
+            exit 1
+          fi
+          cp "$artifact" acceptance-evidence/
+
+          ARTIFACT="$artifact" python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from zipfile import ZipFile
+
+          from yandex_analytics_reaper.analyst_workflow import verify_packaged_artifact
+
+          artifact = Path(os.environ["ARTIFACT"])
+          with ZipFile(artifact) as archive:
+              summary = json.loads(archive.read("execution-summary.json"))
+          assert summary["workflow_version"] == "analyst-experiment-v1.2"
+          assert summary["status"] == "completed"
+          assert summary["query_count"] == 36
+          assert summary["final_invocation_mode"] == "resume"
+          assert summary["final_invocation_workers"] == 4
+          assert summary["was_resumed"] is True
+          assert summary["reused_query_count"] >= 4
+          assert summary["reused_query_count"] + summary["collected_query_count"] == 36
+          verified = verify_packaged_artifact(
+              artifact,
+              expected_experiment_id=summary["experiment_id"],
+              expected_run_id=summary["run_id"],
+          )
+          assert verified.experiment_id == summary["experiment_id"]
+          assert verified.run_id == summary["run_id"]
+          Path("acceptance-evidence/final-execution-summary.json").write_text(
+              json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
+      - name: Upload acceptance evidence and market artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper-0.2.0-mystery-sweep
+          path: acceptance-evidence/
+          if-no-files-found: error
+          retention-days: 14

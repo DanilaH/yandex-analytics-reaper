@@ -41,6 +41,17 @@ jobs:
               '__name__': '__main__',
           }
           exec(compile(source, namespace['__file__'], 'exec'), namespace)
+
+          coordinator = Path('src/yandex_analytics_reaper/analyst_workflow.py')
+          text = coordinator.read_text(encoding='utf-8')
+          old = '                        "packaged artifact manifest does not match the manifest built from the workdir"\n'
+          new = (
+              '                        "packaged artifact manifest does not match the manifest built "\n'
+              '                        "from the workdir"\n'
+          )
+          if text.count(old) != 1:
+              raise RuntimeError('expected one long artifact-manifest error line')
+          coordinator.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
       - name: Install exact dev environment
         run: |

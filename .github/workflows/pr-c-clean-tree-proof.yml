@@ -1,0 +1,34 @@
+name: PR C clean tree proof
+
+on:
+  push:
+    branches:
+      - feat/analyst-runner-v1.2-workers
+
+permissions:
+  contents: write
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/analyst-runner-v1.2-workers
+      - name: Confirm only proof workflow is temporary
+        run: |
+          test ! -e scripts/pr_c_bootstrap.py
+          test ! -e scripts/pr_c_bootstrap_fix.py
+          test ! -e .github/workflows/pr-c-bootstrap.yml
+          test ! -e .github/workflows/pr-c-runner-concurrency-acceptance.yml
+          test ! -e .github/workflows/pr-c-final-gate.yml
+          test ! -e .github/workflows/pr-c-noop-cleanup-check.yml
+      - name: Remove proof workflow
+        run: |
+          rm -f .github/workflows/pr-c-clean-tree-proof.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "ci: prove clean PR C tree"
+          git push origin HEAD:feat/analyst-runner-v1.2-workers

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import threading
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import ClassVar
 from zipfile import ZipFile
 
 import pytest
@@ -23,6 +25,9 @@ from yandex_analytics_reaper.storage import FilesystemRawSnapshotStore, SQLitePr
 
 class FakeSearchClient:
     source_id = "yandex_public"
+    _barrier = threading.Barrier(2)
+    _seen_lock = threading.Lock()
+    _seen: ClassVar[set[str]] = set()
 
     def collect_search(
         self,
@@ -33,6 +38,11 @@ class FakeSearchClient:
         rtx_reqid: str | None = None,
     ) -> CollectedResponse:
         del page_id, rtx_reqid
+        with type(self)._seen_lock:
+            first_for_query = query not in type(self)._seen
+            type(self)._seen.add(query)
+        if first_for_query:
+            type(self)._barrier.wait(timeout=2.0)
         app_ids = {
             "clean": [10, 20],
             "break": [20, 30],

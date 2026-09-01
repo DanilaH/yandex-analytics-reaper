@@ -1,0 +1,45 @@
+name: Microgame Orthogonal Sweep V4 2026-09-01
+
+on:
+  push:
+    branches:
+      - research/microgame-orthogonal-sweep-v4-2026-09-01
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Reaper
+        run: |
+          python -m pip install -e .
+
+      - name: Run orthogonal microgame sweep v4
+        run: |
+          set -o pipefail
+          yandex-reaper-experiment run research/microgame-orthogonal-sweep-v4-2026-09-01/manifest.json --workers 4 | tee sweep-result.json
+
+      - name: Upload sweep evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: microgame-orthogonal-sweep-v4-2026-09-01
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            sweep-result.json
+            research/microgame-orthogonal-sweep-v4-2026-09-01/manifest.json
+            artifacts/**

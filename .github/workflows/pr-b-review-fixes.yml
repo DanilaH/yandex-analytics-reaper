@@ -1,0 +1,173 @@
+name: PR B review fixes
+
+on:
+  push:
+    branches:
+      - feat/analyst-runner-v1.2-resume
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feat/analyst-runner-v1.2-resume
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Apply recovery review fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path("src/yandex_analytics_reaper/analyst_workflow.py")
+          text = workflow.read_text(encoding="utf-8")
+          old = '''                    for query, run_ref in zip(
+                        family_input.queries,
+                        existing_comparable.runs,
+                        strict=True,
+                    ):
+                        query_index += 1
+'''
+          new = '''                    for query, run_ref in zip(
+                        family_input.queries,
+                        existing_comparable.runs,
+                        strict=True,
+                    ):
+                        comparable_builder.validate_reusable_run(
+                            run_ref.probe_run_id,
+                            query_text=query,
+                            expected_context=expected_context,
+                            requested_page_limit=manifest.context.pages,
+                        )
+                        query_index += 1
+'''
+          if text.count(old) != 1:
+              raise RuntimeError("expected one comparable-first recovery loop")
+          workflow.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          tests = Path("tests/test_comparable_sets.py")
+          test_text = tests.read_text(encoding="utf-8").rstrip()
+          marker = "def test_recovery_lookup_and_validator_reuse_exact_completed_run"
+          if marker in test_text:
+              raise RuntimeError("recovery validator tests already exist")
+          test_text += '''
+
+
+def test_recovery_lookup_and_validator_reuse_exact_completed_run(tmp_path: Path) -> None:
+    family, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
+    first_ref = comparable_set.runs[0]
+    first = probe_store.get_run(first_ref.probe_run_id)
+    assert first is not None
+
+    candidates = probe_store.find_search_runs(
+        query_text=first_ref.query_text,
+        context=first.context,
+        requested_page_limit=first.run.requested_page_limit,
+    )
+    assert [item.run.id for item in candidates] == [first_ref.probe_run_id]
+
+    validated = YandexSearchComparableSetBuilder(
+        raw_store=raw_store,
+        probe_store=probe_store,
+    ).validate_reusable_run(
+        first_ref.probe_run_id,
+        query_text=first_ref.query_text,
+        expected_context=first.context,
+        requested_page_limit=first.run.requested_page_limit,
+    )
+    assert validated == first
+    assert family.members[0].query_text == first_ref.query_text
+
+
+def test_recovery_validator_rejects_completed_run_with_tampered_raw_query(
+    tmp_path: Path,
+) -> None:
+    raw_store = FilesystemRawSnapshotStore(tmp_path / "raw")
+    probe_store = SQLiteProbeRunStore(tmp_path / "market.sqlite3")
+    run_id = _persist_search_run(
+        raw_store=raw_store,
+        probe_store=probe_store,
+        query="merge",
+        raw_query="different",
+        started_at=datetime(2026, 8, 29, 9, 0, tzinfo=UTC),
+        pages=((10,),),
+        requested_page_limit=1,
+    )
+    record = probe_store.get_run(run_id)
+    assert record is not None
+
+    with pytest.raises(ComparableSetConstructionError, match="raw query"):
+        YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=probe_store,
+        ).validate_reusable_run(
+            run_id,
+            query_text="merge",
+            expected_context=record.context,
+            requested_page_limit=1,
+        )
+
+
+@pytest.mark.parametrize(
+    ("expected_context", "requested_page_limit", "message"),
+    [
+        (ProbeContext(device_type="mobile", profile_age_days=0), 2, "ProbeContext"),
+        (ProbeContext(profile_age_days=0), 1, "page limit"),
+    ],
+)
+def test_recovery_validator_rejects_context_or_page_limit_mismatch(
+    tmp_path: Path,
+    expected_context: ProbeContext,
+    requested_page_limit: int,
+    message: str,
+) -> None:
+    _, comparable_set, raw_store, probe_store = _build_fixture(tmp_path)
+    first_ref = comparable_set.runs[0]
+
+    with pytest.raises(ComparableSetConstructionError, match=message):
+        YandexSearchComparableSetBuilder(
+            raw_store=raw_store,
+            probe_store=probe_store,
+        ).validate_reusable_run(
+            first_ref.probe_run_id,
+            query_text=first_ref.query_text,
+            expected_context=expected_context,
+            requested_page_limit=requested_page_limit,
+        )
+'''
+          tests.write_text(test_text + "\n", encoding="utf-8")
+          PY
+      - name: Install exact dev environment
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Format review fixes
+        run: |
+          ruff format \
+            src/yandex_analytics_reaper/analyst_workflow.py \
+            tests/test_comparable_sets.py
+      - name: Ruff
+        run: ruff check .
+      - name: Mypy
+        run: mypy src
+      - name: Pytest and coverage
+        run: pytest --cov=yandex_analytics_reaper --cov-report=term-missing --cov-fail-under=80
+      - name: Commit verified review fixes
+        shell: bash
+        run: |
+          rm -f .github/workflows/pr-b-review-fixes.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "test: harden deterministic recovery validation"
+          git push origin HEAD:feat/analyst-runner-v1.2-resume

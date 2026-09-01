@@ -42,6 +42,18 @@ jobs:
           )
           if count != 1:
               raise RuntimeError('could not remove stale invented comparable fixture block')
+
+          # PR A's formatter is line-oriented; keep only the signature patch here and
+          # add the resume line structurally after generation.
+          text, count = re.subn(
+              r'\n    replace_once\(\n        path,\n        "    parts\.append\(f\\"workdir=\{workdir\}\\"\)\\n    return \\"; \\"\.join\(parts\)\\n",.*?\n    \)\n',
+              '\n',
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise RuntimeError('could not remove stale formatter-body patch')
           bootstrap.write_text(text, encoding='utf-8')
           PY
 
@@ -50,6 +62,14 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           import re
+
+          runtime = Path('src/yandex_analytics_reaper/experiment_runtime.py')
+          runtime_text = runtime.read_text(encoding='utf-8')
+          old = '        ("workdir_preserved", workdir),\n    )\n'
+          new = '        ("workdir_preserved", workdir),\n        ("resume", resume_command),\n    )\n'
+          if runtime_text.count(old) != 1:
+              raise RuntimeError('expected one line-oriented failure formatter tuple')
+          runtime.write_text(runtime_text.replace(old, new, 1), encoding='utf-8')
 
           workflow = Path('src/yandex_analytics_reaper/analyst_workflow.py')
           text = workflow.read_text(encoding='utf-8')
@@ -79,6 +99,8 @@ jobs:
               '        except Exception as exc:\n',
               1,
           )
+          text = text.replace('    ExperimentRecoveryError,\n', '', 1)
+
           # Existing final ZIP corruption must fail closed with an explicit no-overwrite message.
           text = text.replace(
               '    except (BadZipFile, KeyError, OSError, ValueError) as exc:\n',

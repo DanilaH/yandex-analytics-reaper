@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from threading import RLock
 from typing import Protocol
 
 from yandex_analytics_reaper.domain import (
@@ -54,6 +56,18 @@ class ProbeCollectionError(RuntimeError):
     """A paginated probe could not be completed without compromising run semantics."""
 
 
+class ProbePersistenceGate:
+    """Serialize SQLite/schema mutations while leaving source I/O concurrent."""
+
+    def __init__(self) -> None:
+        self._lock = RLock()
+
+    @contextmanager
+    def hold(self) -> Iterator[None]:
+        with self._lock:
+            yield
+
+
 @dataclass(frozen=True, slots=True)
 class PaginatedProbeResult:
     record: ProbeRunRecord
@@ -85,6 +99,7 @@ class YandexPaginatedProbeRunner:
         clock: Callable[[], datetime] | None = None,
         monotonic: Callable[[], float] = time.monotonic,
         page_observer: Callable[[PaginatedProbePageEvent], None] | None = None,
+        persistence_gate: ProbePersistenceGate | None = None,
     ) -> None:
         self.client = client
         self.raw_store = raw_store
@@ -93,6 +108,15 @@ class YandexPaginatedProbeRunner:
         self.clock = clock or _utc_now
         self.monotonic = monotonic
         self.page_observer = page_observer
+        self.persistence_gate = persistence_gate
+
+    @contextmanager
+    def _persistence(self) -> Iterator[None]:
+        if self.persistence_gate is None:
+            yield
+            return
+        with self.persistence_gate.hold():
+            yield
 
     def run_feed(
         self,
@@ -155,15 +179,16 @@ class YandexPaginatedProbeRunner:
             raise ValueError("page_limit must be at least 1")
         _validate_effective_session_context(context)
 
-        run = self.probe_store.create_run(
-            source_id=self.client.source_id,
-            request_key=request_key,
-            kind=kind,
-            context=context,
-            requested_page_limit=page_limit,
-            started_at=_aware(self.clock(), "clock result"),
-            query_text=query_text,
-        )
+        with self._persistence():
+            run = self.probe_store.create_run(
+                source_id=self.client.source_id,
+                request_key=request_key,
+                kind=kind,
+                context=context,
+                requested_page_limit=page_limit,
+                started_at=_aware(self.clock(), "clock result"),
+                query_text=query_text,
+            )
         parser = YandexFeedParser()
         parsed_pages: list[FeedPage] = []
         page_id: str | None = None
@@ -185,12 +210,13 @@ class YandexPaginatedProbeRunner:
                         f"source returned HTTP {response.status_code}; raw response was preserved"
                     )
 
-                analysis = self.schema_registry.observe_json(
-                    metadata,
-                    response.body,
-                    comparison_scope_id=schema_comparison_scope_for_snapshot(metadata),
-                    contract=schema_contract_for_request(metadata.request_key),
-                )
+                with self._persistence():
+                    analysis = self.schema_registry.observe_json(
+                        metadata,
+                        response.body,
+                        comparison_scope_id=schema_comparison_scope_for_snapshot(metadata),
+                        contract=schema_contract_for_request(metadata.request_key),
+                    )
                 if any(event.severity is DriftSeverity.BREAKING for event in analysis.events):
                     raise ProbeCollectionError(
                         "breaking source-schema drift detected; raw response and "
@@ -200,13 +226,14 @@ class YandexPaginatedProbeRunner:
                 try:
                     parsed = parser.parse(response.body)
                 except ValueError as exc:
-                    self.schema_registry.record_parser_failure(
-                        metadata,
-                        comparison_scope_id=schema_comparison_scope_for_snapshot(metadata),
-                        parser_name=type(parser).__name__,
-                        parser_version=parser.version,
-                        error=str(exc),
-                    )
+                    with self._persistence():
+                        self.schema_registry.record_parser_failure(
+                            metadata,
+                            comparison_scope_id=schema_comparison_scope_for_snapshot(metadata),
+                            parser_name=type(parser).__name__,
+                            parser_version=parser.version,
+                            error=str(exc),
+                        )
                     raise ProbeCollectionError(str(exc)) from exc
 
                 page = probe_page_from_yandex(
@@ -216,7 +243,8 @@ class YandexPaginatedProbeRunner:
                     page_index=page_index,
                     page_info=parsed.page_info,
                 )
-                self.probe_store.append_page(page)
+                with self._persistence():
+                    self.probe_store.append_page(page)
                 parsed_pages.append(parsed)
                 if self.page_observer is not None:
                     self.page_observer(
@@ -246,35 +274,37 @@ class YandexPaginatedProbeRunner:
                 error_raw_snapshot_id = None
 
             error_raw_snapshot_id = None
-            self.probe_store.finish_run(
-                run.id,
-                status=ProbeRunStatus.COMPLETED,
-                completed_at=_completion_time(self.clock(), run, last_retrieved_at),
-            )
+            with self._persistence():
+                self.probe_store.finish_run(
+                    run.id,
+                    status=ProbeRunStatus.COMPLETED,
+                    completed_at=_completion_time(self.clock(), run, last_retrieved_at),
+                )
         except Exception as exc:
             try:
-                record = self.probe_store.get_run(run.id)
-                if record is None:
-                    raise RuntimeError("probe run disappeared during collection")
-                if record.run.status is ProbeRunStatus.RUNNING:
-                    status = ProbeRunStatus.PARTIAL if record.pages else ProbeRunStatus.FAILED
-                    self.probe_store.finish_run(
-                        run.id,
-                        status=status,
-                        completed_at=_completion_time(self.clock(), run, last_retrieved_at),
-                        error=_error_text(exc),
-                        error_raw_snapshot_id=error_raw_snapshot_id,
-                    )
+                with self._persistence():
+                    record = self.probe_store.get_run(run.id)
+                    if record is None:
+                        raise RuntimeError("probe run disappeared during collection")
+                    if record.run.status is ProbeRunStatus.RUNNING:
+                        status = ProbeRunStatus.PARTIAL if record.pages else ProbeRunStatus.FAILED
+                        self.probe_store.finish_run(
+                            run.id,
+                            status=status,
+                            completed_at=_completion_time(self.clock(), run, last_retrieved_at),
+                            error=_error_text(exc),
+                            error_raw_snapshot_id=error_raw_snapshot_id,
+                        )
             except Exception as finalization_exc:
                 exc.add_note(
-                    "probe terminal-state persistence also failed: "
-                    f"{_error_text(finalization_exc)}"
+                    f"probe terminal-state persistence also failed: {_error_text(finalization_exc)}"
                 )
             raise
 
-        record = self.probe_store.get_run(run.id)
-        if record is None:
-            raise RuntimeError("completed probe run could not be reloaded")
+        with self._persistence():
+            record = self.probe_store.get_run(run.id)
+            if record is None:
+                raise RuntimeError("completed probe run could not be reloaded")
         return PaginatedProbeResult(record=record, parsed_pages=tuple(parsed_pages))
 
 

@@ -6,6 +6,7 @@ from .yandex_probes import (
     PaginatedProbePageEvent,
     PaginatedProbeResult,
     ProbeCollectionError,
+    ProbePersistenceGate,
     YandexPaginatedProbeRunner,
 )
 from .yandex_rich import (
@@ -26,6 +27,7 @@ __all__ = [
     "PersistedYandexNormalization",
     "PreparedYandexSession",
     "ProbeCollectionError",
+    "ProbePersistenceGate",
     "RichMetadataCollectionError",
     "RichMetadataCollectionResult",
     "SessionConfigurationError",

@@ -186,9 +186,7 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
     assert result.rich_requested_listing_count == 3
     assert result.rich_observed_listing_count == 3
     assert result.invocation_elapsed_seconds >= 0.0
-    assert not (
-        tmp_path / "artifacts" / "work" / result.experiment_id / result.run_id
-    ).exists()
+    assert not (tmp_path / "artifacts" / "work" / result.experiment_id / result.run_id).exists()
 
     packaged_manifest = workflow.verify_packaged_artifact(
         artifact_path,

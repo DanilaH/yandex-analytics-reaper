@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
+from threading import current_thread
 from typing import Literal, Self
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
@@ -61,9 +62,17 @@ from yandex_analytics_reaper.experiment_runtime import (
     format_failure_summary,
     write_run_state,
 )
+from yandex_analytics_reaper.experiment_workers import (
+    DEFAULT_QUERY_WORKERS,
+    ExactQueryWorkItem,
+    ExactQueryWorkResult,
+    run_bounded_query_workers,
+    validate_query_workers,
+)
 from yandex_analytics_reaper.ingestion import (
     PaginatedProbePageEvent,
     PaginatedProbeResult,
+    ProbePersistenceGate,
     RichMetadataCollectionResult,
     YandexNormalizationPersistence,
     YandexPaginatedProbeRunner,
@@ -96,6 +105,20 @@ _TRANSPORT_ERRORS = (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.ConnectError
 
 class AnalystExperimentError(RuntimeError):
     """A declarative analyst experiment could not complete without weakening its contract."""
+
+
+class _ExactQueryExecutionError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        item: ExactQueryWorkItem,
+        worker: str,
+        cause: Exception,
+    ) -> None:
+        super().__init__(str(cause).strip() or type(cause).__name__)
+        self.item = item
+        self.worker = worker
+        self.cause = cause
 
 
 class AnalystExperimentContext(BaseModel):
@@ -341,7 +364,9 @@ class AnalystExperimentRunner:
         manifest_bytes: bytes,
         manifest_validation_elapsed_seconds: float = 0.0,
         invocation_started_monotonic: float | None = None,
+        query_workers: int = DEFAULT_QUERY_WORKERS,
     ) -> AnalystExperimentResult:
+        query_workers = validate_query_workers(query_workers)
         invocation_started_at = datetime.now(UTC)
         started_at = invocation_started_at
         invocation_mono = (
@@ -416,6 +441,7 @@ class AnalystExperimentRunner:
                             artifact_path=artifact_path,
                             events=events,
                             timings=timings,
+                            query_workers=query_workers,
                         )
                     except Exception as exc:
                         failure_context = events.last_context
@@ -465,7 +491,9 @@ class AnalystExperimentRunner:
         workdir: Path,
         *,
         invocation_started_monotonic: float | None = None,
+        query_workers: int = DEFAULT_QUERY_WORKERS,
     ) -> AnalystExperimentResult:
+        query_workers = validate_query_workers(query_workers)
         invocation_started_at = datetime.now(UTC)
         invocation_mono = (
             self.monotonic()
@@ -548,6 +576,7 @@ class AnalystExperimentRunner:
                                 timings=timings,
                                 invocation_mode="resume",
                                 allow_reuse=True,
+                                query_workers=query_workers,
                             )
                         except Exception as exc:
                             failure_context = events.last_context
@@ -606,7 +635,9 @@ class AnalystExperimentRunner:
         timings: ExperimentTimingRecorder,
         invocation_mode: Literal["run", "resume"] = "run",
         allow_reuse: bool = False,
+        query_workers: int = DEFAULT_QUERY_WORKERS,
     ) -> AnalystExperimentResult:
+        query_workers = validate_query_workers(query_workers)
         report_dir = workdir / "reports"
         csv_dir = workdir / "csv"
         raw_store = FilesystemRawSnapshotStore(workdir / "raw")
@@ -618,18 +649,11 @@ class AnalystExperimentRunner:
         comparable_store = SQLiteComparableSetStore(database_path)
         schema_registry = SQLiteSchemaDriftRegistry(database_path)
         persistence = YandexNormalizationPersistence(database_path)
-        session_manager = YandexSessionManager(
-            state_root=workdir / "sessions",
-            base_url=self.settings.yandex_base_url,
-            timeout_seconds=self.settings.http_timeout_seconds,
-            user_agent=self.settings.user_agent,
-        )
-
         families: list[
             tuple[
                 AnalystExperimentFamily,
                 QueryFamilyVersion,
-                list[str],
+                tuple[int, ...],
                 ComparableSetVersion | None,
             ]
         ] = []
@@ -642,6 +666,9 @@ class AnalystExperimentRunner:
             raw_store=raw_store,
             probe_store=probe_store,
         )
+        persistence_gate = ProbePersistenceGate()
+        selected_run_ids: dict[int, str] = {}
+        pending_queries: list[ExactQueryWorkItem] = []
 
         with _stage(events, timings, self.monotonic, "search_collection"):
             for family_input in manifest.families:
@@ -653,7 +680,7 @@ class AnalystExperimentRunner:
                 family = query_store.persist(family)
                 set_id = f"{manifest.experiment_id}--{family_input.id}"
                 existing_comparable = comparable_store.get(set_id, 1) if allow_reuse else None
-                family_run_ids: list[str] = []
+                family_query_indices: list[int] = []
 
                 if existing_comparable is not None:
                     existing_queries = tuple(run.query_text for run in existing_comparable.runs)
@@ -666,14 +693,15 @@ class AnalystExperimentRunner:
                         existing_comparable.runs,
                         strict=True,
                     ):
+                        query_index += 1
+                        family_query_indices.append(query_index)
                         comparable_builder.validate_reusable_run(
                             run_ref.probe_run_id,
                             query_text=query,
                             expected_context=expected_context,
                             requested_page_limit=manifest.context.pages,
                         )
-                        query_index += 1
-                        family_run_ids.append(run_ref.probe_run_id)
+                        selected_run_ids[query_index] = run_ref.probe_run_id
                         reused_query_count += 1
                         timings.record_query(
                             family_id=family_input.id,
@@ -695,6 +723,7 @@ class AnalystExperimentRunner:
                 else:
                     for query in family_input.queries:
                         query_index += 1
+                        family_query_indices.append(query_index)
                         reusable = None
                         if allow_reuse:
                             candidates = probe_store.find_search_runs(
@@ -740,7 +769,7 @@ class AnalystExperimentRunner:
                                 break
 
                         if reusable is not None:
-                            family_run_ids.append(reusable.run.id)
+                            selected_run_ids[query_index] = reusable.run.id
                             reused_query_count += 1
                             timings.record_query(
                                 family_id=family_input.id,
@@ -759,60 +788,63 @@ class AnalystExperimentRunner:
                                 query_total=query_total,
                                 probe_run_id=reusable.run.id,
                             )
-                            continue
+                        else:
+                            pending_queries.append(
+                                ExactQueryWorkItem(
+                                    family_id=family_input.id,
+                                    query=query,
+                                    query_index=query_index,
+                                    query_total=query_total,
+                                )
+                            )
+                families.append(
+                    (
+                        family_input,
+                        family,
+                        tuple(family_query_indices),
+                        existing_comparable,
+                    )
+                )
 
-                        query_started = self.monotonic()
-                        events.emit(
-                            "query_started",
-                            stage="search_collection",
-                            family_id=family_input.id,
-                            query=query,
-                            query_index=query_index,
-                            query_total=query_total,
-                        )
-                        search_result = self._collect_search(
-                            query,
-                            context=context,
-                            page_limit=manifest.context.pages,
-                            raw_store=raw_store,
-                            probe_store=probe_store,
-                            schema_registry=schema_registry,
-                            session_manager=session_manager,
-                            family_id=family_input.id,
-                            query_index=query_index,
-                            query_total=query_total,
-                            events=events,
-                            timings=timings,
-                        )
-                        family_run_ids.append(search_result.record.run.id)
-                        collected_query_count += 1
-                        elapsed = max(0.0, self.monotonic() - query_started)
-                        timings.record_query(
-                            family_id=family_input.id,
-                            query=query,
-                            query_index=query_index,
-                            query_total=query_total,
-                            action="collected",
-                            elapsed_seconds=elapsed,
-                        )
-                        events.emit(
-                            "query_completed",
-                            stage="search_collection",
-                            family_id=family_input.id,
-                            query=query,
-                            query_index=query_index,
-                            query_total=query_total,
-                            probe_run_id=search_result.record.run.id,
-                            listing_count=sum(
-                                len(page.games) for page in search_result.parsed_pages
-                            ),
-                            duration_seconds=elapsed,
-                        )
-                families.append((family_input, family, family_run_ids, existing_comparable))
+            try:
+                collected_results = run_bounded_query_workers(
+                    pending_queries,
+                    workers=query_workers,
+                    collect=lambda item: self._collect_query_work_item(
+                        item,
+                        context=context,
+                        page_limit=manifest.context.pages,
+                        raw_store=raw_store,
+                        probe_store=probe_store,
+                        schema_registry=schema_registry,
+                        persistence_gate=persistence_gate,
+                        workdir=workdir,
+                        events=events,
+                        timings=timings,
+                    ),
+                )
+            except _ExactQueryExecutionError as exc:
+                events.emit(
+                    "query_failure_selected",
+                    stage="search_collection",
+                    worker=exc.worker,
+                    family_id=exc.item.family_id,
+                    query=exc.item.query,
+                    query_index=exc.item.query_index,
+                    query_total=exc.item.query_total,
+                    error_type=type(exc.cause).__name__,
+                    error_message=str(exc.cause).strip() or type(exc.cause).__name__,
+                )
+                raise exc.cause from exc
+
+            for result in collected_results:
+                selected_run_ids[result.query_index] = result.run_id
+            collected_query_count = len(collected_results)
 
         comparable_sets: list[ComparableSetVersion] = []
         with _stage(events, timings, self.monotonic, "comparable_construction"):
-            for family_input, family, family_run_ids, existing in families:
+            for family_input, family, query_indices, existing in families:
+                family_run_ids = [selected_run_ids[index] for index in query_indices]
                 comparable = comparable_builder.build(
                     family,
                     family_run_ids,
@@ -957,7 +989,7 @@ class AnalystExperimentRunner:
             market_features_content_hash=market_features.content_hash,
             final_invocation_mode=invocation_mode,
             final_invocation_started_at=invocation_started_at,
-            final_invocation_workers=1,
+            final_invocation_workers=query_workers,
             was_resumed=invocation_mode == "resume",
             reused_query_count=reused_query_count,
             collected_query_count=collected_query_count,
@@ -969,7 +1001,7 @@ class AnalystExperimentRunner:
             experiment_id=manifest.experiment_id,
             run_id=run_id,
             invocation_mode=invocation_mode,
-            query_workers=1,
+            query_workers=query_workers,
         )
         _write_model(report_dir / "execution-timings.json", timing_report)
 
@@ -1019,6 +1051,83 @@ class AnalystExperimentRunner:
             invocation_elapsed_seconds=events.elapsed_seconds,
         )
 
+    def _collect_query_work_item(
+        self,
+        item: ExactQueryWorkItem,
+        *,
+        context: ProbeContext,
+        page_limit: int,
+        raw_store: FilesystemRawSnapshotStore,
+        probe_store: SQLiteProbeRunStore,
+        schema_registry: SQLiteSchemaDriftRegistry,
+        persistence_gate: ProbePersistenceGate,
+        workdir: Path,
+        events: ExperimentEventEmitter,
+        timings: ExperimentTimingRecorder,
+    ) -> ExactQueryWorkResult:
+        worker = current_thread().name
+        query_started = self.monotonic()
+        events.emit(
+            "query_started",
+            stage="search_collection",
+            worker=worker,
+            family_id=item.family_id,
+            query=item.query,
+            query_index=item.query_index,
+            query_total=item.query_total,
+        )
+        session_manager = YandexSessionManager(
+            state_root=workdir / "sessions",
+            base_url=self.settings.yandex_base_url,
+            timeout_seconds=self.settings.http_timeout_seconds,
+            user_agent=self.settings.user_agent,
+        )
+        try:
+            result = self._collect_search(
+                item.query,
+                context=context,
+                page_limit=page_limit,
+                raw_store=raw_store,
+                probe_store=probe_store,
+                schema_registry=schema_registry,
+                session_manager=session_manager,
+                persistence_gate=persistence_gate,
+                family_id=item.family_id,
+                query_index=item.query_index,
+                query_total=item.query_total,
+                worker=worker,
+                events=events,
+                timings=timings,
+            )
+        except Exception as exc:
+            raise _ExactQueryExecutionError(item=item, worker=worker, cause=exc) from exc
+
+        elapsed = max(0.0, self.monotonic() - query_started)
+        timings.record_query(
+            family_id=item.family_id,
+            query=item.query,
+            query_index=item.query_index,
+            query_total=item.query_total,
+            action="collected",
+            elapsed_seconds=elapsed,
+        )
+        events.emit(
+            "query_completed",
+            stage="search_collection",
+            worker=worker,
+            family_id=item.family_id,
+            query=item.query,
+            query_index=item.query_index,
+            query_total=item.query_total,
+            probe_run_id=result.record.run.id,
+            listing_count=sum(len(page.games) for page in result.parsed_pages),
+            duration_seconds=elapsed,
+        )
+        return ExactQueryWorkResult(
+            query_index=item.query_index,
+            run_id=result.record.run.id,
+        )
+
     def _collect_search(
         self,
         query: str,
@@ -1029,9 +1138,11 @@ class AnalystExperimentRunner:
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         session_manager: YandexSessionManager,
+        persistence_gate: ProbePersistenceGate,
         family_id: str,
         query_index: int,
         query_total: int,
+        worker: str,
         events: ExperimentEventEmitter,
         timings: ExperimentTimingRecorder,
     ) -> PaginatedProbeResult:
@@ -1049,6 +1160,7 @@ class AnalystExperimentRunner:
             events.emit(
                 "page_completed",
                 stage="search_collection",
+                worker=worker,
                 family_id=family_id,
                 query=query,
                 query_index=query_index,
@@ -1071,6 +1183,7 @@ class AnalystExperimentRunner:
                         schema_registry=schema_registry,
                         monotonic=self.monotonic,
                         page_observer=page_observer,
+                        persistence_gate=persistence_gate,
                     ).run_search(
                         query,
                         session.context,
@@ -1081,6 +1194,7 @@ class AnalystExperimentRunner:
                     events.emit(
                         "query_failed",
                         stage="search_collection",
+                        worker=worker,
                         family_id=family_id,
                         query=query,
                         query_index=query_index,
@@ -1102,6 +1216,7 @@ class AnalystExperimentRunner:
                 events.emit(
                     "query_retry",
                     stage="search_collection",
+                    worker=worker,
                     family_id=family_id,
                     query=query,
                     query_index=query_index,
@@ -1117,6 +1232,7 @@ class AnalystExperimentRunner:
                 events.emit(
                     "query_failed",
                     stage="search_collection",
+                    worker=worker,
                     family_id=family_id,
                     query=query,
                     query_index=query_index,
@@ -1292,13 +1408,23 @@ def _result_from_existing_artifact(
     )
 
 
-def resume_analyst_experiment(workdir: Path) -> AnalystExperimentResult:
+def resume_analyst_experiment(
+    workdir: Path,
+    *,
+    query_workers: int = DEFAULT_QUERY_WORKERS,
+) -> AnalystExperimentResult:
     """Resume one preserved v1.2 experiment workdir after strict local preflight."""
     repository_root = find_repository_root(workdir)
-    return AnalystExperimentRunner(repository_root=repository_root).resume(workdir)
+    return AnalystExperimentRunner(repository_root=repository_root).resume(
+        workdir, query_workers=query_workers
+    )
 
 
-def run_analyst_experiment(manifest_path: Path) -> AnalystExperimentResult:
+def run_analyst_experiment(
+    manifest_path: Path,
+    *,
+    query_workers: int = DEFAULT_QUERY_WORKERS,
+) -> AnalystExperimentResult:
     """Validate a manifest before network I/O, then execute it inside the repository."""
     invocation_started_monotonic = time.monotonic()
     validation_started = invocation_started_monotonic
@@ -1317,6 +1443,7 @@ def run_analyst_experiment(manifest_path: Path) -> AnalystExperimentResult:
         manifest_bytes=manifest_bytes,
         manifest_validation_elapsed_seconds=validation_elapsed,
         invocation_started_monotonic=invocation_started_monotonic,
+        query_workers=query_workers,
     )
 
 

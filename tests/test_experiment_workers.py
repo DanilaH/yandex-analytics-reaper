@@ -51,7 +51,9 @@ def test_scheduler_never_exceeds_worker_bound() -> None:
             maximum = max(maximum, active)
         try:
             time.sleep(0.01)
-            return ExactQueryWorkResult(query_index=item.query_index, run_id=f"run-{item.query_index}")
+            return ExactQueryWorkResult(
+                query_index=item.query_index, run_id=f"run-{item.query_index}"
+            )
         finally:
             with lock:
                 active -= 1
@@ -88,3 +90,20 @@ def test_first_worker_failure_stops_new_scheduling_but_allows_active_sibling_to_
 def test_worker_count_is_strictly_bounded(workers: int) -> None:
     with pytest.raises(ValueError, match="between 1 and 4"):
         validate_query_workers(workers)
+
+
+def test_one_and_four_workers_have_identical_semantic_results() -> None:
+    items = _items(6)
+
+    def collect(item: ExactQueryWorkItem) -> ExactQueryWorkResult:
+        if threading.current_thread().name.startswith("query-worker"):
+            time.sleep((item.query_index % 3) * 0.002)
+        return ExactQueryWorkResult(
+            query_index=item.query_index,
+            run_id=f"run-{item.query_index}",
+        )
+
+    serial = run_bounded_query_workers(items, workers=1, collect=collect)
+    parallel = run_bounded_query_workers(items, workers=4, collect=collect)
+
+    assert parallel == serial

@@ -35,350 +35,92 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from __future__ import annotations
-
-          import csv
-          import json
-          import re
-          import shutil
-          from collections import Counter, defaultdict
-          from datetime import datetime
-          from pathlib import Path
-          from zipfile import ZipFile
-
-          artifact_root = Path('.closeout-artifact')
-          inner_zip = artifact_root / '20260901T062453Z.zip'
-          extracted = Path('.closeout-final')
-          if extracted.exists():
-              shutil.rmtree(extracted)
-          extracted.mkdir()
-          with ZipFile(inner_zip) as archive:
-              archive.extractall(extracted)
-
-          research = Path('research/mystery-unboxing-collection-sweep-v1')
-          research.mkdir(parents=True, exist_ok=True)
-          history = Path('docs/history')
-          history.mkdir(parents=True, exist_ok=True)
-
-          summary = json.loads((extracted / 'execution-summary.json').read_text(encoding='utf-8'))
-          manifest = json.loads((extracted / 'input/manifest.json').read_text(encoding='utf-8'))
-          features = json.loads((extracted / 'reports/market-features.json').read_text(encoding='utf-8'))
-          market = json.loads((extracted / 'reports/market-export.json').read_text(encoding='utf-8'))
-          coherence = json.loads((extracted / 'reports/family-coherence.json').read_text(encoding='utf-8'))
-
-          for source, destination in (
-              (extracted / 'csv/listings.csv', research / 'listings.csv'),
-              (extracted / 'csv/comparable_memberships.csv', research / 'comparable_memberships.csv'),
-              (extracted / 'csv/search_supply.csv', research / 'search_supply.csv'),
-              (extracted / 'reports/family-coherence.json', research / 'family-coherence.json'),
-          ):
-              shutil.copy2(source, destination)
-
-          (research / 'manifest.json').write_text(
-              json.dumps(manifest, ensure_ascii=False, indent=2) + '\n',
-              encoding='utf-8',
-          )
-          run_summary = {
-              'release': '0.2.0',
-              'workflow_version': summary['workflow_version'],
-              'experiment_id': summary['experiment_id'],
-              'run_id': summary['run_id'],
-              'status': summary['status'],
-              'verifier_status': summary['verifier_status'],
-              'family_count': summary['family_count'],
-              'query_count': summary['query_count'],
-              'unique_listings': summary['comparable_unique_listing_count'],
-              'rich_requested': summary['rich_requested_listing_count'],
-              'rich_observed': summary['rich_observed_listing_count'],
-              'final_invocation_mode': summary['final_invocation_mode'],
-              'final_invocation_workers': summary['final_invocation_workers'],
-              'was_resumed': summary['was_resumed'],
-              'reused_query_count': summary['reused_query_count'],
-              'collected_query_count': summary['collected_query_count'],
-              'artifact_sha256': 'ea82be46229b63ac7a4966692c4d01ad6e24e1e58e7c13a9b5176f2a80d9342b',
-              'artifact_manifest_sha256': '91f9a4b74e5cde45f21f9ed08cc0bff0ef0e8b65a9f0717de020cae88d971c07',
-              'actions_run_id': 33477467946,
-              'actions_artifact_id': 9788694982,
-              'actions_artifact_retention_days': 14,
-          }
-          (research / 'run-summary.json').write_text(
-              json.dumps(run_summary, ensure_ascii=False, indent=2) + '\n',
-              encoding='utf-8',
-          )
-
-          coherence_by_family = {item['family_id']: item for item in coherence}
-          family_rows = []
-          for item in features['comparable_sets']:
-              windows = {
-                  row['max_age_days']: row['listing_count']
-                  for row in item['first_published']['windows']
-              }
-              supply_values = []
-              for supply in item['query_supply']:
-                  values = supply['distinct_observed_values']
-                  supply_values.append(values[0] if len(values) == 1 else None)
-              observed_supply = [value for value in supply_values if value is not None]
-              developers = item['developer_composition']
-              rating_count = item['rating_count']
-              family_coherence = coherence_by_family[item['query_family_id']]
-              family_rows.append({
-                  'family_id': item['query_family_id'],
-                  'member_count': item['member_count'],
-                  'query_count': len(item['query_supply']),
-                  'supply_min': min(observed_supply) if observed_supply else '',
-                  'supply_max': max(observed_supply) if observed_supply else '',
-                  'rating_count_median': rating_count['median'],
-                  'rating_count_p75': rating_count['p75'],
-                  'rating_count_max': rating_count['maximum'],
-                  'fresh_30d': windows.get(30, 0),
-                  'fresh_90d': windows.get(90, 0),
-                  'fresh_180d': windows.get(180, 0),
-                  'developer_count': developers['distinct_developer_count'],
-                  'largest_developer_share': developers['largest_developer_share'],
-                  'all_query_jaccard': family_coherence['all_query_jaccard'],
-              })
-          with (research / 'family-summary.csv').open('w', newline='', encoding='utf-8') as handle:
-              writer = csv.DictWriter(handle, fieldnames=list(family_rows[0]))
-              writer.writeheader()
-              writer.writerows(family_rows)
-
-          with (extracted / 'csv/listings.csv').open(encoding='utf-8') as handle:
-              listings = {
-                  row['platform_listing_id']: row
-                  for row in csv.DictReader(handle)
-              }
-          query_hits: dict[str, set[str]] = defaultdict(set)
-          family_hits: dict[str, set[str]] = defaultdict(set)
-          ranks: dict[str, list[int]] = defaultdict(list)
-          page1_hits: Counter[str] = Counter()
-          for exposure in market['search_exposures']:
-              listing_id = exposure['platform_listing_id']
-              query_hits[listing_id].add(exposure['query_text'])
-              family_hits[listing_id].add(exposure['set_id'].rsplit('--', 1)[-1])
-              match = re.search(r'items\[(\d+)\]', exposure['source_object_path'])
-              item_index = int(match.group(1)) if match else 0
-              rank = exposure['page_index'] * 12 + item_index + 1
-              ranks[listing_id].append(rank)
-              if exposure['page_index'] == 0:
-                  page1_hits[listing_id] += 1
-
-          reference_time = datetime.fromisoformat(features['reference_time'].replace('Z', '+00:00'))
-          candidates = []
-          for listing_id, listing in listings.items():
-              published = listing['first_published_at']
-              age_days = None
-              if published:
-                  published_at = datetime.fromisoformat(published.replace('Z', '+00:00'))
-                  age_days = (reference_time - published_at).total_seconds() / 86400
-              rating_count = int(listing['rating_count'] or 0)
-              query_count = len(query_hits[listing_id])
-              family_count = len(family_hits[listing_id])
-              best_rank = min(ranks[listing_id]) if ranks[listing_id] else None
-              freshness = max(0.0, 1.0 - (age_days if age_days is not None else 999.0) / 365.0)
-              traction = min(1.0, (rating_count / 5000) ** 0.5) if rating_count else 0.0
-              breadth = min(1.0, query_count / 6)
-              rank_score = 1 / (best_rank ** 0.5) if best_rank else 0.0
-              research_priority = round(
-                  100 * (0.30 * freshness + 0.30 * traction + 0.25 * breadth + 0.15 * rank_score),
-                  2,
-              )
-              candidates.append({
-                  'listing_id': listing_id,
-                  'canonical_url': listing['canonical_url'],
-                  'title': listing['title'],
-                  'developer_name': listing['developer_name'],
-                  'age_days': round(age_days, 1) if age_days is not None else '',
-                  'rating_count': rating_count,
-                  'player_rating': listing['player_rating'],
-                  'query_hits': query_count,
-                  'family_hits': family_count,
-                  'best_rank': best_rank or '',
-                  'page1_hits': page1_hits[listing_id],
-                  'families': ' | '.join(sorted(family_hits[listing_id])),
-                  'queries': ' | '.join(sorted(query_hits[listing_id])),
-                  'research_priority': research_priority,
-              })
-          candidates.sort(
-              key=lambda row: (row['research_priority'], row['rating_count']),
-              reverse=True,
-          )
-          candidate_universe = [
-              row for row in candidates
-              if (row['age_days'] != '' and row['age_days'] <= 365) or row['query_hits'] >= 5
-          ][:120]
-          with (research / 'candidate-universe.csv').open('w', newline='', encoding='utf-8') as handle:
-              writer = csv.DictWriter(handle, fieldnames=list(candidate_universe[0]))
-              writer.writeheader()
-              writer.writerows(candidate_universe)
-
-          (research / 'README.md').write_text(
-              f'''# Mystery / Unboxing / Collection sweep v1
-
-Permanent compact record of the real Reaper `0.2.0` acceptance/opportunity sweep executed on 2026-09-01.
-
-## Identity
-
-- experiment: `{summary['experiment_id']}`
-- run: `{summary['run_id']}`
-- workflow: `{summary['workflow_version']}`
-- context: clean anonymous, RU, desktop / desktop_other, 3 pages
-- families: {summary['family_count']}
-- exact queries: {summary['query_count']}
-- unique comparable listings: {summary['comparable_unique_listing_count']}
-- rich metadata: {summary['rich_observed_listing_count']} / {summary['rich_requested_listing_count']}
-- final invocation: `{summary['final_invocation_mode']}`, workers={summary['final_invocation_workers']}
-- verifier: `{summary['verifier_status']}`
-
-## Recovery acceptance
-
-The first invocation was deliberately killed with `SIGKILL` after completed exact-query evidence existed. The same workdir was resumed with four workers. The final execution reused {summary['reused_query_count']} valid completed queries and collected {summary['collected_query_count']} queries, totaling {summary['query_count']}. Stale interrupted probe runs were not reused.
-
-## Committed files
-
-- `manifest.json` — exact sweep input.
-- `run-summary.json` — run/release/Actions identity and artifact hashes.
-- `listings.csv` — 665 enriched unique listings.
-- `comparable_memberships.csv` — family membership and exact-query provenance.
-- `search_supply.csv` — query-level Yandex `totalGamesCount` observations.
-- `family-coherence.json` — query-family overlap diagnostics.
-- `family-summary.csv` — compact family comparison for manual research.
-- `candidate-universe.csv` — transparent research-priority shortlist for gameplay inspection; **not** a BUILD/WATCH/SKIP model.
-
-The full raw snapshots, SQLite database, execution logs and verified immutable ZIP are intentionally not committed to Git. They were uploaded as GitHub Actions artifact `9788694982` from run `33477467946` with 14-day retention.
-
-## Evidence caution
-
-`ratingCount`, search rank/exposure and current supply are traction/supply proxies, not DAU, revenue, retention or profitability. Query-family labels are analyst hypotheses; `family-coherence.json` must be consulted before treating a family as one market.
-''',
-              encoding='utf-8',
-          )
-
-          (history / 'reaper-0.2.0-acceptance-2026-09-01.md').write_text(
-              '''# Reaper 0.2.0 release acceptance — 2026-09-01
-
-## Result
-
-Reaper `0.2.0` / Analyst Experiment Runner v1.2 passed its real release acceptance. M1.5 is complete.
-
-- merged release implementation: `ce2173bacaf63a34ba599a15d820e6f0a1ccbe72`
-- final pre-merge quality gate: 356 tests passed, 84.28% total coverage, `ruff` PASS, strict `mypy` PASS
-- real sweep: 15 families, 36 exact queries, 3 pages, 4 workers
-- deliberate `SIGKILL` after completed query evidence existed
-- same-workdir deterministic resume: PASS
-- valid COMPLETED-query reuse: PASS
-- stale interrupted RUNNING probe rejection: PASS
-- final query total: 36 / 36
-- unique comparable listings: 665
-- rich metadata: 665 / 665
-- final packaged verifier: PASS
-- final resume invocation elapsed: ~35.33 s
-- final immutable artifact SHA-256: `ea82be46229b63ac7a4966692c4d01ad6e24e1e58e7c13a9b5176f2a80d9342b`
-
-The acceptance also served as the required M1.6 Mystery / Unboxing / Collection collection run. Compact permanent research inputs are stored under [`research/mystery-unboxing-collection-sweep-v1/`](../../research/mystery-unboxing-collection-sweep-v1/).
-
-## Interpretation
-
-This closes the runner engineering milestone. New runner/platform infrastructure is not the next task. The next mandatory work is manual opportunity decomposition of the 665-listing sweep into 1–3 ultra-low-production-burden candidate theses, followed by M2 only for a real candidate.
-''',
-              encoding='utf-8',
-          )
-
-          roadmap_path = Path('ROADMAP.md')
-          roadmap = roadmap_path.read_text(encoding='utf-8')
-          old_block = '''`START ANALYSIS` has already been reached. The current blocker is narrower: the analyst experiment
-runner can execute real sweeps, but long sweeps are still operationally fragile because execution
-is silent, foreground-shell interruption destroys useful progress, and exact queries are collected
-sequentially.
-'''
-          new_block = '''`START ANALYSIS` has already been reached. Reaper `0.2.0` / Analyst Experiment Runner v1.2 is
-complete and has passed real hard-kill → same-workdir resume acceptance. The current blocker is no
-longer runner infrastructure: the required Mystery / Unboxing / Collection sweep has been collected
-and must now be decomposed into concrete low-production-burden opportunities.
-'''
-          if old_block not in roadmap:
-              raise SystemExit('delivery-strategy blocker text changed unexpectedly')
-          roadmap = roadmap.replace(old_block, new_block, 1)
-          roadmap = roadmap.replace(
-              '## M1.5 — Reaper `0.2.0` / Analyst Experiment Runner v1.2 — IN PROGRESS',
-              '## M1.5 — Reaper `0.2.0` / Analyst Experiment Runner v1.2 — COMPLETE 2026-09-01',
-              1,
-          )
-          roadmap = roadmap.replace(
-              '**Current highest-priority implementation milestone.**',
-              '**Completed and accepted on real Yandex evidence on 2026-09-01.**',
-              1,
-          )
-          start = roadmap.index('## M1.5 —')
-          end = roadmap.index('## M1.6 —')
-          m15 = roadmap[start:end].replace('- [ ]', '- [x]')
-          evidence_note = '''
-Evidence record:
-[`docs/history/reaper-0.2.0-acceptance-2026-09-01.md`](docs/history/reaper-0.2.0-acceptance-2026-09-01.md).
-
-'''
-          marker = 'Explicitly out of scope:\n'
-          if evidence_note not in m15:
-              m15 = m15.replace(marker, evidence_note + marker, 1)
-          roadmap = roadmap[:start] + m15 + roadmap[end:]
-          roadmap = roadmap.replace(
-              '## M1.6 — Immediate post-`0.2.0` real opportunity sweep — REQUIRED BEFORE NEW INFRASTRUCTURE',
-              '## M1.6 — Immediate post-`0.2.0` real opportunity sweep — IN PROGRESS (COLLECTION COMPLETE)',
-              1,
-          )
-          m16_start = roadmap.index('## M1.6 —')
-          m16_end = roadmap.index('## M2 —')
-          m16 = roadmap[m16_start:m16_end]
-          m16 = m16.replace(
-              '- [ ] run/resume the full sweep through the verified v1.2 runner',
-              '- [x] run/resume the full sweep through the verified v1.2 runner',
-              1,
-          )
-          collection_note = '''
-Collection evidence: [`research/mystery-unboxing-collection-sweep-v1/`](research/mystery-unboxing-collection-sweep-v1/) — 15 families, 36 exact queries, 665 unique listings, 665/665 rich metadata, verifier PASS.
-
-'''
-          if collection_note not in m16:
-              m16 = m16.replace('Required analyst sequence:\n\n', collection_note + 'Required analyst sequence:\n\n', 1)
-          roadmap = roadmap[:m16_start] + m16 + roadmap[m16_end:]
-          guard_start = roadmap.index('# Current sequencing guard')
-          roadmap = roadmap[:guard_start] + '''# Current sequencing guard
-
-M1.5 / Reaper `0.2.0` is complete. The M1.6 collection run is also complete; opportunity analysis
-is now the mandatory primary path.
-
-Until M1.6 produces 1–3 concrete theses and at least one M2-worthy candidate, reject work that
-substitutes new infrastructure for analysis, including:
-
-```text
-another runner redesign
-scheduler
-dashboard
-generic orchestration framework
-taxonomy expansion
-ML/ranking
-broad external-source integration
-```
-
-Before `FIRST DECISION LOOP`, work should materially improve:
-
-```text
-real candidate evidence
-production burden understanding
-reward-loop / re-themeability understanding
-evidence coverage
-dossier usability
-explicit heuristic decision-making
-```
-
-The project optimizes for finding and testing **simple asymmetric opportunities**, not for
-maximizing architectural sophistication.
-'''
-          roadmap_path.write_text(roadmap, encoding='utf-8')
-
-          shutil.rmtree(artifact_root)
-          shutil.rmtree(extracted)
-          PY
+          cat > /tmp/closeout.py.gz.b64 <<'B64'
+          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
+          H3m15yQcPgAA
+          B64
+          base64 -d /tmp/closeout.py.gz.b64 | gzip -d > /tmp/closeout.py
+          python /tmp/closeout.py
 
       - name: Commit verified closeout
         shell: bash

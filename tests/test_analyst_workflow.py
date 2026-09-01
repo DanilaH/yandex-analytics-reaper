@@ -198,3 +198,61 @@ def test_yandex_app_id_and_batching_are_internal_deterministic_helpers() -> None
 
     with pytest.raises(workflow.AnalystExperimentError):
         workflow._yandex_app_id("steam:123")
+
+
+def test_existing_final_artifact_binds_manifest_payload_to_run_state(tmp_path: Path) -> None:
+    workdir = tmp_path / "work"
+    (workdir / "input").mkdir(parents=True)
+    persisted_manifest = b'{"schema_version":1,"experiment_id":"demo"}'
+    authoritative_manifest = persisted_manifest + b" "
+    (workdir / "input" / "manifest.json").write_bytes(persisted_manifest)
+    state = workflow.AnalystExperimentRunState(
+        experiment_id="demo",
+        run_id="20260901T000000Z",
+        started_at=datetime(2026, 9, 1, tzinfo=UTC),
+        manifest_sha256=workflow._sha256_bytes(authoritative_manifest),
+    )
+    digest = "0" * 64
+    summary = workflow.AnalystExperimentExecutionSummary(
+        workflow_version="analyst-experiment-v1.2",
+        status="completed",
+        experiment_id=state.experiment_id,
+        run_id=state.run_id,
+        started_at=state.started_at,
+        completed_at=state.started_at,
+        manifest_sha256=state.manifest_sha256,
+        runtime=workflow.AnalystRuntimeProvenance(
+            package_version="0.1.1", git_sha=None, python="3.12", platform="test"
+        ),
+        family_count=1,
+        query_count=1,
+        comparable_unique_listing_count=0,
+        rich_requested_listing_count=0,
+        rich_observed_listing_count=0,
+        rich_missing_listing_ids=(),
+        snapshot_content_hash=digest,
+        market_export_content_hash=digest,
+        market_features_content_hash=digest,
+        final_invocation_mode="resume",
+        final_invocation_started_at=state.started_at,
+        final_invocation_workers=1,
+        was_resumed=True,
+        reused_query_count=1,
+        collected_query_count=0,
+        verifier_status="pass",
+    )
+    workflow._write_model(workdir / "execution-summary.json", summary)
+    artifact_manifest = workflow.build_artifact_manifest(
+        workdir, experiment_id=state.experiment_id, run_id=state.run_id
+    )
+    workflow._write_model(workdir / "artifact-manifest.json", artifact_manifest)
+    artifact = tmp_path / "artifact.zip"
+    workflow.package_workdir(workdir, artifact)
+
+    with pytest.raises(workflow.AnalystExperimentError, match="identity"):
+        workflow._result_from_existing_artifact(
+            artifact,
+            repository_root=tmp_path,
+            state=state,
+            invocation_elapsed_seconds=0.0,
+        )

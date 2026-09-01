@@ -1259,6 +1259,7 @@ def _result_from_existing_artifact(
         with ZipFile(artifact_path, "r") as archive:
             summary_bytes = archive.read("execution-summary.json")
             manifest_bytes = archive.read("artifact-manifest.json")
+            input_manifest_bytes = archive.read("input/manifest.json")
         summary = AnalystExperimentExecutionSummary.model_validate_json(summary_bytes)
     except (AnalystExperimentError, BadZipFile, KeyError, OSError, ValueError) as exc:
         raise AnalystExperimentError(
@@ -1270,6 +1271,7 @@ def _result_from_existing_artifact(
         or summary.manifest_sha256 != state.manifest_sha256
         or artifact_manifest.experiment_id != state.experiment_id
         or artifact_manifest.run_id != state.run_id
+        or _sha256_bytes(input_manifest_bytes) != state.manifest_sha256
     ):
         raise AnalystExperimentError(
             "existing final artifact identity does not match resume state; refusing overwrite"

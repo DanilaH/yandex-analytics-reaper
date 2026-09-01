@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "experiment_id": "theme-gap-sweep-2026-09-01",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "bag-charms-broad",
+      "queries": ["bag charms", "bag charm", "брелоки на сумку", "брелоки на рюкзак"]
+    },
+    {
+      "id": "bag-charms-opening",
+      "queries": ["брелок сюрприз", "брелоки сюрприз", "распаковка брелоков", "открывай брелоки", "mystery charm", "blind bag charms"]
+    },
+    {
+      "id": "bag-charms-collection",
+      "queries": ["коллекция брелоков", "собери брелоки", "charms collection"]
+    },
+    {
+      "id": "keychain-broad",
+      "queries": ["брелоки", "брелок", "keychain", "игрушки брелоки"]
+    },
+    {
+      "id": "retro-gadgets-broad",
+      "queries": ["ретро гаджеты", "retro gadgets", "карманные гаджеты", "ретро техника"]
+    },
+    {
+      "id": "mini-gadgets",
+      "queries": ["мини гаджеты", "mini gadgets", "мини техника", "мини телефон"]
+    },
+    {
+      "id": "mini-camera",
+      "queries": ["мини камера", "камера брелок", "mini camera"]
+    },
+    {
+      "id": "gadget-opening",
+      "queries": ["распаковка гаджетов", "открывай гаджеты", "gadget unboxing"]
+    },
+    {
+      "id": "gadget-collection",
+      "queries": ["коллекция гаджетов", "собери гаджеты", "gadget collection"]
+    },
+    {
+      "id": "virtual-pet-control",
+      "queries": ["виртуальный питомец", "тамагочи", "virtual pet"]
+    },
+    {
+      "id": "miniatures-broad",
+      "queries": ["миниатюры", "мини предметы", "miniatures"]
+    },
+    {
+      "id": "trinkets-broad",
+      "queries": ["безделушки", "trinkets", "коллекционные безделушки"]
+    },
+    {
+      "id": "trinket-shelf",
+      "queries": ["полка коллекционера", "коллекционная полка", "trinket shelf"]
+    },
+    {
+      "id": "miniature-opening",
+      "queries": ["сюрприз миниатюры", "распаковка миниатюр", "mystery miniatures"]
+    },
+    {
+      "id": "tiny-things",
+      "queries": ["tiny things", "мини коллекция", "маленькие вещи"]
+    },
+    {
+      "id": "food-squish-control",
+      "queries": ["сквиш еда", "food squishy", "сквиш масло", "сквиш эдамаме", "сквиш тост"]
+    },
+    {
+      "id": "dumpling-control",
+      "queries": ["дамплинги", "сквиш дамплинги", "mystery dumpling"]
+    }
+  ]
+}

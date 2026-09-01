@@ -135,8 +135,13 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         session_manager: object,
+        family_id: str,
+        query_index: int,
+        query_total: int,
+        events: object,
+        timings: object,
     ):
-        del session_manager
+        del session_manager, family_id, query_index, query_total, events, timings
         effective_context = context.model_copy(update={"profile_age_days": 0})
         return YandexPaginatedProbeRunner(
             client=FakeSearchClient(),
@@ -151,7 +156,12 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
         raw_store: FilesystemRawSnapshotStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         persistence: YandexNormalizationPersistence,
+        batch_index: int,
+        batch_total: int,
+        events: object,
+        timings: object,
     ):
+        del batch_index, batch_total, events, timings
         return YandexRichMetadataCollector(
             client=FakeGamesClient(),
             raw_store=raw_store,
@@ -171,6 +181,7 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
     assert result.comparable_unique_listing_count == 3
     assert result.rich_requested_listing_count == 3
     assert result.rich_observed_listing_count == 3
+    assert result.invocation_elapsed_seconds >= 0.0
     assert not (
         tmp_path / "artifacts" / "work" / result.experiment_id / result.run_id
     ).exists()
@@ -193,10 +204,15 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
             "reports/market-features.json",
             "reports/family-coherence.json",
             "reports/verification.json",
+            "reports/execution-timings.json",
             "execution-summary.json",
             "artifact-manifest.json",
         } <= names
         assert archive.read("input/manifest.json") == manifest_bytes
+        assert "run-state.json" not in names
+        assert "run.lock" not in names
+        assert not any(name.startswith("logs/") for name in names)
+        assert not any(name.startswith("sessions/") for name in names)
 
 
 def test_package_workdir_removes_partial_zip_when_write_fails(
@@ -204,8 +220,8 @@ def test_package_workdir_removes_partial_zip_when_write_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     workdir = tmp_path / "work"
-    workdir.mkdir()
-    (workdir / "payload.txt").write_text("payload", encoding="utf-8")
+    (workdir / "input").mkdir(parents=True)
+    (workdir / "input" / "manifest.json").write_text("payload", encoding="utf-8")
     artifact_path = tmp_path / "artifact.zip"
 
     def fail_write(
@@ -227,8 +243,8 @@ def test_package_workdir_removes_partial_zip_when_write_fails(
 
 def test_finalizer_rejects_wrong_packaged_identity_and_removes_zip(tmp_path: Path) -> None:
     workdir = tmp_path / "work"
-    workdir.mkdir()
-    (workdir / "payload.txt").write_text("payload", encoding="utf-8")
+    (workdir / "input").mkdir(parents=True)
+    (workdir / "input" / "manifest.json").write_text("payload", encoding="utf-8")
     expected_manifest = workflow.build_artifact_manifest(
         workdir,
         experiment_id="expected-experiment",

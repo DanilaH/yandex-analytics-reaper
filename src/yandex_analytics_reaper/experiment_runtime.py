@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -384,14 +384,16 @@ class ExperimentEventEmitter:
                 for key, value in context.items()
                 if value is not None and key in AnalystExecutionEvent.model_fields
             }
-            record = AnalystExecutionEvent(
-                timestamp=_aware(self.wall_clock(), "event wall clock"),
-                experiment_id=self.experiment_id,
-                run_id=self.run_id,
-                event=event,
-                stage=stage,
-                elapsed_seconds=max(0.0, now_mono - self._started_monotonic),
-                **payload,
+            record = AnalystExecutionEvent.model_validate(
+                {
+                    "timestamp": _aware(self.wall_clock(), "event wall clock"),
+                    "experiment_id": self.experiment_id,
+                    "run_id": self.run_id,
+                    "event": event,
+                    "stage": stage,
+                    "elapsed_seconds": max(0.0, now_mono - self._started_monotonic),
+                    **payload,
+                }
             )
             if event != "heartbeat":
                 self._last_context = {
@@ -539,7 +541,7 @@ def _human_event_line(event: AnalystExecutionEvent) -> str:
 
 
 def _lock_file(handle: IO[bytes]) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         handle.seek(0, os.SEEK_END)
@@ -562,7 +564,7 @@ def _lock_file(handle: IO[bytes]) -> None:
 
 
 def _unlock_file(handle: IO[bytes]) -> None:
-    if os.name == "nt":
+    if sys.platform == "win32":
         import msvcrt
 
         handle.seek(0)

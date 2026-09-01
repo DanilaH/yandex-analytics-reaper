@@ -3,6 +3,7 @@ from .yandex_normalization import (
     YandexNormalizationPersistence,
 )
 from .yandex_probes import (
+    PaginatedProbePageEvent,
     PaginatedProbeResult,
     ProbeCollectionError,
     YandexPaginatedProbeRunner,
@@ -20,6 +21,7 @@ from .yandex_sessions import (
 )
 
 __all__ = [
+    "PaginatedProbePageEvent",
     "PaginatedProbeResult",
     "PersistedYandexNormalization",
     "PreparedYandexSession",

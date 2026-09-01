@@ -11,6 +11,7 @@ import pytest
 import yandex_analytics_reaper.analyst_workflow as workflow
 from yandex_analytics_reaper.domain import ProbeContext
 from yandex_analytics_reaper.ingestion import (
+    ProbePersistenceGate,
     YandexNormalizationPersistence,
     YandexPaginatedProbeRunner,
     YandexRichMetadataCollector,
@@ -135,19 +136,22 @@ def test_runner_executes_full_local_evidence_chain_and_cleans_workdir(
         probe_store: SQLiteProbeRunStore,
         schema_registry: SQLiteSchemaDriftRegistry,
         session_manager: object,
+        persistence_gate: ProbePersistenceGate,
         family_id: str,
         query_index: int,
         query_total: int,
+        worker: str,
         events: object,
         timings: object,
     ):
-        del session_manager, family_id, query_index, query_total, events, timings
+        del session_manager, family_id, query_index, query_total, worker, events, timings
         effective_context = context.model_copy(update={"profile_age_days": 0})
         return YandexPaginatedProbeRunner(
             client=FakeSearchClient(),
             raw_store=raw_store,
             probe_store=probe_store,
             schema_registry=schema_registry,
+            persistence_gate=persistence_gate,
         ).run_search(query, effective_context, page_limit=page_limit)
 
     def collect_rich_batch(

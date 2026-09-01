@@ -1,0 +1,71 @@
+name: Reaper 0.2.0 closeout fix
+
+on:
+  push:
+    branches:
+      - docs/reaper-0.2.0-closeout
+    paths:
+      - .github/workflows/reaper-0.2.0-closeout-fix.yml
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  closeout:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: docs/reaper-0.2.0-closeout
+
+      - name: Download verified acceptance artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: reaper-0.2.0-mystery-sweep
+          path: .closeout-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: 33477467946
+
+      - name: Recreate compact closeout files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64
+          import gzip
+          import re
+          from pathlib import Path
+
+          source = Path('.github/workflows/reaper-0.2.0-closeout.yml').read_text(encoding='utf-8')
+          match = re.search(r"cat > /tmp/closeout\.py\.gz\.b64 <<'B64'\n(?P<body>.*?)\n\s*B64", source, re.S)
+          if match is None:
+              raise SystemExit('embedded closeout payload not found')
+          encoded = ''.join(line.strip() for line in match.group('body').splitlines())
+          Path('/tmp/closeout.py').write_bytes(gzip.decompress(base64.b64decode(encoded)))
+          PY
+          python /tmp/closeout.py
+
+      - name: Commit and push closeout data
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add ROADMAP.md docs/history research
+          git diff --cached --check
+          git commit -m 'docs: close Reaper 0.2.0 and persist mystery sweep'
+          git push origin HEAD:docs/reaper-0.2.0-closeout
+
+      - name: Publish v0.2.0 release if absent
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gh release view v0.2.0 >/dev/null 2>&1; then
+            gh release create v0.2.0 \
+              --target ce2173bacaf63a34ba599a15d820e6f0a1ccbe72 \
+              --title 'Reaper 0.2.0' \
+              --notes 'Analyst Experiment Runner v1.2: durable observability, deterministic same-workdir resume, bounded 1..4 exact-query workers, serialized SQLite persistence, crash-safe verified artifact publication. Real 15-family / 36-query Mystery sweep passed SIGKILL → resume acceptance with verifier PASS.'
+          fi

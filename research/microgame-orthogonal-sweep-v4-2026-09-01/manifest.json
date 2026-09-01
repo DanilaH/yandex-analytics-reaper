@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "experiment_id": "microgame-orthogonal-sweep-v4-2026-09-01",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "clay-bag-charm-maker",
+      "queries": [
+        "сделай брелок из глины", "лепи брелоки", "сделай подвеску на сумку", "глиняные брелоки", "укрась брелок", "сделай брелок", "clay charm maker", "clay bag charm", "make bag charm", "make keychain", "decorate keychain", "DIY charm game"
+      ]
+    },
+    {
+      "id": "beauty-functional-bag-charms",
+      "queries": [
+        "брелок косметика", "косметика на сумку", "мини косметика брелок", "сделай брелок косметика", "укрась сумку косметикой", "beauty bag charm", "makeup bag charm", "lip gloss keychain", "perfume charm", "cosmetic keychain", "functional bag charm", "beauty charm maker"
+      ]
+    },
+    {
+      "id": "trash-to-miniature-upcycle",
+      "queries": [
+        "сделай миниатюру из мусора", "поделки из мусора", "миниатюры из мусора", "преврати мусор в игрушку", "сделай мини вещь", "апсайкл миниатюры", "trash to miniature", "miniatures from trash", "upcycle miniature", "trash craft game", "make tiny things", "recycle craft game"
+      ]
+    },
+    {
+      "id": "tiny-terrarium-crystal-craft",
+      "queries": [
+        "сделай террариум", "мини террариум", "террариум с кристаллами", "собери террариум", "укрась террариум", "сад в банке", "terrarium maker", "mini terrarium game", "crystal terrarium", "build terrarium", "jar garden game", "tiny garden craft"
+      ]
+    },
+    {
+      "id": "charm-collection-personalization",
+      "queries": [
+        "собери браслет с шармами", "сделай браслет с подвесками", "коллекция шармов", "собирай шармы", "укрась браслет", "сделай браслет", "charm bracelet maker", "collect charms", "bracelet charms game", "personalize bracelet", "charm collection", "make charm bracelet"
+      ]
+    }
+  ]
+}

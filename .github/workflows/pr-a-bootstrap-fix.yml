@@ -52,10 +52,15 @@ jobs:
           if text.count(old) != 1:
               raise RuntimeError('expected one long artifact-manifest error line')
           text = text.replace(old, new, 1)
-          csv_mkdir = '            csv_dir.mkdir(parents=True, exist_ok=True)\n'
-          if text.count(csv_mkdir) != 1:
+          text, replacements = re.subn(
+              r'(?m)^\s*csv_dir\.mkdir\([^\n]*\)\n',
+              '',
+              text,
+              count=1,
+          )
+          if replacements != 1:
               raise RuntimeError('expected one premature csv directory creation')
-          coordinator.write_text(text.replace(csv_mkdir, '', 1), encoding='utf-8')
+          coordinator.write_text(text, encoding='utf-8')
 
           runtime = Path('src/yandex_analytics_reaper/experiment_runtime.py')
           runtime_text = runtime.read_text(encoding='utf-8')

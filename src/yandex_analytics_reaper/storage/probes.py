@@ -57,6 +57,14 @@ class ProbeRunStore(Protocol):
 
     def get_run(self, run_id: str) -> ProbeRunRecord | None: ...
 
+    def find_search_runs(
+        self,
+        *,
+        query_text: str,
+        context: ProbeContext,
+        requested_page_limit: int,
+    ) -> tuple[ProbeRunRecord, ...]: ...
+
 
 class SQLiteProbeRunStore:
     """Operational persistence for contextual paginated collection runs."""
@@ -134,9 +142,7 @@ class SQLiteProbeRunStore:
             existing = self._load_page(connection, page.run_id, page.page_index)
             if existing is not None:
                 if existing != page:
-                    raise ValueError(
-                        f"conflicting probe page {page.run_id}[{page.page_index}]"
-                    )
+                    raise ValueError(f"conflicting probe page {page.run_id}[{page.page_index}]")
                 return existing
 
             if run.status is not ProbeRunStatus.RUNNING:
@@ -150,9 +156,7 @@ class SQLiteProbeRunStore:
             ).fetchone()
             current_count = 0 if row is None else int(row["count"])
             if page.page_index != current_count:
-                raise ValueError(
-                    f"probe pages must be contiguous; expected index {current_count}"
-                )
+                raise ValueError(f"probe pages must be contiguous; expected index {current_count}")
             if current_count >= run.requested_page_limit:
                 raise ValueError("probe run already reached requested_page_limit")
 
@@ -165,10 +169,7 @@ class SQLiteProbeRunStore:
                     raise RuntimeError("contiguous probe page history is missing its previous page")
                 if not previous.has_next_page:
                     raise ValueError("cannot append after source reported has_next_page=false")
-                if (
-                    previous.response_next_page_id is None
-                    or previous.response_rtx_reqid is None
-                ):
+                if previous.response_next_page_id is None or previous.response_rtx_reqid is None:
                     raise ValueError(
                         "cannot append after source omitted required continuation tokens"
                     )
@@ -310,6 +311,58 @@ class SQLiteProbeRunStore:
             pages = self._load_pages(connection, run.id)
         return ProbeRunRecord(run=run, context=context, pages=pages)
 
+    def find_search_runs(
+        self,
+        *,
+        query_text: str,
+        context: ProbeContext,
+        requested_page_limit: int,
+    ) -> tuple[ProbeRunRecord, ...]:
+        query = query_text.strip()
+        if not query or query != query_text:
+            raise ValueError("query_text must be non-blank and already trimmed")
+        if requested_page_limit < 1:
+            raise ValueError("requested_page_limit must be at least 1")
+        context_id = _context_id(context)
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT id
+                FROM probe_runs
+                WHERE source_id = ?
+                  AND request_key = ?
+                  AND probe_kind = ?
+                  AND context_id = ?
+                  AND query_text = ?
+                  AND requested_page_limit = ?
+                ORDER BY started_at DESC, id DESC
+                """,
+                (
+                    "yandex_public",
+                    "catalogue.search",
+                    ProbeKind.SEARCH.value,
+                    context_id,
+                    query,
+                    requested_page_limit,
+                ),
+            ).fetchall()
+            records: list[ProbeRunRecord] = []
+            for row in rows:
+                run = self._load_run(connection, str(row["id"]))
+                if run is None:
+                    raise RuntimeError("probe lookup returned a missing run")
+                stored_context = self._load_context(connection, run.context_id)
+                if stored_context is None:
+                    raise RuntimeError(f"probe context {run.context_id} is missing")
+                records.append(
+                    ProbeRunRecord(
+                        run=run,
+                        context=stored_context,
+                        pages=self._load_pages(connection, run.id),
+                    )
+                )
+        return tuple(records)
+
     @staticmethod
     def _persist_context(
         connection: sqlite3.Connection,
@@ -391,9 +444,7 @@ class SQLiteProbeRunStore:
             requested_page_limit=int(row["requested_page_limit"]),
             started_at=_parse_timestamp(str(row["started_at"])),
             completed_at=(
-                None
-                if row["completed_at"] is None
-                else _parse_timestamp(str(row["completed_at"]))
+                None if row["completed_at"] is None else _parse_timestamp(str(row["completed_at"]))
             ),
             status=ProbeRunStatus(str(row["status"])),
             error=_optional_str(row["error"]),

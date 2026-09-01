@@ -37,9 +37,7 @@ def load_resume_preflight(repository_root: Path, workdir: Path) -> ResumePreflig
             "resume workdir must live directly under artifacts/work/<experiment>/<run>"
         ) from exc
     if len(relative.parts) != 2:
-        raise ExperimentRecoveryError(
-            "resume workdir must be artifacts/work/<experiment>/<run>"
-        )
+        raise ExperimentRecoveryError("resume workdir must be artifacts/work/<experiment>/<run>")
     if not resolved.is_dir():
         raise ExperimentRecoveryError(f"resume workdir does not exist: {resolved}")
 
@@ -53,8 +51,7 @@ def load_resume_preflight(repository_root: Path, workdir: Path) -> ResumePreflig
         raise ExperimentRecoveryError("run-state.json is missing or invalid") from exc
     if state.workflow_version != _WORKFLOW_VERSION:
         raise ExperimentRecoveryError(
-            f"resume workflow mismatch: expected {_WORKFLOW_VERSION}, "
-            f"got {state.workflow_version}"
+            f"resume workflow mismatch: expected {_WORKFLOW_VERSION}, got {state.workflow_version}"
         )
     path_experiment_id, path_run_id = relative.parts
     if state.experiment_id != path_experiment_id or state.run_id != path_run_id:
@@ -88,9 +85,7 @@ def clear_derived_outputs(workdir: Path) -> None:
         path = workdir / directory_name
         if path.exists():
             if not path.is_dir():
-                raise ExperimentRecoveryError(
-                    f"derived output path is not a directory: {path}"
-                )
+                raise ExperimentRecoveryError(f"derived output path is not a directory: {path}")
             shutil.rmtree(path)
     for file_name in ("execution-summary.json", "artifact-manifest.json"):
         path = workdir / file_name

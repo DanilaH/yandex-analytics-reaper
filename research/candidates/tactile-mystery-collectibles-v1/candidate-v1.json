@@ -1,0 +1,42 @@
+{
+  "schema": "candidate-concept-v1",
+  "candidate_id": "tactile-mystery-collectibles-v1",
+  "candidate_version": 1,
+  "status": "pre_build_frozen",
+  "working_product_theme": "Pocket Gremlins: Mystery Desk Toys",
+  "theme_status": "working_original_theme",
+  "core_loop": [
+    "choose_package",
+    "perform_2_to_4_tactile_unwrap_actions",
+    "anticipation_reveal",
+    "receive_random_collectible_and_rarity",
+    "fill_album_or_convert_duplicate_to_soft_currency",
+    "repeat"
+  ],
+  "mvp_scope": {
+    "collectibles": 24,
+    "rarities": 4,
+    "package_tiers": 3,
+    "album_screens": 1,
+    "currencies": 1,
+    "rewarded_ad_acceleration_points": 1,
+    "multiplayer": false,
+    "three_d_world": false,
+    "combat": false,
+    "daily_quests": false,
+    "shop_economy": false,
+    "liveops_framework": false
+  },
+  "evidence_binding": {
+    "experiment_id": "mystery-unboxing-collection-sweep-v1",
+    "run_id": "20260901T062453Z",
+    "workflow_version": "analyst-experiment-v1.2",
+    "release": "0.2.0",
+    "primary_reference_listing_id": "533677",
+    "research_root": "research/mystery-unboxing-collection-sweep-v1",
+    "artifact_sha256": "ea82be46229b63ac7a4966692c4d01ad6e24e1e58e7c13a9b5176f2a80d9342b",
+    "artifact_manifest_sha256": "91f9a4b74e5cde45f21f9ed08cc0bff0ef0e8b65a9f0717de020cae88d971c07"
+  },
+  "third_party_ip_policy": "original_assets_only",
+  "decision_validation_status": "heuristic"
+}

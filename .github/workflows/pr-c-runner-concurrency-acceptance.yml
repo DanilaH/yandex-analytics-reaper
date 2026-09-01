@@ -62,15 +62,15 @@ jobs:
           path.write_text(text, encoding="utf-8")
           PY
           python -m compileall -q tests/test_analyst_workflow_end_to_end.py
+      - name: Install exact dev environment
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
       - name: Format and lint temporary assertion
         run: |
           ruff format tests/test_analyst_workflow_end_to_end.py
           ruff check --fix tests/test_analyst_workflow_end_to_end.py
           ruff check tests/test_analyst_workflow_end_to_end.py
-      - name: Install exact dev environment
-        run: |
-          python -m pip install "pip==26.2.1"
-          pip install -c constraints-dev.txt -e ".[dev]"
       - name: Run runner-level concurrency acceptance
         run: pytest -q tests/test_analyst_workflow_end_to_end.py::test_runner_executes_full_local_evidence_chain_and_cleans_workdir
       - name: Commit verified assertion and remove workflow

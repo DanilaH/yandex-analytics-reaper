@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "experiment_id": "fresh-microhit-anomaly-sweep-v1-2026-09-02",
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "families": [
+    {
+      "id": "clean-transform",
+      "queries": ["чистка предметов", "очисти предмет", "мойка вещей", "почисти и преобрази", "asmr чистка", "satisfying cleaning"]
+    },
+    {
+      "id": "decorate-customize",
+      "queries": ["укрась предмет", "декор вещей", "сделай красиво", "кастомизация предметов", "decorate objects", "customize game"]
+    },
+    {
+      "id": "make-craft-build",
+      "queries": ["собери предмет", "создай предмет", "сделай своими руками", "крафт предметов", "make objects", "diy game"]
+    },
+    {
+      "id": "open-reveal-find",
+      "queries": ["открой и найди", "распаковка сюрпризов", "открывай предметы", "найди сюрприз", "reveal game", "unboxing game"]
+    },
+    {
+      "id": "click-fill-progress",
+      "queries": ["кликай и заполняй", "нажимай и улучшай", "заполни шкалу", "кликай и открывай", "click to unlock", "progress meter game"]
+    },
+    {
+      "id": "break-cut-smash",
+      "queries": ["сломай предмет", "разрежь предмет", "раздави предмет", "разбей и найди", "smash objects", "cut objects"]
+    },
+    {
+      "id": "mix-pour-make",
+      "queries": ["смешивай предметы", "смешай и создай", "наливай и смешивай", "сделай смесь", "mix and make", "pour game"]
+    },
+    {
+      "id": "pack-place-organize",
+      "queries": ["упакуй предметы", "сложи по местам", "расставь предметы", "организуй вещи", "pack items", "organize objects"]
+    },
+    {
+      "id": "repair-restore",
+      "queries": ["почини предмет", "восстанови предмет", "ремонт вещей", "реставрация предметов", "repair objects", "restore game"]
+    },
+    {
+      "id": "grow-evolve-transform",
+      "queries": ["вырасти предмет", "эволюция предметов", "преврати предмет", "трансформация предметов", "evolve objects", "transform game"]
+    },
+    {
+      "id": "satisfying-diy-novelty",
+      "queries": ["satisfying game", "asmr game", "diy simulator", "creative simulator", "oddly satisfying", "craft simulator"]
+    }
+  ]
+}

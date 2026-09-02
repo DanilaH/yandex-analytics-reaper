@@ -7,6 +7,7 @@ from typing import Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from yandex_analytics_reaper.analyst import (
+    AnalystComparableMembership,
     AnalystMarketExportReport,
     AnalystSemanticEnrichmentReport,
     validate_analyst_market_export,
@@ -192,9 +193,20 @@ class QuerySurfaceQualityV1(BaseModel):
     def validate_shape(self) -> Self:
         if len(self.queries) != self.query_count:
             raise ValueError("query quality row count must equal query_count")
-        expected_pairs = self.query_count * (self.query_count - 1) // 2
-        if len(self.pairwise) != expected_pairs:
-            raise ValueError("pairwise query rows do not match declared query_count")
+        query_texts = tuple(item.query_text for item in self.queries)
+        if len(set(query_texts)) != len(query_texts):
+            raise ValueError("query quality rows must use unique query text")
+        expected_pairs = tuple(combinations(query_texts, 2))
+        actual_pairs = tuple((item.left_query, item.right_query) for item in self.pairwise)
+        if actual_pairs != expected_pairs:
+            raise ValueError("pairwise query rows do not follow declaration combinations")
+        numeric = [item.jaccard for item in self.pairwise if item.jaccard is not None]
+        expected_mean = None if not numeric else statistics.fmean(numeric)
+        expected_median = None if not numeric else statistics.median(numeric)
+        if self.mean_pairwise_jaccard != expected_mean:
+            raise ValueError("mean pairwise Jaccard does not match pairwise rows")
+        if self.median_pairwise_jaccard != expected_median:
+            raise ValueError("median pairwise Jaccard does not match pairwise rows")
         return self
 
 
@@ -237,24 +249,49 @@ class CompetitorQualityV1(BaseModel):
         )
         if semantic_total != raw:
             raise ValueError("semantic directness counts must equal raw search union")
-        expected_coverage = self.semantic_source_observed_count / raw
-        if self.semantic_source_coverage_ratio != expected_coverage:
+        if self.semantic_source_coverage_ratio != self.semantic_source_observed_count / raw:
             raise ValueError("semantic source coverage ratio does not match counts")
-        expected_direct_share = self.semantic_direct_candidate_count / raw
-        if self.semantic_direct_candidate_share != expected_direct_share:
+        if self.semantic_direct_candidate_share != self.semantic_direct_candidate_count / raw:
             raise ValueError("semantic direct candidate share does not match counts")
-        if self.reviewed_direct_candidate_count > self.semantic_direct_candidate_count:
+
+        direct = self.semantic_direct_candidate_count
+        reviewed = self.reviewed_direct_candidate_count
+        false_positive = self.rejected_direct_false_positive_count
+        if reviewed > direct:
             raise ValueError("reviewed direct candidates cannot exceed semantic direct candidates")
-        reviewed_total = (
-            self.confirmed_direct_count
-            + self.adjacent_after_review_count
-            + (self.rejected_direct_false_positive_count - self.adjacent_after_review_count)
-            + self.unresolved_direct_candidate_count
-        )
-        if reviewed_total != self.reviewed_direct_candidate_count:
-            raise ValueError("review verdict counts do not sum to reviewed direct candidates")
-        if self.rejected_direct_false_positive_count < self.adjacent_after_review_count:
+        if false_positive < self.adjacent_after_review_count:
             raise ValueError("false-positive count must include adjacent-after-review rows")
+        if self.confirmed_direct_count + false_positive + self.unresolved_direct_candidate_count != reviewed:
+            raise ValueError("review verdict counts do not sum to reviewed direct candidates")
+        if not self.review_artifact_present and reviewed != 0:
+            raise ValueError("review counts require a review artifact")
+
+        if direct == 0:
+            if self.manual_direct_review_coverage_ratio is not None:
+                raise ValueError("zero-direct review coverage must be null")
+            expected_state: DirectReviewStateV1 = "no_direct_candidates"
+        else:
+            expected_coverage = reviewed / direct
+            if self.manual_direct_review_coverage_ratio != expected_coverage:
+                raise ValueError("manual direct review coverage ratio does not match counts")
+            if reviewed == 0:
+                expected_state = "not_reviewed"
+            elif reviewed < direct:
+                expected_state = "partially_reviewed"
+            elif self.confirmed_direct_count > 0:
+                expected_state = "all_reviewed_with_confirmed"
+            else:
+                expected_state = "all_direct_candidates_reviewed_zero_confirmed"
+        if self.direct_review_state != expected_state:
+            raise ValueError("direct review state does not match review counts")
+
+        surface = self.query_surface
+        if surface.members_seen_by_multiple_queries > raw:
+            raise ValueError("multi-query member count cannot exceed raw search union")
+        if surface.multi_query_member_share != surface.members_seen_by_multiple_queries / raw:
+            raise ValueError("multi-query member share does not match raw search union")
+        if any(item.organic_member_count > raw for item in surface.queries):
+            raise ValueError("query organic member count cannot exceed raw search union")
         return self
 
 
@@ -326,10 +363,14 @@ def validate_directness_review(
         or report.thesis_version != thesis.thesis_version
         or report.semantic_report_content_hash != semantic.content_hash
     ):
-        raise ThesisIntelligenceError("directness review does not bind supplied suite/semantic report")
+        raise ThesisIntelligenceError(
+            "directness review does not bind supplied suite/semantic report"
+        )
 
     semantic_by_id = {item.platform_listing_id: item for item in semantic.listings}
-    semantic_order = {item.platform_listing_id: index for index, item in enumerate(semantic.listings)}
+    semantic_order = {
+        item.platform_listing_id: index for index, item in enumerate(semantic.listings)
+    }
     previous = -1
     for row in report.rows:
         semantic_row = semantic_by_id.get(row.platform_listing_id)
@@ -355,8 +396,14 @@ def build_competitor_quality(
     thesis = _bind_semantic_report_to_suite(suite, semantic)
     comparable_set_id = f"{suite.suite_id}--{thesis.thesis_id}"
 
-    if semantic.snapshot_id != export.snapshot_id or semantic.snapshot_content_hash != export.snapshot_content_hash:
-        raise ThesisIntelligenceError("semantic report and market export do not bind the same snapshot")
+    snapshot_mismatch = (
+        semantic.snapshot_id != export.snapshot_id
+        or semantic.snapshot_content_hash != export.snapshot_content_hash
+    )
+    if snapshot_mismatch:
+        raise ThesisIntelligenceError(
+            "semantic report and market export do not bind the same snapshot"
+        )
 
     memberships = tuple(
         item for item in export.comparable_memberships if item.set_id == comparable_set_id
@@ -364,15 +411,28 @@ def build_competitor_quality(
     if not memberships:
         raise ThesisIntelligenceError("market export is missing thesis comparable membership")
     memberships = tuple(sorted(memberships, key=lambda item: item.member_ordinal))
+    for membership in memberships:
+        if (
+            membership.set_version != 1
+            or membership.query_family_id != thesis.thesis_id
+            or membership.query_family_version != 1
+        ):
+            raise ThesisIntelligenceError(
+                "comparable membership identity disagrees with suite compile contract"
+            )
     ordinals = tuple(item.member_ordinal for item in memberships)
     if ordinals != tuple(range(len(memberships))):
-        raise ThesisIntelligenceError("thesis comparable member ordinals are not contiguous from zero")
+        raise ThesisIntelligenceError(
+            "thesis comparable member ordinals are not contiguous from zero"
+        )
     member_ids = tuple(item.platform_listing_id for item in memberships)
     if len(set(member_ids)) != len(member_ids):
         raise ThesisIntelligenceError("thesis comparable contains duplicate listing IDs")
     semantic_ids = tuple(item.platform_listing_id for item in semantic.listings)
     if semantic_ids != member_ids:
-        raise ThesisIntelligenceError("semantic listing order does not equal frozen comparable order")
+        raise ThesisIntelligenceError(
+            "semantic listing order does not equal frozen comparable order"
+        )
 
     if review is not None:
         review = validate_directness_review(review, suite=suite, semantic_report=semantic)
@@ -430,7 +490,7 @@ def build_competitor_quality(
 
 def _build_query_surface(
     thesis: ThesisDeclaration,
-    memberships: tuple[object, ...],
+    memberships: tuple[AnalystComparableMembership, ...],
     raw_count: int,
 ) -> QuerySurfaceQualityV1:
     query_sets: dict[str, set[str]] = {query: set() for query in thesis.queries}
@@ -438,12 +498,16 @@ def _build_query_surface(
     multiple = 0
 
     for membership in memberships:
-        listing_id = membership.platform_listing_id  # type: ignore[attr-defined]
-        source_queries = tuple(membership.source_queries)  # type: ignore[attr-defined]
+        listing_id = membership.platform_listing_id
+        source_queries = membership.source_queries
         if not source_queries or any(query not in query_universe for query in source_queries):
-            raise ThesisIntelligenceError("comparable membership source_queries disagree with thesis")
+            raise ThesisIntelligenceError(
+                "comparable membership source_queries disagree with thesis"
+            )
         if len(set(source_queries)) != len(source_queries):
-            raise ThesisIntelligenceError("comparable membership source_queries contain duplicates")
+            raise ThesisIntelligenceError(
+                "comparable membership source_queries contain duplicates"
+            )
         if len(source_queries) > 1:
             multiple += 1
         for query in source_queries:
@@ -454,8 +518,8 @@ def _build_query_surface(
             query_text=query,
             organic_member_count=len(query_sets[query]),
             unique_contribution_count=sum(
-                membership.platform_listing_id in query_sets[query]  # type: ignore[attr-defined]
-                and len(membership.source_queries) == 1  # type: ignore[attr-defined]
+                membership.platform_listing_id in query_sets[query]
+                and len(membership.source_queries) == 1
                 for membership in memberships
             ),
         )
@@ -494,13 +558,19 @@ def _bind_semantic_report_to_suite(
 ) -> ThesisDeclaration:
     matching = tuple(item for item in suite.theses if item.thesis_id == semantic.thesis.thesis_id)
     if len(matching) != 1:
-        raise ThesisIntelligenceError("semantic thesis does not identify exactly one suite thesis")
+        raise ThesisIntelligenceError(
+            "semantic thesis does not identify exactly one suite thesis"
+        )
     thesis = matching[0]
     expected_semantic = next(
-        item for item in compile_thesis_suite(suite).semantic_theses if item.thesis_id == thesis.thesis_id
+        item
+        for item in compile_thesis_suite(suite).semantic_theses
+        if item.thesis_id == thesis.thesis_id
     )
     if semantic.thesis != expected_semantic:
-        raise ThesisIntelligenceError("semantic report thesis declaration does not equal suite compilation")
+        raise ThesisIntelligenceError(
+            "semantic report thesis declaration does not equal suite compilation"
+        )
     return thesis
 
 

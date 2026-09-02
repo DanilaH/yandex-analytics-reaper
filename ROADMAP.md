@@ -17,17 +17,24 @@ infrastructure sophistication.
 - production burden is a first-class decision variable;
 - no new infrastructure milestone may replace a concrete market/build decision loop.
 
-## Delivery path
+## Delivery paths
+
+The product-validation lane and research-tool lane may move independently. Tooling work must not
+silently reopen or displace an accepted production decision.
 
 ```text
+RESEARCH-TOOL LANE
 M0 evidence foundation — COMPLETE
 -> M1 analyst workbench / START ANALYSIS — COMPLETE
 -> M1.5 Reaper 0.2.0 / Runner v1.2 — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
--> M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
+-> R0.3 Reaper 0.3.0 / Thesis Intelligence — PLANNED
+
+PRODUCT-VALIDATION LANE
+M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
 -> P1 production-ready micro-spec — COMPLETE
--> P2 cheapest credible build/release probe — NEXT PRIMARY PATH
+-> P2 cheapest credible build/release probe — NEXT PRIMARY PRODUCT PATH
 -> observe real behavior
 -> calibrate, re-theme or kill the thesis
 ```
@@ -186,6 +193,157 @@ Definition of Done:
 
 ---
 
+# R0.3 — Reaper `0.3.0` / Thesis Intelligence — PLANNED 2026-09-02
+
+Purpose:
+
+> Turn several explicit `mechanic x theme/object` theses into compact, comparable, reproducible
+> evidence packages while preserving the existing human decision boundary.
+
+Full product/semantic plan:
+[`docs/spec/thesis-intelligence.md`](docs/spec/thesis-intelligence.md).
+
+0.3 approved scope is limited to:
+
+1. thesis-suite declaration and deterministic compilation onto existing experiment semantics;
+2. age-normalized traction features plus real observed rating deltas only when historical evidence exists;
+3. explicit-policy fresh anomaly review queue;
+4. hash-bound analyst directness review plus competitor-set quality summary;
+5. deterministic cross-thesis JSON/CSV/Markdown comparison;
+6. thin `run/build/verify` coordination that reuses the 0.2 runner rather than replacing it.
+
+## R0.3 sequencing
+
+```text
+0.3-P0 contract freeze
+-> 0.3-P1 thesis-suite compiler + artifact bindings
+-> 0.3-P2 traction features + bounded historical delta read
+-> 0.3-P3 fresh anomaly queue
+-> 0.3-P4 directness review + competitor quality
+-> 0.3-P5 cross-thesis comparison
+-> 0.3-P6 thin CLI integration
+-> 0.3-P7 V3 replay + Satisfying Destruction live validation
+-> package/release 0.3.0
+```
+
+### 0.3-P0 — Contract freeze — NEXT TOOLING STEP
+
+Before implementation:
+
+- [ ] freeze exact `thesis-suite-v1` schema;
+- [ ] freeze age-bucket boundary semantics;
+- [ ] freeze too-young lifetime-pace behavior;
+- [ ] freeze anomaly gate pass/fail/unknown semantics;
+- [ ] freeze analyst directness review schema and verdict vocabulary;
+- [ ] freeze per-thesis report schema;
+- [ ] freeze cross-thesis comparison schema;
+- [ ] independently review the spec for measurement honesty and unnecessary infrastructure.
+
+### 0.3-P1 — Thesis suite compiler + artifact bindings
+
+- [ ] map each thesis deterministically to one existing query-family/comparable identity;
+- [ ] compile the suite to the current experiment manifest semantics without changing search behavior;
+- [ ] compile M1.7 semantic declarations deterministically;
+- [ ] bind the exact immutable experiment artifact by hash;
+- [ ] add create-only thesis-intelligence artifact identity/verification primitives;
+- [ ] preserve exact thesis/query declaration order.
+
+### 0.3-P2 — Traction features
+
+- [ ] derive first-publication age from frozen snapshot time;
+- [ ] derive versioned age buckets;
+- [ ] expose `ratingCount` coverage separately from numeric values;
+- [ ] derive lifetime ratings/day only when method prerequisites are met;
+- [ ] derive suite-relative age-bucket cohort percentile with cohort definition/size;
+- [ ] read previous `rating_count` observations through a narrow existing-storage read API;
+- [ ] expose observed rating delta/day only when two trustworthy observations exist;
+- [ ] preserve negative deltas/revision states rather than clamping;
+- [ ] avoid schema migration unless a measured storage requirement proves one necessary.
+
+### 0.3-P3 — Fresh anomaly queue
+
+- [ ] require explicit anomaly thresholds in analyst input;
+- [ ] emit traceable gate reason codes;
+- [ ] treat missing configured evidence as unknown/fail according to the frozen contract, never as zero;
+- [ ] deterministic queue ordering without opportunity score;
+- [ ] preserve the distinction between anomaly candidate and successful game.
+
+### 0.3-P4 — Directness review + competitor quality
+
+- [ ] create hash-bound analyst review artifact;
+- [ ] support `confirmed_direct / adjacent / not_direct / unresolved`;
+- [ ] calculate review coverage and false-positive counts;
+- [ ] summarize raw union vs semantic direct/adjacent/noise/insufficient counts;
+- [ ] summarize per-query contribution and overlap/Jaccard descriptors;
+- [ ] expose bounded zero-confirmed state without claiming absolute market absence.
+
+### 0.3-P5 — Cross-thesis comparison
+
+- [ ] stable declaration-order rows;
+- [ ] direct evidence never silently replaced with adjacent evidence;
+- [ ] expose confirmed direct/fresh direct/anomaly/coverage/query-quality facts;
+- [ ] include listing IDs/provenance with best-traction facts;
+- [ ] emit canonical JSON plus analyst-readable CSV/Markdown;
+- [ ] no automatic winner or BUILD/WATCH/SKIP.
+
+### 0.3-P6 — CLI integration
+
+- [ ] `yandex-reaper-thesis run` delegates collection to existing experiment runner;
+- [ ] collection failure surfaces the existing resume path;
+- [ ] `build` reconstructs intelligence from a frozen verified experiment artifact without network access;
+- [ ] `build` can add analyst review artifacts without recollecting Yandex data;
+- [ ] `verify` checks source artifact, report and member hashes;
+- [ ] post-processing failure cannot mutate the source experiment artifact.
+
+### 0.3-P7 — Real-data validation + release
+
+Replay existing V3 evidence where possible:
+
+- [ ] Custom Headphones — fuzzy-noise / zero-confirmed-direct control;
+- [ ] Custom Digicam — weak-direct-supply control;
+- [ ] Restore Retro Tech — near-direct/adjacent control.
+
+Run one new focused thesis sweep:
+
+- [ ] Satisfying Destruction — determine whether the discovered anomaly represents a broader cheap grammar or one exceptional listing.
+
+Release gate:
+
+- [ ] real validation demonstrates material manual-review reduction;
+- [ ] comparison output is manually reviewed for measurement honesty;
+- [ ] existing 0.2 runner acceptance behavior remains intact;
+- [ ] `ruff`, strict `mypy`, full `pytest` and repository coverage gate pass;
+- [ ] methodology/decision docs are synchronized if real validation changes durable conclusions;
+- [ ] authoritative package version/provenance becomes `0.3.0` only after every release gate passes.
+
+## R0.3 explicit non-goals
+
+Do not add during 0.3:
+
+```text
+LLM / embeddings / vector DB
+opaque opportunity score
+automatic BUILD / WATCH / SKIP
+automatic production-burden estimation
+visual screenshot classifier
+query-generation / uncontrolled synonym expansion
+external trend ingestion
+additional game platforms
+scheduler / daemon / monitoring service
+dashboard / web UI
+distributed workers
+new generic workflow framework
+broad taxonomy redesign
+market-size estimation
+fabricated 7d/30d/90d velocity without repeated observations
+```
+
+Potential `0.3.1+` work such as controlled query expansion, cross-thesis reuse diagnostics, and
+sweep-to-sweep change detection must be justified by real 0.3 usage rather than pulled into the
+release preemptively.
+
+---
+
 # M2 / FIRST DECISION LOOP — COMPLETE 2026-09-01
 
 Candidate directory:
@@ -238,7 +396,7 @@ The result is a **BUILD — small probe**, not a profitability claim.
 
 ---
 
-# PRIMARY PATH — BUILD PROBE
+# PRIMARY PRODUCT PATH — BUILD PROBE
 
 ## P1 — Production-ready micro-spec — COMPLETE 2026-09-01
 
@@ -309,38 +467,37 @@ hypothesis according to the frozen M2 conditions.
 
 ---
 
-# Deferred until real build evidence justifies it
+# Deferred beyond accepted 0.3 / product validation work
 
 Potential later work remains valid but is not automatically next:
 
-- broader candidate discovery automation;
-- broad taxonomy validation/classification beyond the narrow M1.7 triage contract;
-- historical backtesting;
-- external trend sources;
+- broad taxonomy validation/classification beyond the narrow semantic/directness contracts;
+- historical backtesting beyond the bounded 0.3 metric-delta use case;
+- external trend-source integration;
 - portfolio calibration;
 - dashboards/scheduling;
-- automated ranking.
+- automated ranking;
+- multi-platform collection.
 
-Promote any of these only when the real decision/build loop exposes a concrete bottleneck they
-solve.
+Promote any of these only when a real decision/build loop exposes a concrete bottleneck they solve.
 
 ## Current sequencing guard
 
-Until the cheap v2 build/release probe is completed, reject work whose main effect is:
+Even with 0.3 approved, reject work whose main effect is:
 
 ```text
 another runner redesign
 scheduler
 dashboard
 generic orchestration framework
-taxonomy expansion beyond the approved M1.7 directness triage
 ML/ranking
 broad external-source integration
-extra gameplay/meta systems
+extra gameplay/meta systems inside Reaper
 ```
 
-M1.7 is allowed only because it reuses already-collected evidence to remove a repeated manual
-classification bottleneck. It must not grow into generic taxonomy infrastructure or delay P2.
+0.3 is justified only because repeated real thesis research exposed concrete manual analysis costs.
+It must remain a thin evidence/intelligence layer over the proven collector and must not become a
+separate platform-analytics product.
 
 The primary product job is still to test whether a **very cheap, original, reward-first collectible
 opener** can produce repeat-opening behavior with real Yandex traffic.

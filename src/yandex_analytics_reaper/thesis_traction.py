@@ -278,6 +278,26 @@ class ThesisTractionRow(BaseModel):
         return self
 
 
+class ThesisFieldCoverage(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    member_count: int = Field(ge=1)
+    observed_count: int = Field(ge=0)
+    missing_count: int = Field(ge=0)
+    coverage_ratio: float = Field(ge=0.0, le=1.0)
+
+    @model_validator(mode="after")
+    def validate_counts(self) -> Self:
+        if self.observed_count > self.member_count:
+            raise ValueError("coverage observed_count cannot exceed member_count")
+        if self.missing_count != self.member_count - self.observed_count:
+            raise ValueError("coverage missing_count must equal member_count - observed_count")
+        expected = self.observed_count / self.member_count
+        if not math.isclose(self.coverage_ratio, expected, rel_tol=0.0, abs_tol=1e-12):
+            raise ValueError("coverage ratio does not match counts")
+        return self
+
+
 class ThesisTractionSet(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -285,7 +305,21 @@ class ThesisTractionSet(BaseModel):
     thesis_version: int = Field(ge=1)
     comparable_set_id: str
     comparable_set_version: int = Field(ge=1)
+    rating_count_coverage: ThesisFieldCoverage
     rows: tuple[ThesisTractionRow, ...] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_rating_coverage(self) -> Self:
+        observed = sum(row.rating_count is not None for row in self.rows)
+        expected = ThesisFieldCoverage(
+            member_count=len(self.rows),
+            observed_count=observed,
+            missing_count=len(self.rows) - observed,
+            coverage_ratio=observed / len(self.rows),
+        )
+        if self.rating_count_coverage != expected:
+            raise ValueError("rating_count_coverage does not match traction rows")
+        return self
 
 
 class ThesisTractionFeaturesPayload(BaseModel):
@@ -490,19 +524,28 @@ def build_traction_features(
     }
     cohorts = _build_age_bucket_cohorts(pre_rows)
 
-    thesis_sets = tuple(
-        ThesisTractionSet(
-            thesis_id=thesis_id,
-            thesis_version=thesis_version,
-            comparable_set_id=set_id,
-            comparable_set_version=set_version,
-            rows=tuple(
-                _materialize_row(pre_rows[listing_id], cohorts)
-                for listing_id in member_listing_ids
-            ),
+    thesis_sets: list[ThesisTractionSet] = []
+    for thesis_id, thesis_version, set_id, set_version, member_listing_ids in thesis_bindings:
+        rows = tuple(
+            _materialize_row(pre_rows[listing_id], cohorts)
+            for listing_id in member_listing_ids
         )
-        for thesis_id, thesis_version, set_id, set_version, member_listing_ids in thesis_bindings
-    )
+        observed_rating_count = sum(row.rating_count is not None for row in rows)
+        thesis_sets.append(
+            ThesisTractionSet(
+                thesis_id=thesis_id,
+                thesis_version=thesis_version,
+                comparable_set_id=set_id,
+                comparable_set_version=set_version,
+                rating_count_coverage=ThesisFieldCoverage(
+                    member_count=len(rows),
+                    observed_count=observed_rating_count,
+                    missing_count=len(rows) - observed_rating_count,
+                    coverage_ratio=observed_rating_count / len(rows),
+                ),
+                rows=rows,
+            )
+        )
 
     payload = ThesisTractionFeaturesPayload(
         suite_id=suite.suite_id,
@@ -511,7 +554,7 @@ def build_traction_features(
         reference_time=current.snapshot.created_at,
         current_experiment=inputs.current_experiment,
         prior_experiments=inputs.prior_experiments,
-        theses=thesis_sets,
+        theses=tuple(thesis_sets),
     )
     report = ThesisTractionFeaturesReport(
         **payload.model_dump(mode="python"),

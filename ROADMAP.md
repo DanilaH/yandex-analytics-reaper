@@ -220,8 +220,8 @@ Full product/semantic plan:
 -> 0.3-P2 traction features + frozen prior-artifact delta support — COMPLETE
 -> 0.3-P3 fresh anomaly queue — COMPLETE
 -> 0.3-P4 directness review + competitor quality — COMPLETE
--> 0.3-P5 cross-thesis comparison — NEXT TOOLING STEP
--> 0.3-P6 thin CLI integration
+-> 0.3-P5 cross-thesis comparison — COMPLETE
+-> 0.3-P6 thin CLI integration — NEXT TOOLING STEP
 -> 0.3-P7 V3 replay + Satisfying Destruction live validation
 -> package/release 0.3.0
 ```
@@ -285,17 +285,20 @@ Before implementation:
 Review:
 [`docs/history/reaper-0.3-p4-review-2026-09-02.md`](docs/history/reaper-0.3-p4-review-2026-09-02.md).
 
-### 0.3-P5 — Cross-thesis comparison — NEXT TOOLING STEP
+### 0.3-P5 — Cross-thesis comparison — COMPLETE 2026-09-02
 
-- [ ] stable declaration-order rows;
-- [ ] direct evidence never silently replaced with adjacent evidence;
-- [ ] expose confirmed direct/fresh direct/anomaly/coverage/query-quality facts;
-- [ ] expose longitudinal coverage only for explicitly bound prior artifacts;
-- [ ] include listing IDs/provenance with best-traction facts;
-- [ ] emit canonical JSON plus analyst-readable CSV/Markdown;
-- [ ] no automatic winner or BUILD/WATCH/SKIP.
+- [x] stable declaration-order rows;
+- [x] direct evidence never silently replaced with adjacent evidence;
+- [x] expose confirmed direct/fresh direct/anomaly/coverage/query-quality facts;
+- [x] expose longitudinal coverage only for explicitly bound prior artifacts;
+- [x] include listing IDs/provenance with best-traction facts;
+- [x] emit canonical JSON plus analyst-readable CSV/Markdown;
+- [x] no automatic winner or BUILD/WATCH/SKIP.
 
-### 0.3-P6 — CLI integration
+Review:
+[`docs/history/reaper-0.3-p5-review-2026-09-02.md`](docs/history/reaper-0.3-p5-review-2026-09-02.md).
+
+### 0.3-P6 — CLI integration — NEXT TOOLING STEP
 
 - [ ] `yandex-reaper-thesis run` delegates current collection to existing experiment runner;
 - [ ] `run/build` accept optional repeatable prior experiment artifact inputs;

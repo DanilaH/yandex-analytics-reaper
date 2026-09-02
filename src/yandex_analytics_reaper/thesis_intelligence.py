@@ -34,7 +34,7 @@ _ID_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 
 class ThesisIntelligenceError(ValueError):
-    """Thesis-intelligence input cannot be accepted without weakening frozen v1 semantics."""
+    """Frozen thesis-intelligence evidence cannot be accepted safely."""
 
 
 class ThesisSuiteContext(BaseModel):
@@ -48,9 +48,9 @@ class ThesisSuiteContext(BaseModel):
 
     @field_validator("lang", "platform")
     @classmethod
-    def validate_trimmed_non_blank(cls, value: str) -> str:
+    def validate_text(cls, value: str) -> str:
         if not value or value != value.strip():
-            raise ValueError("suite context text fields must be non-blank and already trimmed")
+            raise ValueError("suite context fields must be non-blank and already trimmed")
         return value
 
 
@@ -68,7 +68,6 @@ class ThesisSemanticDeclaration(BaseModel):
             return None
         if not values:
             raise ValueError("configured semantic term groups must be non-empty")
-        # Reuse the shipped M1.7 lexical-rule contract rather than duplicating normalization rules.
         AnalystSemanticRule(terms=values)
         return values
 
@@ -84,7 +83,7 @@ class ThesisAnomalyPolicy(BaseModel):
     min_observed_rating_delta_per_day: float | None = Field(default=None, ge=0.0)
 
     @model_validator(mode="after")
-    def validate_at_least_one_gate(self) -> Self:
+    def validate_gates(self) -> Self:
         gates = (
             self.max_age_days,
             self.min_rating_count,
@@ -134,7 +133,7 @@ class ThesisSuiteDeclaration(BaseModel):
     theses: tuple[ThesisDeclaration, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
-    def validate_suite_identity(self) -> Self:
+    def validate_suite(self) -> Self:
         thesis_ids = [item.thesis_id for item in self.theses]
         if len(set(thesis_ids)) != len(thesis_ids):
             raise ValueError("suite thesis IDs must be unique")
@@ -192,7 +191,7 @@ class ExperimentArtifactBinding(BaseModel):
 
     @field_validator("experiment_id", "run_id", "snapshot_id")
     @classmethod
-    def validate_identity_text(cls, value: str) -> str:
+    def validate_identity(cls, value: str) -> str:
         if not value or value != value.strip():
             raise ValueError("artifact binding identities must be non-blank and already trimmed")
         return value
@@ -231,7 +230,7 @@ class ThesisIntelligenceBuildInputs(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_binding_roles_and_order(self) -> Self:
+    def validate_bindings(self) -> Self:
         if self.current_experiment.role != "current":
             raise ValueError("current_experiment binding must have role=current")
         if any(item.role != "prior" for item in self.prior_experiments):
@@ -252,6 +251,8 @@ class ThesisIntelligenceBuildInputs(BaseModel):
 class ThesisIntelligenceBuildIdentity(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    suite_id: str = Field(pattern=_ID_PATTERN, max_length=80)
+    suite_version: int = Field(ge=1)
     inputs: ThesisIntelligenceBuildInputs
     build_input_hash: str
     relative_artifact_path: str
@@ -271,53 +272,37 @@ class ThesisIntelligenceBuildIdentity(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def validate_identity(self) -> Self:
-        if self.build_input_hash != canonical_model_hash(self.inputs):
+    def validate_build_identity(self) -> Self:
+        expected_hash = canonical_model_hash(self.inputs)
+        if self.build_input_hash != expected_hash:
             raise ValueError("build_input_hash does not match canonical build inputs")
-        expected = intelligence_artifact_relative_path(
-            suite_id=_suite_id_from_path(self.relative_artifact_path),
+        expected_path = intelligence_artifact_relative_path(
+            suite_id=self.suite_id,
             run_id=self.inputs.current_experiment.run_id,
             build_input_hash=self.build_input_hash,
         ).as_posix()
-        if expected != self.relative_artifact_path:
+        if expected_path != self.relative_artifact_path:
             raise ValueError("relative artifact path does not match build identity")
         return self
 
 
 def compile_thesis_suite(suite: ThesisSuiteDeclaration) -> CompiledThesisSuite:
-    """Compile one frozen suite onto existing experiment and M1.7 semantic contracts."""
+    """Compile a suite onto existing experiment and M1.7 semantic contracts."""
     suite = ThesisSuiteDeclaration.model_validate(suite.model_dump())
-    context = AnalystExperimentContext.model_validate(suite.context.model_dump())
-    families = tuple(
-        AnalystExperimentFamily(id=item.thesis_id, queries=item.queries) for item in suite.theses
-    )
     experiment = AnalystExperimentManifest(
         schema_version=1,
         experiment_id=suite.suite_id,
-        context=context,
-        families=families,
+        context=AnalystExperimentContext.model_validate(suite.context.model_dump()),
+        families=tuple(
+            AnalystExperimentFamily(id=item.thesis_id, queries=item.queries)
+            for item in suite.theses
+        ),
     )
-    semantics = tuple(
-        AnalystSemanticThesisDeclaration(
-            spec_version="analyst-semantic-thesis-v1",
-            thesis_id=item.thesis_id,
-            version=item.thesis_version,
-            label=item.label,
-            target_set_ids=(f"{suite.suite_id}--{item.thesis_id}",),
-            theme=AnalystSemanticRule(terms=item.semantic.theme_terms),
-            mechanic=AnalystSemanticRule(terms=item.semantic.mechanic_terms),
-            reward_grammar=(
-                None
-                if item.semantic.reward_grammar_terms is None
-                else AnalystSemanticRule(terms=item.semantic.reward_grammar_terms)
-            ),
-        )
-        for item in suite.theses
-    )
+    semantic_theses = tuple(_compile_semantic_thesis(suite, item) for item in suite.theses)
     return CompiledThesisSuite(
         suite_content_hash=canonical_model_hash(suite),
         experiment_manifest=experiment,
-        semantic_theses=semantics,
+        semantic_theses=semantic_theses,
     )
 
 
@@ -328,7 +313,7 @@ def build_intelligence_inputs(
     prior_experiments: Sequence[ExperimentArtifactBinding] = (),
     review_bindings: Sequence[ThesisReviewBinding] = (),
 ) -> ThesisIntelligenceBuildInputs:
-    """Canonicalize current/history/review bindings for deterministic intelligence identity."""
+    """Canonicalize current/history/review bindings for deterministic identity."""
     suite = ThesisSuiteDeclaration.model_validate(suite.model_dump())
     current = ExperimentArtifactBinding.model_validate(current_experiment.model_dump())
     if current.role != "current":
@@ -351,7 +336,9 @@ def build_intelligence_inputs(
     priors = _sorted_prior_bindings(priors)
 
     thesis_order = {item.thesis_id: index for index, item in enumerate(suite.theses)}
-    reviews = tuple(ThesisReviewBinding.model_validate(item.model_dump()) for item in review_bindings)
+    reviews = tuple(
+        ThesisReviewBinding.model_validate(item.model_dump()) for item in review_bindings
+    )
     if any(item.thesis_id not in thesis_order for item in reviews):
         raise ThesisIntelligenceError("review binding references a thesis outside the suite")
     review_ids = [item.thesis_id for item in reviews]
@@ -387,6 +374,8 @@ def build_intelligence_identity(
         build_input_hash=digest,
     )
     return ThesisIntelligenceBuildIdentity(
+        suite_id=suite.suite_id,
+        suite_version=suite.suite_version,
         inputs=inputs,
         build_input_hash=digest,
         relative_artifact_path=relative.as_posix(),
@@ -394,10 +383,7 @@ def build_intelligence_identity(
 
 
 def intelligence_artifact_relative_path(
-    *,
-    suite_id: str,
-    run_id: str,
-    build_input_hash: str,
+    *, suite_id: str, run_id: str, build_input_hash: str
 ) -> PurePosixPath:
     if not suite_id or not run_id:
         raise ThesisIntelligenceError("suite_id and run_id must be non-blank")
@@ -412,16 +398,33 @@ def intelligence_artifact_relative_path(
 
 
 def validate_artifact_file_sha256(binding: ExperimentArtifactBinding, path: Path) -> None:
-    """Fail closed when a local artifact reference no longer matches its frozen binding."""
     actual = _sha256_file(path)
     if actual != binding.artifact_sha256:
+        expected = binding.artifact_sha256
         raise ThesisIntelligenceError(
-            f"experiment artifact SHA-256 mismatch: expected {binding.artifact_sha256}, got {actual}"
+            f"experiment artifact SHA-256 mismatch: expected {expected}, got {actual}"
         )
 
 
 def canonical_model_hash(model: BaseModel) -> str:
     return hashlib.sha256(_canonical_json_bytes(model)).hexdigest()
+
+
+def _compile_semantic_thesis(
+    suite: ThesisSuiteDeclaration,
+    thesis: ThesisDeclaration,
+) -> AnalystSemanticThesisDeclaration:
+    reward_terms = thesis.semantic.reward_grammar_terms
+    return AnalystSemanticThesisDeclaration(
+        spec_version="analyst-semantic-thesis-v1",
+        thesis_id=thesis.thesis_id,
+        version=thesis.thesis_version,
+        label=thesis.label,
+        target_set_ids=(f"{suite.suite_id}--{thesis.thesis_id}",),
+        theme=AnalystSemanticRule(terms=thesis.semantic.theme_terms),
+        mechanic=AnalystSemanticRule(terms=thesis.semantic.mechanic_terms),
+        reward_grammar=(None if reward_terms is None else AnalystSemanticRule(terms=reward_terms)),
+    )
 
 
 def _canonical_json_bytes(model: BaseModel) -> bytes:
@@ -480,13 +483,8 @@ def _sha256_file(path: Path) -> str:
 
 
 def _require_sha256(value: str) -> None:
-    invalid = len(value) != 64 or any(character not in "0123456789abcdef" for character in value)
+    invalid = len(value) != 64 or any(
+        character not in "0123456789abcdef" for character in value
+    )
     if invalid:
         raise ValueError("value must be a lowercase SHA-256 hex digest")
-
-
-def _suite_id_from_path(value: str) -> str:
-    parts = PurePosixPath(value).parts
-    if len(parts) != 5 or parts[:2] != ("artifacts", "intelligence"):
-        raise ValueError("intelligence artifact path must use artifacts/intelligence hierarchy")
-    return parts[2]

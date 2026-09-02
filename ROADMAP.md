@@ -29,7 +29,7 @@ M0 evidence foundation — COMPLETE
 -> M1.5 Reaper 0.2.0 / Runner v1.2 — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
--> R0.3 Reaper 0.3.0 / Thesis Intelligence — PLANNED
+-> R0.3 Reaper 0.3.0 / Thesis Intelligence — IN PROGRESS
 
 PRODUCT-VALIDATION LANE
 M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
@@ -193,7 +193,7 @@ Definition of Done:
 
 ---
 
-# R0.3 — Reaper `0.3.0` / Thesis Intelligence — PLANNED 2026-09-02
+# R0.3 — Reaper `0.3.0` / Thesis Intelligence — IN PROGRESS 2026-09-02
 
 Purpose:
 
@@ -215,74 +215,77 @@ Full product/semantic plan:
 ## R0.3 sequencing
 
 ```text
-0.3-P0 contract freeze
--> 0.3-P1 thesis-suite compiler + artifact bindings
--> 0.3-P2 traction features + frozen prior-artifact delta support
--> 0.3-P3 fresh anomaly queue
--> 0.3-P4 directness review + competitor quality
--> 0.3-P5 cross-thesis comparison
+0.3-P0 contract freeze — COMPLETE
+-> 0.3-P1 thesis-suite compiler + artifact bindings — COMPLETE
+-> 0.3-P2 traction features + frozen prior-artifact delta support — COMPLETE
+-> 0.3-P3 fresh anomaly queue — COMPLETE
+-> 0.3-P4 directness review + competitor quality — COMPLETE
+-> 0.3-P5 cross-thesis comparison — NEXT TOOLING STEP
 -> 0.3-P6 thin CLI integration
 -> 0.3-P7 V3 replay + Satisfying Destruction live validation
 -> package/release 0.3.0
 ```
 
-### 0.3-P0 — Contract freeze — NEXT TOOLING STEP
+### 0.3-P0 — Contract freeze — COMPLETE 2026-09-02
 
 Before implementation:
 
-- [ ] freeze exact `thesis-suite-v1` schema;
-- [ ] freeze current/prior experiment artifact binding schema and deterministic history selection rules;
-- [ ] freeze age-bucket boundary semantics;
-- [ ] freeze too-young lifetime-pace behavior;
-- [ ] freeze anomaly gate pass/fail/unknown semantics;
-- [ ] freeze analyst directness review schema and verdict vocabulary;
-- [ ] freeze per-thesis report schema;
-- [ ] freeze cross-thesis comparison schema;
-- [ ] independently review the spec for measurement honesty and unnecessary infrastructure.
+- [x] freeze exact `thesis-suite-v1` schema;
+- [x] freeze current/prior experiment artifact binding schema and deterministic history selection rules;
+- [x] freeze age-bucket boundary semantics;
+- [x] freeze too-young lifetime-pace behavior;
+- [x] freeze anomaly gate pass/fail/unknown semantics;
+- [x] freeze analyst directness review schema and verdict vocabulary;
+- [x] freeze per-thesis report schema;
+- [x] freeze cross-thesis comparison schema;
+- [x] independently review the spec for measurement honesty and unnecessary infrastructure.
 
-### 0.3-P1 — Thesis suite compiler + artifact bindings
+### 0.3-P1 — Thesis suite compiler + artifact bindings — COMPLETE 2026-09-02
 
-- [ ] map each thesis deterministically to one existing query-family/comparable identity;
-- [ ] compile the suite to the current experiment manifest semantics without changing search behavior;
-- [ ] compile M1.7 semantic declarations deterministically;
-- [ ] bind the exact immutable current experiment artifact by hash;
-- [ ] support an ordered set of optional prior experiment artifact hashes for longitudinal evidence;
-- [ ] add create-only thesis-intelligence artifact identity/verification primitives;
-- [ ] preserve exact thesis/query declaration order.
+- [x] map each thesis deterministically to one existing query-family/comparable identity;
+- [x] compile the suite to the current experiment manifest semantics without changing search behavior;
+- [x] compile M1.7 semantic declarations deterministically;
+- [x] bind the exact immutable current experiment artifact by hash;
+- [x] support an ordered set of optional prior experiment artifact hashes for longitudinal evidence;
+- [x] add create-only thesis-intelligence artifact identity/verification primitives;
+- [x] preserve exact thesis/query declaration order.
 
-### 0.3-P2 — Traction features
+### 0.3-P2 — Traction features — COMPLETE 2026-09-02
 
-- [ ] derive first-publication age from frozen snapshot time;
-- [ ] derive versioned age buckets;
-- [ ] expose `ratingCount` coverage separately from numeric values;
-- [ ] derive lifetime ratings/day only when method prerequisites are met;
-- [ ] derive suite-relative age-bucket cohort percentile with cohort definition/size;
-- [ ] verify/read `rating_count` observations from explicitly supplied prior experiment artifacts;
-- [ ] select the latest eligible prior point deterministically and bind its artifact/observation identity;
-- [ ] expose observed rating delta/day only when two trustworthy frozen observations exist;
-- [ ] preserve negative deltas/revision states rather than clamping;
-- [ ] never consult ambient mutable local SQLite state during deterministic `build`;
-- [ ] no schema migration unless a separate measured requirement later proves one necessary.
+- [x] derive first-publication age from frozen snapshot time;
+- [x] derive versioned age buckets;
+- [x] expose `ratingCount` coverage separately from numeric values;
+- [x] derive lifetime ratings/day only when method prerequisites are met;
+- [x] derive suite-relative age-bucket cohort percentile with cohort definition/size;
+- [x] verify/read `rating_count` observations from explicitly supplied prior experiment artifacts;
+- [x] select the latest eligible prior point deterministically and bind its artifact/observation identity;
+- [x] expose observed rating delta/day only when two trustworthy frozen observations exist;
+- [x] preserve negative deltas/revision states rather than clamping;
+- [x] never consult ambient mutable local SQLite state during deterministic `build`;
+- [x] no schema migration unless a separate measured requirement later proves one necessary.
 
-### 0.3-P3 — Fresh anomaly queue
+### 0.3-P3 — Fresh anomaly queue — COMPLETE 2026-09-02
 
-- [ ] require explicit anomaly thresholds in analyst input;
-- [ ] emit traceable gate reason codes;
-- [ ] treat missing configured evidence as unknown/fail according to the frozen contract, never as zero;
-- [ ] permit a longitudinal velocity gate only against bound prior-artifact evidence;
-- [ ] deterministic queue ordering without opportunity score;
-- [ ] preserve the distinction between anomaly candidate and successful game.
+- [x] require explicit anomaly thresholds in analyst input;
+- [x] emit traceable per-gate `pass / fail / unknown / not_configured` states;
+- [x] treat missing configured evidence as unknown/fail according to the frozen contract, never as zero;
+- [x] permit a longitudinal velocity gate only against bound prior-artifact evidence;
+- [x] deterministic queue ordering without opportunity score;
+- [x] preserve the distinction between anomaly candidate and successful game.
 
-### 0.3-P4 — Directness review + competitor quality
+### 0.3-P4 — Directness review + competitor quality — COMPLETE 2026-09-02
 
-- [ ] create hash-bound analyst review artifact;
-- [ ] support `confirmed_direct / adjacent / not_direct / unresolved`;
-- [ ] calculate review coverage and false-positive counts;
-- [ ] summarize raw union vs semantic direct/adjacent/noise/insufficient counts;
-- [ ] summarize per-query contribution and overlap/Jaccard descriptors;
-- [ ] expose bounded zero-confirmed state without claiming absolute market absence.
+- [x] create hash-bound analyst review artifact;
+- [x] support `confirmed_direct / adjacent / not_direct / unresolved`;
+- [x] calculate review coverage and false-positive counts;
+- [x] summarize raw union vs semantic direct/adjacent/noise/insufficient counts;
+- [x] summarize per-query contribution and overlap/Jaccard descriptors;
+- [x] expose bounded zero-confirmed state without claiming absolute market absence.
 
-### 0.3-P5 — Cross-thesis comparison
+Review:
+[`docs/history/reaper-0.3-p4-review-2026-09-02.md`](docs/history/reaper-0.3-p4-review-2026-09-02.md).
+
+### 0.3-P5 — Cross-thesis comparison — NEXT TOOLING STEP
 
 - [ ] stable declaration-order rows;
 - [ ] direct evidence never silently replaced with adjacent evidence;

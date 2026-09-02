@@ -1,0 +1,98 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "satisfying-destruction-p7-2026-09-02",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 100,
+    "min_lifetime_ratings_per_day": 5.0
+  },
+  "theses": [
+    {
+      "thesis_id": "satisfying-destruction",
+      "thesis_version": 1,
+      "label": "simple destruction x ordinary breakable objects",
+      "queries": [
+        "разбей предметы",
+        "ломай предметы",
+        "разбей всё",
+        "разнеси всё",
+        "разрушай предметы",
+        "круши предметы",
+        "симулятор разрушений предметов",
+        "разбей стекло",
+        "разбей посуду",
+        "разбей бутылки",
+        "сломай технику",
+        "разбей мебель",
+        "разрушение вещей",
+        "кликер разрушений",
+        "тапай чтобы разбить",
+        "break objects",
+        "smash objects",
+        "destroy objects",
+        "break everything",
+        "smash everything",
+        "satisfying destruction",
+        "tap to break",
+        "click to destroy",
+        "break glass",
+        "smash bottles",
+        "break electronics",
+        "destroy furniture"
+      ],
+      "semantic": {
+        "theme_terms": [
+          "предмет",
+          "вещ",
+          "object",
+          "thing",
+          "everything",
+          "всё",
+          "стекл",
+          "glass",
+          "посуд",
+          "dish",
+          "бутыл",
+          "bottle",
+          "техник",
+          "electronic",
+          "мебел",
+          "furniture"
+        ],
+        "mechanic_terms": [
+          "разб",
+          "лом",
+          "разруш",
+          "круш",
+          "разнес",
+          "break",
+          "smash",
+          "destroy",
+          "shatter",
+          "crush"
+        ],
+        "reward_grammar_terms": [
+          "оскол",
+          "трещ",
+          "разбит",
+          "сломан",
+          "разрушен",
+          "damage",
+          "damaged",
+          "broken",
+          "destroyed",
+          "shatter"
+        ]
+      }
+    }
+  ]
+}

@@ -64,13 +64,7 @@ jobs:
       - name: Verify P7 V3 intelligence against source ZIP
         run: |
           set -euo pipefail
-          artifact_path="$(python - <<'PY'
-import json
-from pathlib import Path
-value = json.loads(Path('p7-v3-build-result.json').read_text())
-print(value['artifact_path'])
-PY
-)"
+          artifact_path="$(python -c 'import json; print(json.load(open("p7-v3-build-result.json"))["artifact_path"])')"
           test -f "$artifact_path"
           yandex-reaper-thesis verify "$artifact_path" \
             --current /tmp/current-v3.zip \

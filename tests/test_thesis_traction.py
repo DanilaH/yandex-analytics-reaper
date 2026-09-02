@@ -429,6 +429,11 @@ def test_suite_cohort_deduplicates_cross_thesis_members_and_preserves_order() ->
 
     assert validate_traction_features(report) == report
     assert [item.thesis_id for item in report.theses] == ["alpha", "beta"]
+    coverage = report.theses[0].rating_count_coverage
+    assert coverage.member_count == 3
+    assert coverage.observed_count == 3
+    assert coverage.missing_count == 0
+    assert coverage.coverage_ratio == pytest.approx(1.0)
     assert [row.platform_listing_id for row in report.theses[0].rows] == list(_IDS[:3])
     assert [row.platform_listing_id for row in report.theses[1].rows] == [_IDS[1], _IDS[3]]
 
@@ -618,6 +623,10 @@ def test_missing_current_rating_never_becomes_zero_velocity() -> None:
         _suite(),
         current=_current_evidence(rating_counts=(None, 25, 100, 10)),
     )
+    coverage = report.theses[0].rating_count_coverage
+    assert coverage.observed_count == 2
+    assert coverage.missing_count == 1
+    assert coverage.coverage_ratio == pytest.approx(2 / 3)
     row = report.theses[0].rows[0]
     assert row.rating_count is None
     assert row.lifetime_pace_status == "missing_rating_count"

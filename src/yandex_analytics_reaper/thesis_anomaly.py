@@ -47,10 +47,20 @@ class AnomalyEvaluationV1(BaseModel):
         configured = tuple(status for status in statuses if status != "not_configured")
         if not configured:
             raise ValueError("enabled anomaly evaluation requires at least one configured gate")
-        expected = all(status == "pass" for status in configured)
-        if self.is_anomaly_candidate != expected:
+        if self.is_anomaly_candidate != all(status == "pass" for status in configured):
             raise ValueError("anomaly candidate flag does not match configured gate statuses")
         return self
+
+
+class AnomalyCandidateV1(BaseModel):
+    """Review-queue entry carrying the exact descriptive facts used for v1 ordering."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    platform_listing_id: str
+    lifetime_ratings_per_day: float | None = Field(default=None, ge=0.0)
+    rating_count: int | None = Field(default=None, ge=0)
+    listing_age_days: float | None = Field(default=None, ge=0.0)
 
 
 class ThesisAnomalyQueue(BaseModel):
@@ -60,26 +70,30 @@ class ThesisAnomalyQueue(BaseModel):
     thesis_version: int = Field(ge=1)
     status: AnomalyQueueStatusV1
     evaluations: tuple[AnomalyEvaluationV1, ...]
-    candidate_listing_ids: tuple[str, ...]
+    candidates: tuple[AnomalyCandidateV1, ...]
 
     @model_validator(mode="after")
     def validate_queue(self) -> Self:
         evaluation_ids = [item.platform_listing_id for item in self.evaluations]
         if len(set(evaluation_ids)) != len(evaluation_ids):
             raise ValueError("anomaly evaluations must have unique listing IDs")
-        candidate_ids = [
+        candidate_ids = [item.platform_listing_id for item in self.candidates]
+        if len(set(candidate_ids)) != len(candidate_ids):
+            raise ValueError("anomaly candidate listing IDs must be unique")
+        if self.status == "disabled":
+            if self.evaluations or self.candidates:
+                raise ValueError("disabled anomaly queue must be empty")
+            return self
+
+        qualified_ids = {
             item.platform_listing_id
             for item in self.evaluations
             if item.is_anomaly_candidate
-        ]
-        if self.status == "disabled":
-            if self.evaluations or self.candidate_listing_ids:
-                raise ValueError("disabled anomaly queue must be empty")
-            return self
-        if set(self.candidate_listing_ids) != set(candidate_ids):
+        }
+        if set(candidate_ids) != qualified_ids:
             raise ValueError("candidate queue must contain exactly qualifying evaluations")
-        if len(set(self.candidate_listing_ids)) != len(self.candidate_listing_ids):
-            raise ValueError("candidate queue listing IDs must be unique")
+        if self.candidates != tuple(sorted(self.candidates, key=_candidate_sort_key)):
+            raise ValueError("anomaly candidates do not follow frozen v1 queue ordering")
         return self
 
 
@@ -157,22 +171,30 @@ def build_fresh_anomaly_queue(
                     thesis_version=traction_set.thesis_version,
                     status="disabled",
                     evaluations=(),
-                    candidate_listing_ids=(),
+                    candidates=(),
                 )
             )
             continue
 
         evaluations = tuple(_evaluate_row(row, policy) for row in traction_set.rows)
-        row_by_id = {row.platform_listing_id: row for row in traction_set.rows}
-        candidates = [item for item in evaluations if item.is_anomaly_candidate]
-        candidates.sort(key=lambda item: _candidate_sort_key(row_by_id[item.platform_listing_id]))
+        evaluation_by_id = {item.platform_listing_id: item for item in evaluations}
+        candidates = tuple(
+            sorted(
+                (
+                    _candidate_from_row(row)
+                    for row in traction_set.rows
+                    if evaluation_by_id[row.platform_listing_id].is_anomaly_candidate
+                ),
+                key=_candidate_sort_key,
+            )
+        )
         thesis_queues.append(
             ThesisAnomalyQueue(
                 thesis_id=traction_set.thesis_id,
                 thesis_version=traction_set.thesis_version,
                 status="enabled",
                 evaluations=evaluations,
-                candidate_listing_ids=tuple(item.platform_listing_id for item in candidates),
+                candidates=candidates,
             )
         )
 
@@ -229,8 +251,8 @@ def _evaluate_row(
         percentile_status,
         delta_status,
     )
-    configured_statuses = tuple(value for value in statuses if value != "not_configured")
-    if not configured_statuses:
+    configured = tuple(value for value in statuses if value != "not_configured")
+    if not configured:
         raise ThesisIntelligenceError("anomaly policy unexpectedly has no configured gates")
     return AnomalyEvaluationV1(
         platform_listing_id=row.platform_listing_id,
@@ -239,7 +261,7 @@ def _evaluate_row(
         min_lifetime_ratings_per_day_status=lifetime_status,
         min_age_bucket_percentile_status=percentile_status,
         min_observed_rating_delta_per_day_status=delta_status,
-        is_anomaly_candidate=all(value == "pass" for value in configured_statuses),
+        is_anomaly_candidate=all(value == "pass" for value in configured),
     )
 
 
@@ -281,12 +303,21 @@ def _observed_delta_gate(
     return "pass" if value >= threshold else "fail"
 
 
+def _candidate_from_row(row: ThesisTractionRow) -> AnomalyCandidateV1:
+    return AnomalyCandidateV1(
+        platform_listing_id=row.platform_listing_id,
+        lifetime_ratings_per_day=row.lifetime_ratings_per_day,
+        rating_count=row.rating_count,
+        listing_age_days=row.listing_age_days,
+    )
+
+
 def _candidate_sort_key(
-    row: ThesisTractionRow,
+    candidate: AnomalyCandidateV1,
 ) -> tuple[bool, float, bool, int, bool, float, str]:
-    pace = row.lifetime_ratings_per_day
-    rating = row.rating_count
-    age = row.listing_age_days
+    pace = candidate.lifetime_ratings_per_day
+    rating = candidate.rating_count
+    age = candidate.listing_age_days
     return (
         pace is None,
         -(pace if pace is not None else 0.0),
@@ -294,5 +325,5 @@ def _candidate_sort_key(
         -(rating if rating is not None else 0),
         age is None,
         age if age is not None else 0.0,
-        row.platform_listing_id,
+        candidate.platform_listing_id,
     )

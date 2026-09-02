@@ -221,8 +221,8 @@ Full product/semantic plan:
 -> 0.3-P3 fresh anomaly queue — COMPLETE
 -> 0.3-P4 directness review + competitor quality — COMPLETE
 -> 0.3-P5 cross-thesis comparison — COMPLETE
--> 0.3-P6 thin CLI integration — NEXT TOOLING STEP
--> 0.3-P7 V3 replay + Satisfying Destruction live validation
+-> 0.3-P6 thin CLI integration — COMPLETE
+-> 0.3-P7 V3 replay + Satisfying Destruction live validation — NEXT TOOLING STEP
 -> package/release 0.3.0
 ```
 
@@ -298,17 +298,26 @@ Review:
 Review:
 [`docs/history/reaper-0.3-p5-review-2026-09-02.md`](docs/history/reaper-0.3-p5-review-2026-09-02.md).
 
-### 0.3-P6 — CLI integration — NEXT TOOLING STEP
+### 0.3-P6 — CLI integration — COMPLETE 2026-09-02
 
-- [ ] `yandex-reaper-thesis run` delegates current collection to existing experiment runner;
-- [ ] `run/build` accept optional repeatable prior experiment artifact inputs;
-- [ ] collection failure surfaces the existing resume path;
-- [ ] `build` reconstructs intelligence from verified frozen current/prior artifacts without network access;
-- [ ] `build` can add analyst review artifacts without recollecting Yandex data;
-- [ ] `verify` checks current artifact, prior artifact ordering/hashes, report and member hashes;
-- [ ] post-processing failure cannot mutate any source experiment artifact.
+- [x] `yandex-reaper-thesis run` delegates current collection to existing experiment runner;
+- [x] `run/build` accept optional repeatable prior experiment artifact inputs;
+- [x] collection failure surfaces the existing resume path;
+- [x] `build` reconstructs intelligence from verified frozen current/prior artifacts without network access;
+- [x] `build` can add hash-bound analyst review artifacts without recollecting Yandex data;
+- [x] `verify` checks package members/hashes and performs a source-bound deterministic rebuild;
+- [x] prior artifact inputs canonicalize independently of CLI argument order;
+- [x] final create-only identity includes `build_input_hash` so review-only rebuilds cannot collide;
+- [x] post-processing failure cannot mutate any source experiment artifact.
 
-### 0.3-P7 — Real-data validation + release
+Review:
+[`docs/history/reaper-0.3-p6-review-2026-09-02.md`](docs/history/reaper-0.3-p6-review-2026-09-02.md).
+
+P4 review artifacts are intentionally accepted by offline `build`, not by fresh `run`: a review
+binds an already-existing semantic-report hash, so the honest workflow is `run -> inspect -> review
+-> build same current ZIP` without recollecting Yandex data.
+
+### 0.3-P7 — Real-data validation + release — NEXT TOOLING STEP
 
 Replay existing V3 evidence where possible:
 

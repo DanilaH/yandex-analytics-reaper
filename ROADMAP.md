@@ -206,7 +206,7 @@ Full product/semantic plan:
 0.3 approved scope is limited to:
 
 1. thesis-suite declaration and deterministic compilation onto existing experiment semantics;
-2. age-normalized traction features plus real observed rating deltas only when historical evidence exists;
+2. age-normalized traction plus real rating deltas only from explicitly bound frozen prior experiment artifacts;
 3. explicit-policy fresh anomaly review queue;
 4. hash-bound analyst directness review plus competitor-set quality summary;
 5. deterministic cross-thesis JSON/CSV/Markdown comparison;
@@ -217,7 +217,7 @@ Full product/semantic plan:
 ```text
 0.3-P0 contract freeze
 -> 0.3-P1 thesis-suite compiler + artifact bindings
--> 0.3-P2 traction features + bounded historical delta read
+-> 0.3-P2 traction features + frozen prior-artifact delta support
 -> 0.3-P3 fresh anomaly queue
 -> 0.3-P4 directness review + competitor quality
 -> 0.3-P5 cross-thesis comparison
@@ -231,6 +231,7 @@ Full product/semantic plan:
 Before implementation:
 
 - [ ] freeze exact `thesis-suite-v1` schema;
+- [ ] freeze current/prior experiment artifact binding schema and deterministic history selection rules;
 - [ ] freeze age-bucket boundary semantics;
 - [ ] freeze too-young lifetime-pace behavior;
 - [ ] freeze anomaly gate pass/fail/unknown semantics;
@@ -244,7 +245,8 @@ Before implementation:
 - [ ] map each thesis deterministically to one existing query-family/comparable identity;
 - [ ] compile the suite to the current experiment manifest semantics without changing search behavior;
 - [ ] compile M1.7 semantic declarations deterministically;
-- [ ] bind the exact immutable experiment artifact by hash;
+- [ ] bind the exact immutable current experiment artifact by hash;
+- [ ] support an ordered set of optional prior experiment artifact hashes for longitudinal evidence;
 - [ ] add create-only thesis-intelligence artifact identity/verification primitives;
 - [ ] preserve exact thesis/query declaration order.
 
@@ -255,16 +257,19 @@ Before implementation:
 - [ ] expose `ratingCount` coverage separately from numeric values;
 - [ ] derive lifetime ratings/day only when method prerequisites are met;
 - [ ] derive suite-relative age-bucket cohort percentile with cohort definition/size;
-- [ ] read previous `rating_count` observations through a narrow existing-storage read API;
-- [ ] expose observed rating delta/day only when two trustworthy observations exist;
+- [ ] verify/read `rating_count` observations from explicitly supplied prior experiment artifacts;
+- [ ] select the latest eligible prior point deterministically and bind its artifact/observation identity;
+- [ ] expose observed rating delta/day only when two trustworthy frozen observations exist;
 - [ ] preserve negative deltas/revision states rather than clamping;
-- [ ] avoid schema migration unless a measured storage requirement proves one necessary.
+- [ ] never consult ambient mutable local SQLite state during deterministic `build`;
+- [ ] no schema migration unless a separate measured requirement later proves one necessary.
 
 ### 0.3-P3 — Fresh anomaly queue
 
 - [ ] require explicit anomaly thresholds in analyst input;
 - [ ] emit traceable gate reason codes;
 - [ ] treat missing configured evidence as unknown/fail according to the frozen contract, never as zero;
+- [ ] permit a longitudinal velocity gate only against bound prior-artifact evidence;
 - [ ] deterministic queue ordering without opportunity score;
 - [ ] preserve the distinction between anomaly candidate and successful game.
 
@@ -282,18 +287,20 @@ Before implementation:
 - [ ] stable declaration-order rows;
 - [ ] direct evidence never silently replaced with adjacent evidence;
 - [ ] expose confirmed direct/fresh direct/anomaly/coverage/query-quality facts;
+- [ ] expose longitudinal coverage only for explicitly bound prior artifacts;
 - [ ] include listing IDs/provenance with best-traction facts;
 - [ ] emit canonical JSON plus analyst-readable CSV/Markdown;
 - [ ] no automatic winner or BUILD/WATCH/SKIP.
 
 ### 0.3-P6 — CLI integration
 
-- [ ] `yandex-reaper-thesis run` delegates collection to existing experiment runner;
+- [ ] `yandex-reaper-thesis run` delegates current collection to existing experiment runner;
+- [ ] `run/build` accept optional repeatable prior experiment artifact inputs;
 - [ ] collection failure surfaces the existing resume path;
-- [ ] `build` reconstructs intelligence from a frozen verified experiment artifact without network access;
+- [ ] `build` reconstructs intelligence from verified frozen current/prior artifacts without network access;
 - [ ] `build` can add analyst review artifacts without recollecting Yandex data;
-- [ ] `verify` checks source artifact, report and member hashes;
-- [ ] post-processing failure cannot mutate the source experiment artifact.
+- [ ] `verify` checks current artifact, prior artifact ordering/hashes, report and member hashes;
+- [ ] post-processing failure cannot mutate any source experiment artifact.
 
 ### 0.3-P7 — Real-data validation + release
 
@@ -306,6 +313,11 @@ Replay existing V3 evidence where possible:
 Run one new focused thesis sweep:
 
 - [ ] Satisfying Destruction — determine whether the discovered anomaly represents a broader cheap grammar or one exceptional listing.
+
+Longitudinal validation:
+
+- [ ] zero-history build correctly reports no prior observation rather than fake velocity;
+- [ ] bind at least one prior experiment artifact in a fixture or real repeated sweep and verify deterministic positive/negative/no-change delta handling.
 
 Release gate:
 
@@ -335,7 +347,8 @@ distributed workers
 new generic workflow framework
 broad taxonomy redesign
 market-size estimation
-fabricated 7d/30d/90d velocity without repeated observations
+ambient mutable local-DB history during deterministic build
+fabricated 7d/30d/90d velocity without repeated frozen observations
 ```
 
 Potential `0.3.1+` work such as controlled query expansion, cross-thesis reuse diagnostics, and

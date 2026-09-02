@@ -261,7 +261,12 @@ class CompetitorQualityV1(BaseModel):
             raise ValueError("reviewed direct candidates cannot exceed semantic direct candidates")
         if false_positive < self.adjacent_after_review_count:
             raise ValueError("false-positive count must include adjacent-after-review rows")
-        if self.confirmed_direct_count + false_positive + self.unresolved_direct_candidate_count != reviewed:
+        reviewed_sum = (
+            self.confirmed_direct_count
+            + false_positive
+            + self.unresolved_direct_candidate_count
+        )
+        if reviewed_sum != reviewed:
             raise ValueError("review verdict counts do not sum to reviewed direct candidates")
         if not self.review_artifact_present and reviewed != 0:
             raise ValueError("review counts require a review artifact")

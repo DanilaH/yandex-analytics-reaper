@@ -27,13 +27,6 @@ ANALYST_SEMANTIC_CLASSIFIER_VERSION: Literal["lexical-directness-v1"] = (
     "lexical-directness-v1"
 )
 _YANDEX_LISTING_PREFIX = "yandex_games:"
-_TEXT_FIELDS: tuple[str, ...] = (
-    "title",
-    "description",
-    "instruction",
-    "seo_description",
-    "categories_names",
-)
 _TAG_RE = re.compile(r"<[^>]+>")
 _WHITESPACE_RE = re.compile(r"\s+")
 
@@ -51,6 +44,13 @@ SemanticTextField = Literal[
     "seo_description",
     "categories_names",
 ]
+_TEXT_FIELDS: tuple[SemanticTextField, ...] = (
+    "title",
+    "description",
+    "instruction",
+    "seo_description",
+    "categories_names",
+)
 
 
 class AnalystSemanticError(ValueError):
@@ -243,7 +243,11 @@ class AnalystSemanticEnricher:
         for binding in snapshot.rich_metadata:
             if binding.request_key != "catalogue.get_games":
                 continue
-            if binding.parser_name != type(parser).__name__ or binding.parser_version != parser.version:
+            parser_mismatch = (
+                binding.parser_name != type(parser).__name__
+                or binding.parser_version != parser.version
+            )
+            if parser_mismatch:
                 raise AnalystSemanticError(
                     "semantic enrichment requires the same get_games parser version as the frozen "
                     f"snapshot; got {binding.parser_name}@{binding.parser_version}, "
@@ -270,7 +274,7 @@ class AnalystSemanticEnricher:
                     )
                 candidate = (binding.retrieved_at, binding.raw_snapshot_id, details)
                 current = latest.get(listing_id)
-                if current is None or candidate[:2] > current[:2]:
+                if current is None or (candidate[0], candidate[1]) > (current[0], current[1]):
                     latest[listing_id] = candidate
         return latest
 
@@ -303,7 +307,7 @@ class AnalystSemanticEnricher:
                 raw_snapshot_id=raw_snapshot_id,
                 retrieved_at=_iso(retrieved_at),
                 source_object_path=details.source_object_path,
-                parser_name=type(YandexGetGamesParser()).__name__,
+                parser_name=YandexGetGamesParser.__name__,
                 parser_version=YandexGetGamesParser.version,
             )
 
@@ -315,10 +319,11 @@ class AnalystSemanticEnricher:
             if thesis.reward_grammar is None
             else _evaluate_dimension(fields, thesis.reward_grammar)
         )
+        external_app_id = _external_app_id(listing_id)
         return AnalystSemanticListingRow(
             platform_listing_id=listing_id,
-            external_app_id=_external_app_id(listing_id),
-            canonical_url=f"https://yandex.ru/games/app/{_external_app_id(listing_id)}",
+            external_app_id=external_app_id,
+            canonical_url=f"https://yandex.ru/games/app/{external_app_id}",
             comparable_set_ids=set_ids,
             source=source,
             corpus=corpus,

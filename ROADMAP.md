@@ -24,9 +24,10 @@ M0 evidence foundation — COMPLETE
 -> M1 analyst workbench / START ANALYSIS — COMPLETE
 -> M1.5 Reaper 0.2.0 / Runner v1.2 — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
+-> M1.7 semantic/directness triage — ACTIVE, narrow parallel bottleneck fix
 -> M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
 -> P1 production-ready micro-spec — COMPLETE
--> P2 cheapest credible build/release probe — NEXT
+-> P2 cheapest credible build/release probe — NEXT PRIMARY PATH
 -> observe real behavior
 -> calibrate, re-theme or kill the thesis
 ```
@@ -119,6 +120,54 @@ Standoff/Brawl/IP case clone, and full 3D lucky-block/brainrot clone.
 
 Rationale:
 [`research/mystery-unboxing-collection-sweep-v1/opportunity-decomposition.md`](research/mystery-unboxing-collection-sweep-v1/opportunity-decomposition.md).
+
+## M1.7 — Semantic / directness triage — ACTIVE 2026-09-02
+
+Later thesis-oriented sweeps exposed a repeated operational bottleneck: Yandex search is fuzzy
+enough that a large search union can contain many semantically irrelevant listings, while the rich
+metadata path already stores description/instruction/category/tag evidence that is not surfaced in
+the analyst export.
+
+M1.7 is a **narrow bottleneck fix**, not a return to broad taxonomy work.
+
+Scope:
+
+```text
+frozen AnalystSnapshotReport
++ versioned mechanic × theme thesis terms
++ existing catalogue.get_games raw metadata
+-> reproducible semantic corpus
+-> theme/mechanic/reward lexical evidence
+-> direct_candidate / adjacent_candidate / noise_candidate / insufficient_evidence
+-> evidence snippets + raw provenance
+```
+
+Constraints:
+
+- no new Yandex endpoint or broad collection source;
+- no embeddings/LLM/API dependency;
+- no opaque opportunity/directness score;
+- no claim that lexical `direct_candidate` is a confirmed gameplay competitor;
+- no rewrite of comparable-set v1 or historical taxonomy;
+- no SQLite/domain schema migration solely to carry source-specific descriptive text;
+- the artifact must replay frozen raw evidence and remain hash-verifiable;
+- P2 remains the next primary product path.
+
+Specification:
+[`docs/spec/analyst-semantic-enrichment.md`](docs/spec/analyst-semantic-enrichment.md).
+
+Definition of Done:
+
+- [x] versioned semantic thesis declaration;
+- [x] frozen `get_games` semantic corpus replay;
+- [x] transparent dimension matching + evidence snippets;
+- [x] conservative candidate-level directness labels;
+- [x] deterministic JSON report + analyst-readable CSV;
+- [x] CLI entry point;
+- [ ] focused replay/classification tests pass in CI;
+- [ ] full repository quality gate passes;
+- [ ] one real thesis artifact demonstrates useful reduction of fuzzy search noise;
+- [ ] decision methodology is synchronized with the shipped contract.
 
 ---
 
@@ -250,7 +299,7 @@ hypothesis according to the frozen M2 conditions.
 Potential later work remains valid but is not automatically next:
 
 - broader candidate discovery automation;
-- taxonomy validation/classification;
+- broad taxonomy validation/classification beyond the narrow M1.7 triage contract;
 - historical backtesting;
 - external trend sources;
 - portfolio calibration;
@@ -269,11 +318,14 @@ another runner redesign
 scheduler
 dashboard
 generic orchestration framework
-taxonomy expansion
+taxonomy expansion beyond the approved M1.7 directness triage
 ML/ranking
 broad external-source integration
 extra gameplay/meta systems
 ```
 
-The current job is to test whether a **very cheap, original, reward-first collectible opener** can
-produce repeat-opening behavior with real Yandex traffic.
+M1.7 is allowed only because it reuses already-collected evidence to remove a repeated manual
+classification bottleneck. It must not grow into generic taxonomy infrastructure or delay P2.
+
+The primary product job is still to test whether a **very cheap, original, reward-first collectible
+opener** can produce repeat-opening behavior with real Yandex traffic.

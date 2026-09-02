@@ -25,7 +25,6 @@ def _run(args: argparse.Namespace) -> None:
     result = run_thesis_intelligence(
         Path(args.suite),
         prior_artifact_paths=_paths(args.prior),
-        review_paths=_paths(args.review),
         query_workers=args.workers,
     )
     print(result.model_dump_json(indent=2))
@@ -66,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help=(
             "Compile a thesis suite, delegate collection to the existing experiment runner, "
-            "then build intelligence."
+            "then build an unreviewed intelligence artifact."
         ),
     )
     run.add_argument("suite", help="Path to one thesis-suite-v1 JSON declaration.")
@@ -75,12 +74,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="Prior immutable experiment ZIP. Repeat for multiple history artifacts.",
-    )
-    run.add_argument(
-        "--review",
-        action="append",
-        default=[],
-        help="Analyst directness-review JSON. Repeat for multiple theses.",
     )
     run.add_argument(
         "--workers",
@@ -93,7 +86,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     build = sub.add_parser(
         "build",
-        help="Build intelligence offline from one verified current experiment ZIP.",
+        help=(
+            "Build intelligence offline from one verified current experiment ZIP; "
+            "this is the command that accepts hash-bound analyst reviews."
+        ),
     )
     build.add_argument("suite", help="Path to one thesis-suite-v1 JSON declaration.")
     build.add_argument("current", help="Current immutable experiment ZIP.")

@@ -420,7 +420,7 @@ def make_semantic(
                 comparable_set_ids=(f"{suite.suite_id}--{thesis_id}",),
                 source=AnalystSemanticSourceReference(
                     raw_snapshot_id=f"raw:semantic:{thesis_id}:{index}",
-                    retrieved_at=BASE,
+                    retrieved_at=BASE.isoformat().replace("+00:00", "Z"),
                     source_object_path=f"$.games[{index}]",
                     parser_name="YandexGetGamesParser",
                     parser_version="2",

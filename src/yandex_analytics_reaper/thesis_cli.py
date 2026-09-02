@@ -64,7 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser(
         "run",
-        help="Compile a thesis suite, delegate collection to the existing experiment runner, then build intelligence.",
+        help=(
+            "Compile a thesis suite, delegate collection to the existing experiment runner, "
+            "then build intelligence."
+        ),
     )
     run.add_argument("suite", help="Path to one thesis-suite-v1 JSON declaration.")
     run.add_argument(

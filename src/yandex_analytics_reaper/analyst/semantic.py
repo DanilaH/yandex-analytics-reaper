@@ -81,7 +81,7 @@ class AnalystSemanticRule(BaseModel):
 
 
 class AnalystSemanticThesisDeclaration(BaseModel):
-    """Versioned lexical triage definition for one mechanic × theme thesis."""
+    """Versioned lexical triage definition for one mechanic x theme thesis."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 

@@ -411,9 +411,9 @@ def build_thesis_comparison(
     canonical_prior_hashes = tuple(
         item.artifact_sha256 for item in reports[0].prior_experiments
     )
-    for report in reports:
+    for thesis_report in reports:
         report_prior_hashes = tuple(
-            item.artifact_sha256 for item in report.prior_experiments
+            item.artifact_sha256 for item in thesis_report.prior_experiments
         )
         if report_prior_hashes != canonical_prior_hashes:
             raise ThesisIntelligenceError(
@@ -421,20 +421,24 @@ def build_thesis_comparison(
             )
 
     rows: list[ThesisComparisonRow] = []
-    for thesis, report in zip(suite.theses, reports, strict=True):
+    for thesis, thesis_report in zip(suite.theses, reports, strict=True):
         semantic = semantic_by_id[thesis.thesis_id]
-        if report.semantic_report_content_hash != semantic.content_hash:
+        if thesis_report.semantic_report_content_hash != semantic.content_hash:
             raise ThesisIntelligenceError(
                 "thesis report semantic hash does not match supplied report"
             )
         review = review_by_id.get(thesis.thesis_id)
         review_hash = None if review is None else review.content_hash
-        if review_hash != report.review_content_hash:
+        if review_hash != thesis_report.review_content_hash:
             raise ThesisIntelligenceError(
                 "thesis report review hash does not match supplied review"
             )
-        _validate_report_against_semantic_and_review(report, semantic, review)
-        rows.append(_comparison_row(thesis, report, semantic, review))
+        _validate_report_against_semantic_and_review(
+            thesis_report,
+            semantic,
+            review,
+        )
+        rows.append(_comparison_row(thesis, thesis_report, semantic, review))
 
     payload = ThesisComparisonPayload(
         suite_id=suite.suite_id,
@@ -444,12 +448,12 @@ def build_thesis_comparison(
         thesis_report_hashes=tuple(item.content_hash for item in reports),
         rows=tuple(rows),
     )
-    report = ThesisComparisonReport(
+    comparison_report = ThesisComparisonReport(
         **payload.model_dump(mode="python"),
         content_hash=canonical_model_hash(payload),
     )
     return validate_thesis_comparison(
-        report,
+        comparison_report,
         suite=suite,
         thesis_reports=reports,
     )

@@ -1,6 +1,6 @@
 # Reaper 0.3 P7 real-data validation — 2026-09-02
 
-Status: **PASS pending final repository CI and decision-ledger synchronization**.
+Status: **PASS / ACCEPTED FOR MERGE**.
 
 This note records the real-data release validation for Reaper `0.3.0 / Thesis Intelligence`.
 It is evidence about the tool contract and reviewed Yandex surface, not a profitability or market-size claim.
@@ -160,12 +160,17 @@ P7 does not justify reordering the existing production queue by itself.
 - It is not promoted above the approved-next candidate because the fresh direct evidence is still
   concentrated in one breakout rather than a repeated recent winner pattern.
 
-## 6. Remaining mechanical release gates
+## 6. Mechanical release gates — PASS
 
-Before `0.3.0` is accepted on `main`:
+- decision-ledger synchronization merged in `DanilaH/decisions` as squash commit
+  `f8cddc223fe6789c9d8ae562f1aefd4ba9fb35ac`;
+- code-bearing release head `171e73ae7a58d6add0e9b55ee5329a7040ecb012` passed CI run
+  `33657052686` / CI #343: Ruff, strict mypy, full pytest and repository coverage gate all PASS;
+- the explicit no-change longitudinal regression is included in that passing run;
+- package and runtime version are both `0.3.0`;
+- `ROADMAP.md` marks R0.3/P7 complete and points to this validation note;
+- exact P7 thesis declarations are preserved in the repository;
+- no release-blocking measurement-honesty issue remains.
 
-- repository `ruff`, strict `mypy`, full `pytest` and coverage gate must pass with the explicit
-  no-change regression;
-- package version/provenance must become `0.3.0` consistently;
-- `ROADMAP.md` must mark P7/release complete and point to this note;
-- durable decision docs must be synchronized with the bounded P7 conclusions.
+This status change is documentation-only. The final PR head must still pass the same repository CI
+before merge; that final CI is the authoritative merge gate.

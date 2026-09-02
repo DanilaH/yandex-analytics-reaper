@@ -86,15 +86,17 @@ def main() -> None:
             f"unexpected={sorted(reviewed_ids - expected_ids)}"
         )
 
+    decision_by_id = {item[0]: item[1:] for item in DECISIONS}
     rows = tuple(
         AnalystDirectnessReviewRow(
-            platform_listing_id=listing_id,
-            analyst_verdict=verdict,
-            reason_code=reason_code,
-            note=note,
+            platform_listing_id=listing.platform_listing_id,
+            analyst_verdict=decision_by_id[listing.platform_listing_id][0],
+            reason_code=decision_by_id[listing.platform_listing_id][1],
+            note=decision_by_id[listing.platform_listing_id][2],
             reviewed_at=REVIEWED_AT,
         )
-        for listing_id, verdict, reason_code, note in DECISIONS
+        for listing in semantic.listings
+        if listing.directness == "direct_candidate"
     )
     payload = AnalystDirectnessReviewPayload(
         suite_id=suite.suite_id,

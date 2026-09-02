@@ -3,13 +3,21 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 from typing import Literal, Self
-from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
+from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from yandex_analytics_reaper.analyst import (
     AnalystSemanticEnricher,
@@ -19,13 +27,11 @@ from yandex_analytics_reaper.analyst import (
     write_analyst_semantic_csv,
 )
 from yandex_analytics_reaper.analyst_workflow import (
-    AnalystExperimentError,
     AnalystExperimentResult,
     find_repository_root,
     run_analyst_experiment,
 )
 from yandex_analytics_reaper.experiment_recovery import (
-    ExperimentRecoveryError,
     prepare_temporary_artifact,
     publish_artifact_create_only,
 )
@@ -52,7 +58,6 @@ from yandex_analytics_reaper.thesis_directness import (
 )
 from yandex_analytics_reaper.thesis_intelligence import (
     CompiledThesisSuite,
-    ExperimentArtifactBinding,
     ThesisIntelligenceBuildIdentity,
     ThesisIntelligenceError,
     ThesisReviewBinding,
@@ -134,11 +139,10 @@ class ThesisIntelligenceArtifactManifest(BaseModel):
             raise ValueError("intelligence artifact file paths must be sorted")
         if len(paths) != len(set(paths)):
             raise ValueError("intelligence artifact file paths must be unique")
-        if len(set(self.prior_experiment_artifact_sha256s)) != len(
-            self.prior_experiment_artifact_sha256s
-        ):
+        prior_hashes = self.prior_experiment_artifact_sha256s
+        if len(prior_hashes) != len(set(prior_hashes)):
             raise ValueError("prior experiment artifact hashes must be unique")
-        if self.current_experiment_artifact_sha256 in self.prior_experiment_artifact_sha256s:
+        if self.current_experiment_artifact_sha256 in prior_hashes:
             raise ValueError("current artifact cannot also be a prior artifact")
         return self
 
@@ -200,15 +204,21 @@ def load_thesis_suite(path: Path) -> ThesisSuiteDeclaration:
         raise ThesisIntelligenceError(f"invalid thesis suite: {exc}") from exc
 
 
-def load_directness_reviews(paths: Sequence[Path]) -> tuple[AnalystDirectnessReviewReport, ...]:
+def load_directness_reviews(
+    paths: Sequence[Path],
+) -> tuple[AnalystDirectnessReviewReport, ...]:
     reviews: list[AnalystDirectnessReviewReport] = []
     for path in paths:
         try:
             reviews.append(
-                AnalystDirectnessReviewReport.model_validate_json(path.read_text(encoding="utf-8"))
+                AnalystDirectnessReviewReport.model_validate_json(
+                    path.read_text(encoding="utf-8")
+                )
             )
         except (OSError, ValidationError, ValueError) as exc:
-            raise ThesisIntelligenceError(f"invalid directness review {path}: {exc}") from exc
+            raise ThesisIntelligenceError(
+                f"invalid directness review {path}: {exc}"
+            ) from exc
     return tuple(reviews)
 
 
@@ -219,7 +229,7 @@ def reconstruct_thesis_intelligence(
     prior_artifact_paths: Sequence[Path] = (),
     reviews: Sequence[AnalystDirectnessReviewReport] = (),
 ) -> ThesisIntelligenceBundle:
-    """Rebuild all 0.3 intelligence deterministically from frozen experiment ZIPs."""
+    """Rebuild 0.3 intelligence only from explicit frozen source artifacts."""
     suite = ThesisSuiteDeclaration.model_validate(suite.model_dump())
     compiled = compile_thesis_suite(suite)
     current = load_bound_experiment_evidence(
@@ -227,8 +237,9 @@ def reconstruct_thesis_intelligence(
         role="current",
         expected_suite=suite,
     )
-    prior_evidence = tuple(
-        load_bound_experiment_evidence(path, role="prior") for path in prior_artifact_paths
+    supplied_priors = tuple(
+        load_bound_experiment_evidence(path, role="prior")
+        for path in prior_artifact_paths
     )
     semantic_reports = _build_semantics_from_current_artifact(
         current_artifact_path,
@@ -247,13 +258,21 @@ def reconstruct_thesis_intelligence(
     identity = build_intelligence_identity(
         suite,
         current_experiment=current.binding,
-        prior_experiments=tuple(item.binding for item in prior_evidence),
+        prior_experiments=tuple(item.binding for item in supplied_priors),
         review_bindings=review_bindings,
+    )
+
+    prior_by_hash = {
+        item.binding.artifact_sha256: item for item in supplied_priors
+    }
+    canonical_priors = tuple(
+        prior_by_hash[binding.artifact_sha256]
+        for binding in identity.inputs.prior_experiments
     )
     traction = build_traction_features(
         suite,
         current=current,
-        priors=prior_evidence,
+        priors=canonical_priors,
     )
     anomaly = build_fresh_anomaly_queue(suite, traction)
     thesis_reports = build_thesis_intelligence_reports(
@@ -274,7 +293,7 @@ def reconstruct_thesis_intelligence(
         suite=suite,
         compiled=compiled,
         current=current,
-        priors=prior_evidence,
+        priors=canonical_priors,
         semantic_reports=semantic_reports,
         reviews=ordered_reviews,
         identity=identity,
@@ -293,7 +312,7 @@ def build_thesis_intelligence_artifact(
     reviews: Sequence[AnalystDirectnessReviewReport] = (),
     repository_root: Path,
 ) -> ThesisIntelligenceArtifactResult:
-    """Build, source-verify and create-only publish one final intelligence ZIP."""
+    """Build, source-verify, then create-only publish one intelligence ZIP."""
     bundle = reconstruct_thesis_intelligence(
         suite,
         current_artifact_path=current_artifact_path,
@@ -315,7 +334,7 @@ def build_thesis_intelligence_artifact(
             verified_manifest = verify_intelligence_package(temporary_artifact)
             if verified_manifest != manifest:
                 raise ThesisIntelligenceError(
-                    "packaged intelligence manifest does not match the build manifest"
+                    "packaged intelligence manifest does not match build manifest"
                 )
             verify_thesis_intelligence_artifact(
                 temporary_artifact,
@@ -342,12 +361,14 @@ def build_thesis_intelligence_artifact(
 def verify_intelligence_package(
     artifact_path: Path,
 ) -> ThesisIntelligenceArtifactManifest:
-    """Verify path safety, member set, sizes and hashes without trusting derived semantics."""
+    """Verify archive path safety plus the exact declared member/size/hash set."""
     try:
         with ZipFile(artifact_path, mode="r") as archive:
             names = archive.namelist()
             if len(names) != len(set(names)):
-                raise ThesisIntelligenceError("intelligence artifact contains duplicate paths")
+                raise ThesisIntelligenceError(
+                    "intelligence artifact contains duplicate paths"
+                )
             for name in names:
                 _validate_archive_path(name)
             if "artifact-manifest.json" not in names:
@@ -383,7 +404,7 @@ def verify_thesis_intelligence_artifact(
     current_artifact_path: Path,
     prior_artifact_paths: Sequence[Path] = (),
 ) -> ThesisIntelligenceVerificationResult:
-    """Source-bound rebuild verification against explicitly supplied frozen experiments."""
+    """Rebuild packaged intelligence from the explicitly supplied frozen sources."""
     manifest = verify_intelligence_package(artifact_path)
     try:
         with ZipFile(artifact_path, mode="r") as archive:
@@ -409,7 +430,10 @@ def verify_thesis_intelligence_artifact(
     with TemporaryDirectory(prefix="yandex-reaper-thesis-verify-") as directory:
         expected_root = Path(directory)
         _write_bundle_payload(bundle, expected_root)
-        expected_manifest = _build_intelligence_artifact_manifest(bundle, expected_root)
+        expected_manifest = _build_intelligence_artifact_manifest(
+            bundle,
+            expected_root,
+        )
         if expected_manifest != manifest:
             raise ThesisIntelligenceError(
                 "intelligence artifact manifest does not match source-bound rebuild"
@@ -420,7 +444,8 @@ def verify_thesis_intelligence_artifact(
                     relative = path.relative_to(expected_root).as_posix()
                     if archive.read(relative) != path.read_bytes():
                         raise ThesisIntelligenceError(
-                            f"intelligence member differs from source-bound rebuild: {relative}"
+                            "intelligence member differs from source-bound rebuild: "
+                            f"{relative}"
                         )
         except ThesisIntelligenceError:
             raise
@@ -445,7 +470,7 @@ def run_thesis_intelligence(
     review_paths: Sequence[Path] = (),
     query_workers: int = DEFAULT_QUERY_WORKERS,
 ) -> ThesisIntelligenceArtifactResult:
-    """Delegate collection to the 0.2 runner, then build intelligence from its frozen ZIP."""
+    """Delegate collection to the proven 0.2 runner, then build 0.3 intelligence."""
     suite = load_thesis_suite(suite_path)
     reviews = load_directness_reviews(review_paths)
     repository_root = find_repository_root(suite_path)
@@ -461,7 +486,9 @@ def run_thesis_intelligence(
             dir=repository_root,
             delete=False,
         ) as handle:
-            handle.write(compiled.experiment_manifest.model_dump_json(indent=2) + "\n")
+            handle.write(
+                compiled.experiment_manifest.model_dump_json(indent=2) + "\n"
+            )
             temporary_manifest = Path(handle.name)
         experiment_result = run_analyst_experiment(
             temporary_manifest,
@@ -497,7 +524,8 @@ def _build_semantics_from_current_artifact(
         )
         try:
             return tuple(
-                enricher.build(current.snapshot, thesis) for thesis in semantic_theses
+                enricher.build(current.snapshot, thesis)
+                for thesis in semantic_theses
             )
         except AnalystSemanticError as exc:
             raise ThesisIntelligenceError(
@@ -510,13 +538,17 @@ def _canonical_reviews(
     semantic_reports: Sequence[AnalystSemanticEnrichmentReport],
     reviews: Sequence[AnalystDirectnessReviewReport],
 ) -> tuple[AnalystDirectnessReviewReport, ...]:
-    semantic_by_id = {report.thesis.thesis_id: report for report in semantic_reports}
+    semantic_by_id = {
+        report.thesis.thesis_id: report for report in semantic_reports
+    }
     by_id: dict[str, AnalystDirectnessReviewReport] = {}
     for source_review in reviews:
         thesis_id = source_review.thesis_id
         semantic = semantic_by_id.get(thesis_id)
         if semantic is None:
-            raise ThesisIntelligenceError("directness review references a thesis outside the suite")
+            raise ThesisIntelligenceError(
+                "directness review references a thesis outside the suite"
+            )
         if thesis_id in by_id:
             raise ThesisIntelligenceError("duplicate directness review for thesis")
         by_id[thesis_id] = validate_directness_review(
@@ -524,7 +556,11 @@ def _canonical_reviews(
             suite=suite,
             semantic_report=semantic,
         )
-    return tuple(by_id[item.thesis_id] for item in suite.theses if item.thesis_id in by_id)
+    return tuple(
+        by_id[item.thesis_id]
+        for item in suite.theses
+        if item.thesis_id in by_id
+    )
 
 
 def _write_bundle_payload(bundle: ThesisIntelligenceBundle, root: Path) -> None:
@@ -552,31 +588,26 @@ def _write_bundle_payload(bundle: ThesisIntelligenceBundle, root: Path) -> None:
         report.thesis.thesis_id: report for report in bundle.semantic_reports
     }
     review_by_id = {review.thesis_id: review for review in bundle.reviews}
-    thesis_report_by_id = {report.thesis_id: report for report in bundle.thesis_reports}
+    report_by_id = {report.thesis_id: report for report in bundle.thesis_reports}
     for thesis in bundle.suite.theses:
-        semantic = semantic_by_id[thesis.thesis_id]
-        _write_model_create_only(
-            root / f"semantic/{thesis.thesis_id}.json",
-            semantic,
-        )
+        thesis_id = thesis.thesis_id
+        semantic = semantic_by_id[thesis_id]
+        _write_model_create_only(root / f"semantic/{thesis_id}.json", semantic)
         write_analyst_semantic_csv(
             semantic,
-            root / f"semantic/{thesis.thesis_id}.csv",
+            root / f"semantic/{thesis_id}.csv",
         )
-        review = review_by_id.get(thesis.thesis_id)
+        review = review_by_id.get(thesis_id)
         if review is not None:
-            _write_model_create_only(
-                root / f"reviews/{thesis.thesis_id}.json",
-                review,
-            )
-        report = thesis_report_by_id[thesis.thesis_id]
+            _write_model_create_only(root / f"reviews/{thesis_id}.json", review)
+        report = report_by_id[thesis_id]
         write_thesis_intelligence_json(
             report,
-            root / f"theses/{thesis.thesis_id}-report.json",
+            root / f"theses/{thesis_id}-report.json",
         )
         write_thesis_intelligence_csv(
             report,
-            root / f"theses/{thesis.thesis_id}-report.csv",
+            root / f"theses/{thesis_id}-report.csv",
         )
 
     write_thesis_comparison_json(
@@ -612,7 +643,8 @@ def _build_intelligence_artifact_manifest(
         build_input_hash=bundle.identity.build_input_hash,
         current_experiment_artifact_sha256=bundle.current.binding.artifact_sha256,
         prior_experiment_artifact_sha256s=tuple(
-            item.artifact_sha256 for item in bundle.identity.inputs.prior_experiments
+            item.artifact_sha256
+            for item in bundle.identity.inputs.prior_experiments
         ),
         files=files,
     )
@@ -660,21 +692,27 @@ def _reviews_from_archive(
 ) -> tuple[AnalystDirectnessReviewReport, ...]:
     reviews: list[AnalystDirectnessReviewReport] = []
     names = set(archive.namelist())
+    expected_review_names = {
+        f"reviews/{thesis.thesis_id}.json" for thesis in suite.theses
+    }
     for thesis in suite.theses:
         name = f"reviews/{thesis.thesis_id}.json"
-        if name not in names:
-            continue
-        reviews.append(AnalystDirectnessReviewReport.model_validate_json(archive.read(name)))
+        if name in names:
+            reviews.append(
+                AnalystDirectnessReviewReport.model_validate_json(
+                    archive.read(name)
+                )
+            )
     unexpected = {
         name
         for name in names
         if name.startswith("reviews/")
         and name.endswith(".json")
-        and name not in {f"reviews/{item.thesis_id}.json" for item in suite.theses}
+        and name not in expected_review_names
     }
     if unexpected:
         raise ThesisIntelligenceError(
-            "intelligence artifact contains review files outside the declared suite"
+            "intelligence artifact contains review files outside declared suite"
         )
     return tuple(reviews)
 
@@ -689,7 +727,10 @@ def _validate_manifest_identity(
         bundle.current.binding.run_id,
         bundle.identity.build_input_hash,
         bundle.current.binding.artifact_sha256,
-        tuple(item.artifact_sha256 for item in bundle.identity.inputs.prior_experiments),
+        tuple(
+            item.artifact_sha256
+            for item in bundle.identity.inputs.prior_experiments
+        ),
     )
     actual = (
         manifest.suite_id,
@@ -711,7 +752,9 @@ def _payload_files(root: Path) -> tuple[Path, ...]:
         for path in root.rglob("*")
         if path.is_file() and path.name != "artifact-manifest.json"
     ]
-    return tuple(sorted(selected, key=lambda path: path.relative_to(root).as_posix()))
+    return tuple(
+        sorted(selected, key=lambda path: path.relative_to(root).as_posix())
+    )
 
 
 def _write_model_create_only(path: Path, model: BaseModel) -> None:
@@ -783,10 +826,8 @@ def _require_sha256(value: str) -> None:
 
 
 def _discard_file(path: Path) -> None:
-    try:
+    with suppress(OSError):
         path.unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def _relative_display(path: Path, repository_root: Path) -> str:

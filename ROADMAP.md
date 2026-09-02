@@ -29,7 +29,7 @@ M0 evidence foundation — COMPLETE
 -> M1.5 Reaper 0.2.0 / Runner v1.2 — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
--> R0.3 Reaper 0.3.0 / Thesis Intelligence — IN PROGRESS
+-> R0.3 Reaper 0.3.0 / Thesis Intelligence — COMPLETE
 
 PRODUCT-VALIDATION LANE
 M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
@@ -193,7 +193,7 @@ Definition of Done:
 
 ---
 
-# R0.3 — Reaper `0.3.0` / Thesis Intelligence — IN PROGRESS 2026-09-02
+# R0.3 — Reaper `0.3.0` / Thesis Intelligence — COMPLETE 2026-09-02
 
 Purpose:
 
@@ -222,8 +222,8 @@ Full product/semantic plan:
 -> 0.3-P4 directness review + competitor quality — COMPLETE
 -> 0.3-P5 cross-thesis comparison — COMPLETE
 -> 0.3-P6 thin CLI integration — COMPLETE
--> 0.3-P7 V3 replay + Satisfying Destruction live validation — NEXT TOOLING STEP
--> package/release 0.3.0
+-> 0.3-P7 V3 replay + Satisfying Destruction live validation — COMPLETE
+-> package/release 0.3.0 — COMPLETE
 ```
 
 ### 0.3-P0 — Contract freeze — COMPLETE 2026-09-02
@@ -317,31 +317,34 @@ P4 review artifacts are intentionally accepted by offline `build`, not by fresh 
 binds an already-existing semantic-report hash, so the honest workflow is `run -> inspect -> review
 -> build same current ZIP` without recollecting Yandex data.
 
-### 0.3-P7 — Real-data validation + release — NEXT TOOLING STEP
+### 0.3-P7 — Real-data validation + release — COMPLETE 2026-09-02
 
 Replay existing V3 evidence where possible:
 
-- [ ] Custom Headphones — fuzzy-noise / zero-confirmed-direct control;
-- [ ] Custom Digicam — weak-direct-supply control;
-- [ ] Restore Retro Tech — near-direct/adjacent control.
+- [x] Custom Headphones — fuzzy-noise / zero-confirmed-direct control;
+- [x] Custom Digicam — weak-direct-supply control;
+- [x] Restore Retro Tech — near-direct/adjacent control.
 
 Run one new focused thesis sweep:
 
-- [ ] Satisfying Destruction — determine whether the discovered anomaly represents a broader cheap grammar or one exceptional listing.
+- [x] Satisfying Destruction — broader direct grammar exists, but the recent signal is concentrated in one strong fresh breakout.
 
 Longitudinal validation:
 
-- [ ] zero-history build correctly reports no prior observation rather than fake velocity;
-- [ ] bind at least one prior experiment artifact in a fixture or real repeated sweep and verify deterministic positive/negative/no-change delta handling.
+- [x] zero-history build correctly reports no prior observation rather than fake velocity;
+- [x] bind prior experiment artifacts in deterministic fixtures and verify positive/negative/no-change delta handling.
 
 Release gate:
 
-- [ ] real validation demonstrates material manual-review reduction;
-- [ ] comparison output is manually reviewed for measurement honesty;
-- [ ] existing 0.2 runner acceptance behavior remains intact;
-- [ ] `ruff`, strict `mypy`, full `pytest` and repository coverage gate pass;
-- [ ] methodology/decision docs are synchronized if real validation changes durable conclusions;
-- [ ] authoritative package version/provenance becomes `0.3.0` only after every release gate passes.
+- [x] real validation demonstrates material manual-review reduction;
+- [x] comparison output is manually reviewed for measurement honesty;
+- [x] existing 0.2 runner acceptance behavior remains intact;
+- [x] `ruff`, strict `mypy`, full `pytest` and repository coverage gate pass;
+- [x] methodology/decision docs are synchronized with the bounded P7 conclusions;
+- [x] authoritative package version/provenance is `0.3.0` after the release gates passed.
+
+Validation evidence:
+[`docs/history/reaper-0.3-p7-validation-2026-09-02.md`](docs/history/reaper-0.3-p7-validation-2026-09-02.md).
 
 ## R0.3 explicit non-goals
 

@@ -13,6 +13,7 @@ from yandex_analytics_reaper.analyst import (
     AnalystSnapshotReport,
 )
 from yandex_analytics_reaper.analyst_workflow import (
+    AnalystExperimentError,
     AnalystExperimentExecutionSummary,
     AnalystExperimentManifest,
     AnalystExperimentVerification,
@@ -77,7 +78,14 @@ def load_experiment_artifact_binding(
             )
     except ThesisIntelligenceError:
         raise
-    except (BadZipFile, OSError, KeyError, ValidationError, ValueError) as exc:
+    except (
+        AnalystExperimentError,
+        BadZipFile,
+        OSError,
+        KeyError,
+        ValidationError,
+        ValueError,
+    ) as exc:
         raise ThesisIntelligenceError(
             f"experiment artifact cannot be bound to thesis intelligence: {exc}"
         ) from exc

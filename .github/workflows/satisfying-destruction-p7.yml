@@ -1,0 +1,75 @@
+name: Satisfying Destruction P7 2026-09-02
+
+on:
+  push:
+    branches:
+      - research/satisfying-destruction-p7-2026-09-02
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+
+      - name: Install Reaper
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e .
+
+      - name: Run focused satisfying destruction thesis
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis run \
+            research/satisfying-destruction-p7-2026-09-02/suite.json \
+            --workers 4 \
+            | tee destruction-run-result.json
+
+      - name: Verify final intelligence against collected source ZIP
+        run: |
+          set -euo pipefail
+          mapfile -t source_zips < <(find artifacts/experiments -type f -name '*.zip' -print | sort)
+          if [ "${#source_zips[@]}" -ne 1 ]; then
+            echo "Expected exactly one source experiment ZIP, found ${#source_zips[@]}" >&2
+            printf '%s\n' "${source_zips[@]}" >&2
+            exit 1
+          fi
+          source_zip="${source_zips[0]}"
+          artifact_path="$(python -c 'import json; print(json.load(open("destruction-run-result.json"))["artifact_path"])')"
+          sha256sum "$source_zip" | tee destruction-source-sha256.txt
+          yandex-reaper-thesis verify "$artifact_path" \
+            --current "$source_zip" \
+            | tee destruction-verify-result.json
+          printf '%s\n' "$source_zip" > destruction-source-path.txt
+          printf '%s\n' "$artifact_path" > destruction-intelligence-path.txt
+
+      - name: Upload destruction P7 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: satisfying-destruction-p7-2026-09-02
+          retention-days: 30
+          if-no-files-found: warn
+          path: |
+            research/satisfying-destruction-p7-2026-09-02/suite.json
+            destruction-run-result.json
+            destruction-source-sha256.txt
+            destruction-source-path.txt
+            destruction-intelligence-path.txt
+            destruction-verify-result.json
+            artifacts/**

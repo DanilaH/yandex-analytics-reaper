@@ -302,10 +302,10 @@ def test_review_canonicalizes_to_semantic_order_and_quality_is_transparent() -> 
     assert surface.query_count == 2
     assert surface.members_seen_by_multiple_queries == 1
     assert surface.multi_query_member_share == pytest.approx(0.25)
-    assert [(item.organic_member_count, item.unique_contribution_count) for item in surface.queries] == [
-        (2, 1),
-        (3, 2),
+    contributions = [
+        (item.organic_member_count, item.unique_contribution_count) for item in surface.queries
     ]
+    assert contributions == [(2, 1), (3, 2)]
     assert surface.pairwise[0].intersection_count == 1
     assert surface.pairwise[0].union_count == 4
     assert surface.pairwise[0].jaccard == pytest.approx(0.25)

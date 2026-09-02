@@ -5,7 +5,7 @@ import pytest
 from yandex_analytics_reaper.thesis_cli import build_parser
 
 
-def test_run_parser_accepts_repeatable_prior_review_and_workers() -> None:
+def test_run_parser_accepts_repeatable_prior_and_workers() -> None:
     args = build_parser().parse_args(
         [
             "run",
@@ -14,10 +14,6 @@ def test_run_parser_accepts_repeatable_prior_review_and_workers() -> None:
             "older.zip",
             "--prior",
             "newer.zip",
-            "--review",
-            "headphones.json",
-            "--review",
-            "digicam.json",
             "--workers",
             "3",
         ]
@@ -26,8 +22,14 @@ def test_run_parser_accepts_repeatable_prior_review_and_workers() -> None:
     assert args.command == "run"
     assert args.suite == "suite.json"
     assert args.prior == ["older.zip", "newer.zip"]
-    assert args.review == ["headphones.json", "digicam.json"]
     assert args.workers == 3
+
+
+def test_run_rejects_review_input_because_review_is_hash_bound_to_existing_semantics() -> None:
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(
+            ["run", "suite.json", "--review", "headphones.json"]
+        )
 
 
 def test_build_parser_has_offline_current_and_repeatable_inputs() -> None:

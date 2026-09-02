@@ -1,0 +1,92 @@
+name: Reaper 0.3 P7 V3 Replay
+
+on:
+  push:
+    branches:
+      - research/reaper-0.3-p7-validation
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+
+      - name: Install Reaper
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e .
+
+      - name: Download immutable V3 source artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: microgame-thesis-sweep-v3-2026-09-01
+          path: /tmp/v3-source
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: DanilaH/yandex-analytics-reaper
+          run-id: 33538639750
+
+      - name: Resolve exact V3 experiment ZIP
+        run: |
+          set -euo pipefail
+          mapfile -t zips < <(find /tmp/v3-source/artifacts -type f -name '*.zip' -print | sort)
+          printf '%s\n' "${zips[@]}"
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "Expected exactly one experiment ZIP, found ${#zips[@]}" >&2
+            exit 1
+          fi
+          cp "${zips[0]}" /tmp/current-v3.zip
+          sha256sum /tmp/current-v3.zip | tee v3-source-sha256.txt
+
+      - name: Build P7 V3 intelligence offline
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis build \
+            research/reaper-0.3-p7-validation/v3-suite.json \
+            /tmp/current-v3.zip \
+            | tee p7-v3-build-result.json
+
+      - name: Verify P7 V3 intelligence against source ZIP
+        run: |
+          set -euo pipefail
+          artifact_path="$(python - <<'PY'
+import json
+from pathlib import Path
+value = json.loads(Path('p7-v3-build-result.json').read_text())
+print(value['artifact_path'])
+PY
+)"
+          test -f "$artifact_path"
+          yandex-reaper-thesis verify "$artifact_path" \
+            --current /tmp/current-v3.zip \
+            | tee p7-v3-verify-result.json
+          printf '%s\n' "$artifact_path" > p7-v3-artifact-path.txt
+
+      - name: Upload P7 V3 replay evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: reaper-0.3-p7-v3-replay
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            research/reaper-0.3-p7-validation/v3-suite.json
+            v3-source-sha256.txt
+            p7-v3-build-result.json
+            p7-v3-verify-result.json
+            p7-v3-artifact-path.txt
+            artifacts/intelligence/**

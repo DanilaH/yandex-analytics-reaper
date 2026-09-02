@@ -53,23 +53,44 @@ jobs:
           cp "${zips[0]}" /tmp/current-v3.zip
           sha256sum /tmp/current-v3.zip | tee v3-source-sha256.txt
 
-      - name: Build P7 V3 intelligence offline
+      - name: Build unreviewed P7 V3 intelligence offline
         run: |
           set -euo pipefail
           yandex-reaper-thesis build \
             research/reaper-0.3-p7-validation/v3-suite.json \
             /tmp/current-v3.zip \
-            | tee p7-v3-build-result.json
+            | tee p7-v3-unreviewed-build-result.json
 
-      - name: Verify P7 V3 intelligence against source ZIP
+      - name: Generate hash-bound control reviews
         run: |
           set -euo pipefail
-          artifact_path="$(python -c 'import json; print(json.load(open("p7-v3-build-result.json"))["artifact_path"])')"
+          artifact_path="$(python -c 'import json; print(json.load(open("p7-v3-unreviewed-build-result.json"))["artifact_path"])')"
+          python research/reaper-0.3-p7-validation/generate_control_reviews.py \
+            research/reaper-0.3-p7-validation/v3-suite.json \
+            "$artifact_path" \
+            p7-control-reviews \
+            | tee p7-review-generation-result.json
+
+      - name: Rebuild reviewed P7 V3 intelligence without recollection
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis build \
+            research/reaper-0.3-p7-validation/v3-suite.json \
+            /tmp/current-v3.zip \
+            --review p7-control-reviews/custom-headphones.json \
+            --review p7-control-reviews/custom-digicam.json \
+            --review p7-control-reviews/restore-retro-pocket-tech.json \
+            | tee p7-v3-reviewed-build-result.json
+
+      - name: Verify reviewed P7 V3 intelligence against source ZIP
+        run: |
+          set -euo pipefail
+          artifact_path="$(python -c 'import json; print(json.load(open("p7-v3-reviewed-build-result.json"))["artifact_path"])')"
           test -f "$artifact_path"
           yandex-reaper-thesis verify "$artifact_path" \
             --current /tmp/current-v3.zip \
-            | tee p7-v3-verify-result.json
-          printf '%s\n' "$artifact_path" > p7-v3-artifact-path.txt
+            | tee p7-v3-reviewed-verify-result.json
+          printf '%s\n' "$artifact_path" > p7-v3-reviewed-artifact-path.txt
 
       - name: Upload P7 V3 replay evidence
         uses: actions/upload-artifact@v4
@@ -79,8 +100,12 @@ jobs:
           if-no-files-found: error
           path: |
             research/reaper-0.3-p7-validation/v3-suite.json
+            research/reaper-0.3-p7-validation/generate_control_reviews.py
             v3-source-sha256.txt
-            p7-v3-build-result.json
-            p7-v3-verify-result.json
-            p7-v3-artifact-path.txt
+            p7-v3-unreviewed-build-result.json
+            p7-review-generation-result.json
+            p7-control-reviews/*.json
+            p7-v3-reviewed-build-result.json
+            p7-v3-reviewed-verify-result.json
+            p7-v3-reviewed-artifact-path.txt
             artifacts/intelligence/**

@@ -524,8 +524,8 @@ def _build_semantics_from_current_artifact(
         )
         try:
             return tuple(
-                enricher.build(current.snapshot, thesis)
-                for thesis in semantic_theses
+                enricher.build(current.snapshot, semantic_thesis)
+                for semantic_thesis in semantic_theses
             )
         except AnalystSemanticError as exc:
             raise ThesisIntelligenceError(
@@ -569,10 +569,10 @@ def _write_bundle_payload(bundle: ThesisIntelligenceBundle, root: Path) -> None:
         root / "input/compiled-experiment-manifest.json",
         bundle.compiled.experiment_manifest,
     )
-    for thesis in bundle.compiled.semantic_theses:
+    for semantic_thesis in bundle.compiled.semantic_theses:
         _write_model_create_only(
-            root / f"input/semantic-theses/{thesis.thesis_id}.json",
-            thesis,
+            root / f"input/semantic-theses/{semantic_thesis.thesis_id}.json",
+            semantic_thesis,
         )
 
     _write_model_create_only(
@@ -589,8 +589,8 @@ def _write_bundle_payload(bundle: ThesisIntelligenceBundle, root: Path) -> None:
     }
     review_by_id = {review.thesis_id: review for review in bundle.reviews}
     report_by_id = {report.thesis_id: report for report in bundle.thesis_reports}
-    for thesis in bundle.suite.theses:
-        thesis_id = thesis.thesis_id
+    for suite_thesis in bundle.suite.theses:
+        thesis_id = suite_thesis.thesis_id
         semantic = semantic_by_id[thesis_id]
         _write_model_create_only(root / f"semantic/{thesis_id}.json", semantic)
         write_analyst_semantic_csv(
@@ -693,10 +693,11 @@ def _reviews_from_archive(
     reviews: list[AnalystDirectnessReviewReport] = []
     names = set(archive.namelist())
     expected_review_names = {
-        f"reviews/{thesis.thesis_id}.json" for thesis in suite.theses
+        f"reviews/{suite_thesis.thesis_id}.json"
+        for suite_thesis in suite.theses
     }
-    for thesis in suite.theses:
-        name = f"reviews/{thesis.thesis_id}.json"
+    for suite_thesis in suite.theses:
+        name = f"reviews/{suite_thesis.thesis_id}.json"
         if name in names:
             reviews.append(
                 AnalystDirectnessReviewReport.model_validate_json(

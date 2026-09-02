@@ -24,7 +24,7 @@ M0 evidence foundation — COMPLETE
 -> M1 analyst workbench / START ANALYSIS — COMPLETE
 -> M1.5 Reaper 0.2.0 / Runner v1.2 — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
--> M1.7 semantic/directness triage — ACTIVE, narrow parallel bottleneck fix
+-> M1.7 semantic/directness triage — COMPLETE
 -> M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
 -> P1 production-ready micro-spec — COMPLETE
 -> P2 cheapest credible build/release probe — NEXT PRIMARY PATH
@@ -121,7 +121,7 @@ Standoff/Brawl/IP case clone, and full 3D lucky-block/brainrot clone.
 Rationale:
 [`research/mystery-unboxing-collection-sweep-v1/opportunity-decomposition.md`](research/mystery-unboxing-collection-sweep-v1/opportunity-decomposition.md).
 
-## M1.7 — Semantic / directness triage — ACTIVE 2026-09-02
+## M1.7 — Semantic / directness triage — COMPLETE 2026-09-02
 
 Later thesis-oriented sweeps exposed a repeated operational bottleneck: Yandex search is fuzzy
 enough that a large search union can contain many semantically irrelevant listings, while the rich
@@ -156,6 +156,21 @@ Constraints:
 Specification:
 [`docs/spec/analyst-semantic-enrichment.md`](docs/spec/analyst-semantic-enrichment.md).
 
+Real-data validation:
+[`research/semantic-directness-v1/validation-2026-09-02.md`](research/semantic-directness-v1/validation-2026-09-02.md).
+
+The frozen V3 `custom-headphones` set demonstrated the intended operational gain:
+
+```text
+312 fuzzy listings
+-> 243 noise_candidate
+-> 67 adjacent_candidate
+-> 2 direct_candidate
+-> 0 meaningful direct matches after contextual review of frozen descriptions/instructions
+```
+
+This is review-queue reduction, not a market-size or absolute-absence claim.
+
 Definition of Done:
 
 - [x] versioned semantic thesis declaration;
@@ -164,10 +179,10 @@ Definition of Done:
 - [x] conservative candidate-level directness labels;
 - [x] deterministic JSON report + analyst-readable CSV;
 - [x] CLI entry point;
-- [ ] focused replay/classification tests pass in CI;
-- [ ] full repository quality gate passes;
-- [ ] one real thesis artifact demonstrates useful reduction of fuzzy search noise;
-- [ ] decision methodology is synchronized with the shipped contract.
+- [x] focused replay/classification tests pass in CI;
+- [x] full repository quality gate passes;
+- [x] one real thesis artifact demonstrates useful reduction of fuzzy search noise;
+- [x] decision methodology is synchronized with the shipped contract.
 
 ---
 

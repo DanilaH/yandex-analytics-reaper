@@ -170,6 +170,26 @@ def test_source_bound_verify_requires_real_current_experiment_artifact(tmp_path:
         )
 
 
+def test_source_artifact_bytes_remain_unchanged_on_verification_failure(tmp_path: Path) -> None:
+    artifact = tmp_path / "intelligence.zip"
+    suite_bytes = (_suite().model_dump_json(indent=2) + "\n").encode()
+    _write_package(
+        artifact,
+        members={"input/thesis-suite.json": suite_bytes},
+    )
+    current = tmp_path / "current.zip"
+    original = b"not-a-valid-experiment-zip"
+    current.write_bytes(original)
+
+    with pytest.raises(ThesisIntelligenceError, match="cannot be bound"):
+        verify_thesis_intelligence_artifact(
+            artifact,
+            current_artifact_path=current,
+        )
+
+    assert current.read_bytes() == original
+
+
 def test_manifest_rejects_noncanonical_file_order() -> None:
     with pytest.raises(ValueError, match="file paths must be sorted"):
         ThesisIntelligenceArtifactManifest(

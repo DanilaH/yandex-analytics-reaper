@@ -43,9 +43,9 @@ The current experiment runner collects query families and freezes comparable evi
 
 `ratingCount` alone is not comparable across a 5-day-old listing and a 5-year-old listing.
 
-The analyst needs explicit age-normalized descriptive features and, only where repeated observations actually exist, observed metric deltas.
+The analyst needs explicit age-normalized descriptive features and, only where repeated observations actually exist in explicitly frozen evidence, observed metric deltas.
 
-The system must not fabricate short-window velocity from one point.
+The system must not fabricate short-window velocity from one point or read ambient mutable machine state during a deterministic rebuild.
 
 ## 1.3 Fresh anomaly discovery is useful but ad hoc
 
@@ -85,10 +85,11 @@ The intended analytical flow is:
 versioned thesis suite
 -> deterministic compile to existing analyst-experiment semantics
 -> existing 0.2 collection / resume / verification
--> frozen market artifacts
+-> frozen current experiment artifact
++ optional explicitly bound prior experiment artifacts
 -> M1.7 semantic/directness triage per thesis
 -> age-normalized traction features
--> optional observed historical rating deltas where evidence exists
+-> optional observed historical rating deltas from bound prior artifacts
 -> transparent fresh-anomaly queue
 -> optional analyst directness review overlay
 -> competitor-set quality summary
@@ -147,6 +148,8 @@ The exact Pydantic field layout is frozen during the roadmap contract phase, but
 - anomaly thresholds are explicit input, not product-wide truth;
 - context preserves the same evidence-bearing semantics used by the existing experiment runner;
 - the suite compiles onto existing experiment semantics rather than introducing a second search/recovery implementation.
+
+Historical artifact selection is an execution/build input rather than hidden global state. The exact prior artifact hashes used are frozen into the intelligence artifact bindings.
 
 ## 3.1 Compatibility boundary
 
@@ -246,11 +249,47 @@ Ties must use a deterministic documented method.
 
 # 5. Observed historical rating deltas v1
 
-The production data model already supports repeated `game_metric_observations`. 0.3 may reuse that history without creating a new metric-history table.
+The current experiment artifact is authoritative for the current observation. Historical deltas may use only **explicitly bound immutable prior experiment artifacts**.
 
-When at least two trustworthy `rating_count` observations exist for the same listing, the analyst layer may expose:
+0.3 must not read a developer's ambient/current local SQLite database during `build` and call that deterministic history. Real V3 artifact inspection showed that a single experiment artifact can contain only one `rating_count` point per listing, so prior evidence must be supplied explicitly when longitudinal analysis is desired.
+
+## 5.1 Historical artifact binding
+
+`run`/`build` may accept zero or more prior experiment artifacts.
+
+For every bound artifact, freeze at least:
 
 ```text
+artifact path/reference
+artifact_sha256
+experiment_id
+run_id
+snapshot/reference time
+verification status
+```
+
+The final intelligence artifact stores the exact ordered history-artifact bindings.
+
+If no prior artifacts are supplied, longitudinal coverage is zero/unknown by evidence, not an error.
+
+## 5.2 Prior observation selection
+
+For one current listing, gather trustworthy prior `rating_count` observations from the explicitly bound prior artifacts only.
+
+Selection rules:
+
+- prior observation time must be strictly earlier than the current observation/reference time;
+- future/equal-time observations are ineligible;
+- if several valid prior observations exist, choose the latest deterministically by declared observation ordering;
+- exact prior observation ID and source artifact hash are retained in the derived result;
+- the same prior artifacts + current artifact must reproduce the same selected point.
+
+## 5.3 Delta fields
+
+When a trustworthy prior point exists, the analyst layer may expose:
+
+```text
+prior_artifact_sha256
 previous_observation_id
 previous_observed_at
 previous_rating_count
@@ -265,13 +304,12 @@ longitudinal_status
 
 Semantics:
 
-- no prior observation -> `no_prior_observation`, never zero velocity;
-- an interval below the frozen minimum method interval is explicitly `interval_too_short` and cannot silently satisfy an anomaly velocity gate;
+- no eligible prior observation -> `no_prior_observation`, never zero velocity;
+- interval below the frozen minimum method interval -> `interval_too_short` and cannot silently satisfy an anomaly velocity gate;
 - negative deltas remain negative observed revisions/resets and are not clamped;
-- both observations and their provenance are bound into the derived result;
-- history reads are bounded by the current report `as_of` time;
-- no future observation may leak into an earlier report;
-- repeated collection is accumulated by ordinary research runs; 0.3 adds no scheduler merely to generate history.
+- both observations and their provenance are bound into the result;
+- `build` may not query the network to fill missing history;
+- no scheduler is introduced merely to generate history.
 
 The term `observed_rating_delta_per_day` is intentionally distinct from `lifetime_ratings_per_day`.
 
@@ -294,6 +332,8 @@ optional observed rating-delta velocity gate when explicitly configured
 ```
 
 No threshold above is universal product truth. The actual policy is stored in the suite declaration and bound into the report hash.
+
+A longitudinal gate may only be configured/used against the explicitly bound historical-artifact evidence. Missing prior evidence remains visible.
 
 ## 6.1 Gate results
 
@@ -424,7 +464,8 @@ Conceptual sections:
 ```text
 identity
 suite binding
-experiment/comparable binding
+current experiment/comparable binding
+historical experiment artifact bindings
 semantic report binding
 optional review binding
 traction rows
@@ -472,6 +513,7 @@ Rules:
 - direct evidence is never silently replaced with adjacent evidence;
 - best-traction facts include the source listing identity and evidence status;
 - unresolved review coverage stays visible;
+- longitudinal coverage reflects only explicitly bound prior artifacts;
 - comparison rows are stable by declaration order, not sorted into an implied winner ranking.
 
 ## 10.1 No automatic decision
@@ -507,8 +549,11 @@ Collection evidence stays immutable and separate from the new intelligence artif
 Recommended topology:
 
 ```text
-existing experiment artifact
+current experiment artifact
   artifacts/exports/<experiment_id>/<run_id>.zip
+
+optional prior experiment artifacts
+  artifacts/exports/<prior-experiment-id>/<prior-run-id>.zip
 
 thesis-intelligence artifact
   artifacts/intelligence/<suite_id>/<run_id>.zip
@@ -523,7 +568,8 @@ input/
   semantic-theses/*.json
 
 bindings/
-  experiment-artifact.json
+  current-experiment-artifact.json
+  history-experiment-artifacts.json
 
 semantic/
   <thesis-id>.json
@@ -546,11 +592,11 @@ artifact-manifest.json
 
 Canonical JSON is authoritative. CSV and Markdown are analyst-readable derived views.
 
-Every canonical report is content-hashed. The final intelligence ZIP is create-only and binds the SHA-256 of the exact source experiment artifact.
+Every canonical report is content-hashed. The final intelligence ZIP is create-only and binds the SHA-256 of the exact current experiment artifact and every prior experiment artifact actually used.
 
-Rebuilding from the same frozen experiment artifact, suite declaration, method versions, and review artifacts must reproduce the same canonical reports.
+Rebuilding from the same current artifact, ordered prior artifacts, suite declaration, method versions, and review artifacts must reproduce the same canonical reports.
 
-A different review artifact legitimately produces a different intelligence report/artifact hash while preserving the same source experiment binding.
+A different review artifact or historical artifact set legitimately produces a different intelligence report/artifact hash while preserving the current experiment binding.
 
 ---
 
@@ -565,16 +611,18 @@ yandex-reaper-thesis
 ## 12.1 `run`
 
 ```bash
-yandex-reaper-thesis run path/to/suite.json
+yandex-reaper-thesis run path/to/suite.json \
+  [--history-artifact path/to/prior.zip ...]
 ```
 
 Semantics:
 
 1. validate the suite;
 2. deterministically compile existing analyst experiment input plus semantic declarations;
-3. delegate collection to the established experiment runner;
-4. after verified experiment publication, build thesis intelligence;
-5. verify and publish the separate intelligence artifact.
+3. delegate current collection to the established experiment runner;
+4. verify any explicitly supplied prior experiment artifacts;
+5. after verified current experiment publication, build thesis intelligence;
+6. verify and publish the separate intelligence artifact.
 
 If collection fails, the established experiment workdir/resume contract remains authoritative. `run` must not create a second thesis-specific recovery state machine.
 
@@ -584,15 +632,17 @@ If collection fails, the established experiment workdir/resume contract remains 
 yandex-reaper-thesis build \
   path/to/suite.json \
   --experiment-artifact artifacts/exports/...zip \
-  --reviews path/to/reviews/
+  [--history-artifact artifacts/exports/prior-1.zip ...] \
+  [--reviews path/to/reviews/]
 ```
 
 `build` is the canonical frozen-evidence reconstruction path:
 
 - no network access;
-- source experiment artifact is verified first;
-- semantic/traction/quality/comparison reports are rebuilt from frozen evidence;
+- current and prior experiment artifacts are verified first;
+- semantic/traction/quality/comparison reports are rebuilt only from bound frozen evidence;
 - reviews may be added after collection without recollecting Yandex data;
+- ambient local SQLite state is not consulted for historical deltas;
 - outputs are create-only.
 
 ## 12.3 `verify`
@@ -605,7 +655,8 @@ Verification covers at least:
 
 ```text
 suite identity/hash
-source experiment artifact hash
+current experiment artifact hash
+history experiment artifact hashes/order
 compiled manifest identity
 semantic report hashes
 review bindings
@@ -639,7 +690,8 @@ new generic workflow framework
 broad taxonomy redesign
 market-size estimator
 Yandex-wide percentile claims from a narrow suite
-fabricated 7d/30d/90d velocity without repeated observations
+ambient mutable local-DB history during deterministic build
+fabricated 7d/30d/90d velocity without repeated frozen observations
 ```
 
 These are not hidden stretch goals. Pulling one into 0.3 requires an explicit scope change and evidence that it solves a repeated decision bottleneck.
@@ -670,7 +722,7 @@ removed/unobserved listings
 review-status changes
 ```
 
-This requires careful observation semantics and is not automatically part of 0.3 merely because historical metric reads exist.
+0.3 historical artifact binding provides a trustworthy building block but does not automatically turn this broader change-detection feature into current scope.
 
 ## External trend binding
 
@@ -694,4 +746,4 @@ generic orchestration platform
 
 The release boundary is:
 
-> Collect trustworthy Yandex evidence through the existing runner, reduce fuzzy noise, expose fresh/relative traction transparently, preserve human directness judgement, and make several focused theses easy to compare.
+> Collect trustworthy Yandex evidence through the existing runner, reduce fuzzy noise, expose fresh/relative traction transparently, preserve human directness judgement, and make several focused theses easy to compare from explicitly frozen evidence.

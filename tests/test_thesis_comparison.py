@@ -3,8 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from thesis_comparison_fixture import DIGICAM, HEADPHONES, make_fixture
+
 from yandex_analytics_reaper.thesis_anomaly import build_fresh_anomaly_queue
 from yandex_analytics_reaper.thesis_comparison import (
     ThesisComparisonPayload,

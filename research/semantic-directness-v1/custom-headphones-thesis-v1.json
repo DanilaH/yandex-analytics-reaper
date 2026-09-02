@@ -1,0 +1,43 @@
+{
+  "spec_version": "analyst-semantic-thesis-v1",
+  "thesis_id": "custom-headphones",
+  "version": 1,
+  "label": "customization x headphones",
+  "target_set_ids": [
+    "microgame-thesis-sweep-v3-2026-09-01--custom-headphones"
+  ],
+  "theme": {
+    "terms": [
+      "headphone",
+      "наушник"
+    ]
+  },
+  "mechanic": {
+    "terms": [
+      "decorate",
+      "customiz",
+      "bedazzle",
+      "paint",
+      "украш",
+      "кастом",
+      "страз",
+      "подвеск",
+      "раскрас",
+      "наклей"
+    ]
+  },
+  "reward_grammar": {
+    "terms": [
+      "sticker",
+      "charm",
+      "rhinestone",
+      "color",
+      "material",
+      "наклей",
+      "подвес",
+      "страз",
+      "цвет",
+      "материал"
+    ]
+  }
+}

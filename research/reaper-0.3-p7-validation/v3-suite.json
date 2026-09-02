@@ -1,0 +1,208 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "microgame-thesis-sweep-v3-2026-09-01",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 100,
+    "min_lifetime_ratings_per_day": 5.0
+  },
+  "theses": [
+    {
+      "thesis_id": "custom-headphones",
+      "thesis_version": 1,
+      "label": "customization x headphones",
+      "queries": [
+        "укрась наушники",
+        "кастом наушников",
+        "кастомизация наушников",
+        "наушники со стразами",
+        "наушники с подвесками",
+        "раскрась наушники",
+        "decorate headphones",
+        "bedazzle headphones",
+        "headphone charms",
+        "paint headphones"
+      ],
+      "semantic": {
+        "theme_terms": ["headphone", "наушник"],
+        "mechanic_terms": ["decorate", "customiz", "bedazzle", "paint", "украш", "кастом", "страз", "подвеск", "раскрас", "наклей"],
+        "reward_grammar_terms": ["sticker", "charm", "rhinestone", "color", "material", "наклей", "подвес", "страз", "цвет", "материал"]
+      }
+    },
+    {
+      "thesis_id": "custom-digicam",
+      "thesis_version": 1,
+      "label": "customization x digicam",
+      "queries": [
+        "укрась фотоаппарат",
+        "кастомизация фотоаппарата",
+        "укрась камеру",
+        "камера со стразами",
+        "наклейки на фотоаппарат",
+        "подвески на камеру",
+        "decorate camera",
+        "decorate digicam",
+        "bedazzle camera",
+        "camera charms"
+      ],
+      "semantic": {
+        "theme_terms": ["camera", "digicam", "фотоаппарат", "камер"],
+        "mechanic_terms": ["decorate", "customiz", "bedazzle", "paint", "украш", "кастом", "страз", "подвеск", "раскрас", "наклей"],
+        "reward_grammar_terms": ["sticker", "charm", "rhinestone", "color", "material", "наклей", "подвес", "страз", "цвет", "материал"]
+      }
+    },
+    {
+      "thesis_id": "custom-retro-player",
+      "thesis_version": 1,
+      "label": "customization x retro music player",
+      "queries": [
+        "укрась мп3 плеер",
+        "кастомизация мп3 плеера",
+        "укрась плеер",
+        "плеер со стразами",
+        "наклейки на плеер",
+        "decorate mp3 player",
+        "customize mp3 player",
+        "bedazzle mp3 player",
+        "decorate music player",
+        "music player charms"
+      ],
+      "semantic": {
+        "theme_terms": ["mp3", "music player", "плеер"],
+        "mechanic_terms": ["decorate", "customiz", "bedazzle", "paint", "украш", "кастом", "страз", "подвеск", "раскрас", "наклей"],
+        "reward_grammar_terms": ["sticker", "charm", "rhinestone", "color", "material", "наклей", "подвес", "страз", "цвет", "материал"]
+      }
+    },
+    {
+      "thesis_id": "restore-retro-pocket-tech",
+      "thesis_version": 1,
+      "label": "restore or clean x retro pocket tech",
+      "queries": [
+        "почини старый телефон",
+        "почини старый плеер",
+        "реставрация мп3 плеера",
+        "реставрация фотоаппарата",
+        "восстанови старый телефон",
+        "восстанови старую камеру",
+        "почисти старый плеер",
+        "почисти старый фотоаппарат",
+        "restore old phone",
+        "restore mp3 player",
+        "restore old camera",
+        "repair retro gadget",
+        "restore retro tech",
+        "clean retro gadget"
+      ],
+      "semantic": {
+        "theme_terms": ["phone", "camera", "mp3", "player", "gadget", "телефон", "камера", "фотоаппарат", "плеер", "гаджет"],
+        "mechanic_terms": ["restore", "repair", "clean", "restoration", "почин", "реставр", "восстанов", "почист"]
+      }
+    },
+    {
+      "thesis_id": "peel-collectible-reveal",
+      "thesis_version": 1,
+      "label": "peel x collectible reveal",
+      "queries": [
+        "сорви пленку сюрприз",
+        "отклей пленку сюрприз",
+        "сними пленку и открой",
+        "сними пленку с игрушки",
+        "сними пленку с гаджета",
+        "распаковка сюрприза пленка",
+        "peel surprise",
+        "peel collectible",
+        "peel reveal collectible",
+        "peel mystery toy",
+        "peel mystery pack",
+        "tear film reveal"
+      ],
+      "semantic": {
+        "theme_terms": ["toy", "collectible", "gadget", "pack", "игруш", "коллекц", "гаджет", "упаков"],
+        "mechanic_terms": ["peel", "tear", "film", "сорв", "откле", "сними плен", "пленк"],
+        "reward_grammar_terms": ["surprise", "reveal", "mystery", "сюрприз", "откр", "распаков"]
+      }
+    },
+    {
+      "thesis_id": "cyberdeck-pocket-computer-assembly",
+      "thesis_version": 1,
+      "label": "assembly x cyberdeck or pocket computer",
+      "queries": [
+        "собери кибердек",
+        "кибердек конструктор",
+        "собери карманный компьютер",
+        "собери портативный компьютер",
+        "собери ретро компьютер",
+        "конструктор карманного компьютера",
+        "assemble cyberdeck",
+        "build cyberdeck",
+        "cyberdeck builder",
+        "build pocket computer",
+        "assemble pocket computer",
+        "build handheld computer",
+        "assemble retro computer"
+      ],
+      "semantic": {
+        "theme_terms": ["cyberdeck", "pocket computer", "handheld computer", "retro computer", "кибердек", "карманн", "портативн", "ретро компьютер"],
+        "mechanic_terms": ["assemble", "build", "builder", "собер", "конструктор"]
+      }
+    },
+    {
+      "thesis_id": "vending-tiny-collectibles",
+      "thesis_version": 1,
+      "label": "vending x tiny collectibles",
+      "queries": [
+        "автомат с мини игрушками",
+        "капсульный автомат миниатюры",
+        "автомат с брелоками",
+        "автомат с мини гаджетами",
+        "капсулы с миниатюрами",
+        "капсулы с брелоками",
+        "vending machine mini toys",
+        "capsule machine miniatures",
+        "vending machine keychains",
+        "capsule machine gadgets",
+        "gacha tiny collectibles",
+        "tiny collectible vending"
+      ],
+      "semantic": {
+        "theme_terms": ["vending", "capsule", "gacha", "автомат", "капсул"],
+        "mechanic_terms": ["vend", "dispense", "open", "получ", "крут", "выдай"],
+        "reward_grammar_terms": ["collectible", "toy", "miniature", "keychain", "gadget", "коллекц", "игруш", "миниатюр", "брелок", "гаджет"]
+      }
+    },
+    {
+      "thesis_id": "functional-mini-media",
+      "thesis_version": 1,
+      "label": "functional miniature x mini media",
+      "queries": [
+        "мини проигрыватель",
+        "мини винил",
+        "мини кассета",
+        "мини телевизор игрушка",
+        "мини радио игрушка",
+        "включи мини телевизор",
+        "мини техника коллекция",
+        "mini record player game",
+        "mini vinyl collectible",
+        "tiny tv game",
+        "tiny radio game",
+        "functional miniature game",
+        "mini media collectible"
+      ],
+      "semantic": {
+        "theme_terms": ["record player", "vinyl", "tv", "radio", "media", "проигрыватель", "винил", "телевизор", "радио", "техника"],
+        "mechanic_terms": ["play", "turn on", "switch on", "включ", "проигр"],
+        "reward_grammar_terms": ["mini", "tiny", "miniature", "мини", "коллекц"]
+      }
+    }
+  ]
+}

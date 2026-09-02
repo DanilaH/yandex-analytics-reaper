@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from test_thesis_traction import _NOW, _current_evidence, _prior_evidence, _suite
+
 from yandex_analytics_reaper.thesis_traction import build_traction_features
 
 

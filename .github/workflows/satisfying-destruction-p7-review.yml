@@ -1,0 +1,108 @@
+name: Satisfying Destruction P7 Offline Review
+
+on:
+  push:
+    branches:
+      - research/satisfying-destruction-p7-review-2026-09-02
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+
+      - name: Install Reaper
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e .
+
+      - name: Download immutable live destruction evidence
+        uses: actions/download-artifact@v5
+        with:
+          name: satisfying-destruction-p7-2026-09-02
+          path: /tmp/destruction-live
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: DanilaH/yandex-analytics-reaper
+          run-id: 33652672808
+
+      - name: Resolve exact source experiment ZIP
+        run: |
+          set -euo pipefail
+          mapfile -t zips < <(find /tmp/destruction-live/artifacts/exports -type f -name '*.zip' -print | sort)
+          printf '%s\n' "${zips[@]}"
+          if [ "${#zips[@]}" -ne 1 ]; then
+            echo "Expected exactly one source experiment ZIP, found ${#zips[@]}" >&2
+            exit 1
+          fi
+          cp "${zips[0]}" /tmp/current-destruction.zip
+          sha256sum /tmp/current-destruction.zip | tee destruction-source-sha256.txt
+
+      - name: Build refined unreviewed intelligence without recollection
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis build \
+            research/satisfying-destruction-p7-2026-09-02/suite-v2.json \
+            /tmp/current-destruction.zip \
+            | tee destruction-v2-unreviewed-build.json
+
+      - name: Generate audited directness review
+        run: |
+          set -euo pipefail
+          artifact_path="$(python -c 'import json; print(json.load(open("destruction-v2-unreviewed-build.json"))["artifact_path"])')"
+          python research/satisfying-destruction-p7-2026-09-02/generate-review-v2.py \
+            research/satisfying-destruction-p7-2026-09-02/suite-v2.json \
+            "$artifact_path" \
+            destruction-review-v2.json \
+            | tee destruction-review-generation.json
+
+      - name: Build reviewed intelligence from same source ZIP
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis build \
+            research/satisfying-destruction-p7-2026-09-02/suite-v2.json \
+            /tmp/current-destruction.zip \
+            --review destruction-review-v2.json \
+            | tee destruction-v2-reviewed-build.json
+
+      - name: Source-bound verify reviewed intelligence
+        run: |
+          set -euo pipefail
+          artifact_path="$(python -c 'import json; print(json.load(open("destruction-v2-reviewed-build.json"))["artifact_path"])')"
+          yandex-reaper-thesis verify "$artifact_path" \
+            --current /tmp/current-destruction.zip \
+            | tee destruction-v2-reviewed-verify.json
+          printf '%s\n' "$artifact_path" > destruction-v2-reviewed-artifact-path.txt
+
+      - name: Upload reviewed destruction evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: satisfying-destruction-p7-reviewed-2026-09-02
+          retention-days: 30
+          if-no-files-found: error
+          path: |
+            research/satisfying-destruction-p7-2026-09-02/suite-v2.json
+            research/satisfying-destruction-p7-2026-09-02/generate-review-v2.py
+            destruction-source-sha256.txt
+            destruction-v2-unreviewed-build.json
+            destruction-review-v2.json
+            destruction-review-generation.json
+            destruction-v2-reviewed-build.json
+            destruction-v2-reviewed-verify.json
+            destruction-v2-reviewed-artifact-path.txt
+            artifacts/intelligence/**

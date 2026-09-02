@@ -128,7 +128,7 @@ def _thesis() -> AnalystSemanticThesisDeclaration:
         spec_version="analyst-semantic-thesis-v1",
         thesis_id="custom-headphones",
         version=1,
-        label="customization × headphones",
+        label="customization x headphones",
         target_set_ids=("headphones-thesis",),
         theme=AnalystSemanticRule(terms=("headphone", "наушник")),
         mechanic=AnalystSemanticRule(terms=("decorate", "customization", "stickers", "charms")),

@@ -1,56 +1,54 @@
 {
   "spec_version":"thesis-suite-v1",
-  "suite_id":"trend-mechanics-round4-2026-09-13",
-  "suite_version":4,
+  "suite_id":"trend-mechanics-round5-2026-09-13",
+  "suite_version":5,
   "context":{"pages":3,"session_profile":"clean_anonymous","lang":"ru","device":"desktop","platform":"desktop_other"},
   "anomaly_policy":{"spec_version":"thesis-anomaly-policy-v1","max_age_days":180,"min_rating_count":50,"min_lifetime_ratings_per_day":2.0},
   "theses":[
     {
-      "thesis_id":"one-button-suspicion-timing",
-      "thesis_version":2,
-      "label":"one-button hold release timing with suspicion risk",
+      "thesis_id":"act-while-not-watched",
+      "thesis_version":1,
+      "label":"perform forbidden action while observer is not looking",
       "queries":[
-        "не попадись игра",
-        "не дай себя поймать игра",
-        "подкрадись и не попадись игра",
-        "убей короля не попадись",
-        "зажми отпусти не попадись",
-        "игра на один палец не попадись",
-        "one button don't get caught game",
-        "hold release don't get caught game",
-        "sneak timing game",
-        "assassin timing game",
-        "hold to attack release to hide game",
-        "one button risk timing game"
+        "делай пока не смотрят игра",
+        "не попадись пока воруют игра",
+        "укради пока не смотрят игра",
+        "ешь пока не смотрят игра",
+        "списывай пока учитель не смотрит игра",
+        "воруй и не попадись игра",
+        "steal while not looking game",
+        "do it while they are not looking game",
+        "don't get caught stealing game",
+        "eat while teacher not looking game",
+        "cheat while teacher not looking game",
+        "one button don't get caught game"
       ],
       "semantic":{
-        "theme_terms":["caught","sneak","assassin","king","пойм","подкрад","убей корол","корол"],
-        "mechanic_terms":["hold","release","timing","attack","hide","зажм","отпуст","момент","атак","спряч"],
-        "reward_grammar_terms":["risk","watch","turn","suspicion","риск","смотр","оберн","подозр"]
+        "theme_terms":["not looking","caught","teacher","steal","watch","не смотр","пойм","учител","украд","вор"],
+        "mechanic_terms":["hold","release","tap","act","eat","cheat","зажм","отпуст","нажим","ешь","спис"],
+        "reward_grammar_terms":["risk","timing","hide","suspicion","риск","момент","спряч","подозр"]
       }
     },
     {
-      "thesis_id":"lightweight-resell-bargain",
-      "thesis_version":2,
-      "label":"list item bargain with buyer and sell for profit",
+      "thesis_id":"chat-bargain-sale","thesis_version":1,"label":"list item receive buyer chat negotiate and close sale",
       "queries":[
-        "перепродай вещь игра",
-        "торгуйся с покупателем игра",
-        "выставь товар на продажу игра",
-        "назначь цену товару игра",
-        "купи дешевле продай дороже игра",
-        "перепродажа вещей симулятор",
-        "resell item game",
-        "bargain with buyer game",
-        "list item for sale game",
-        "negotiate price seller game",
-        "buy low sell high simple game",
-        "marketplace reseller game"
+        "торгуйся в переписке игра",
+        "переписка с покупателем игра",
+        "покупатель предлагает цену игра",
+        "выстави вещь и продай игра",
+        "продай вещь через объявления игра",
+        "назначь цену и торгуйся игра",
+        "buyer chat bargain game",
+        "negotiate in chat game",
+        "list item buyer message game",
+        "sell item choose reply game",
+        "marketplace chat seller game",
+        "price offer negotiation game"
       ],
       "semantic":{
-        "theme_terms":["resell","seller","marketplace","buyer","перепрод","покупател","продавец","товар"],
-        "mechanic_terms":["bargain","negotiate","list","price","sell","buy","торг","цен","выстав","продай","купи"],
-        "reward_grammar_terms":["profit","deal","money","margin","прибыл","сделк","деньг","марж"]
+        "theme_terms":["buyer","seller","marketplace","chat","message","покупател","продавец","переписк","объявлен"],
+        "mechanic_terms":["bargain","negotiate","offer","reply","price","list","торг","предлож","ответ","цен","выстав"],
+        "reward_grammar_terms":["sale","deal","profit","sold","продаж","сделк","прибыл","продано"]
       }
     }
   ]

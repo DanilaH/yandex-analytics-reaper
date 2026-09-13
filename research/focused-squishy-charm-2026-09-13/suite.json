@@ -1,0 +1,68 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "focused-squishy-charm-2026-09-13",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 50,
+    "min_lifetime_ratings_per_day": 2.0
+  },
+  "theses": [
+    {
+      "thesis_id": "squishy-maker",
+      "thesis_version": 1,
+      "label": "make or customize x collectible squishy",
+      "queries": [
+        "сделай сквиш",
+        "создай сквиш",
+        "сделай антистресс сквиш",
+        "сделай таба лапку",
+        "создай дамплинг сквиш",
+        "сделай сквиш пельмень",
+        "сделай сквиш масло",
+        "squishy maker game",
+        "make squishy game",
+        "diy squishy game",
+        "make dumpling squishy",
+        "butter squishy game"
+      ],
+      "semantic": {
+        "theme_terms": ["squishy", "squish", "сквиш", "таба лап", "дамплинг", "антистресс"],
+        "mechanic_terms": ["make", "maker", "diy", "create", "mix", "mold", "decorate", "сдел", "созд", "смеш", "формоч", "украш"],
+        "reward_grammar_terms": ["squeeze", "press", "collect", "мни", "сжим", "нажим", "коллекц"]
+      }
+    },
+    {
+      "thesis_id": "beaded-bag-charm-maker",
+      "thesis_version": 1,
+      "label": "string beads or charms x bag charm/keychain",
+      "queries": [
+        "сделай брелок из бусин",
+        "собери брелок из бусин",
+        "сделай брелок с подвесками",
+        "сделай подвеску для сумки",
+        "собери подвеску из шармов",
+        "брелок из бусин игра",
+        "bag charm maker game",
+        "beaded keychain maker game",
+        "make bag charm game",
+        "string beads keychain game",
+        "charm keychain diy game",
+        "bag charm diy game"
+      ],
+      "semantic": {
+        "theme_terms": ["bag charm", "keychain", "брелок", "подвеск"],
+        "mechanic_terms": ["bead", "string", "thread", "clip", "бус", "наниз", "цепоч", "прикреп", "шарм"],
+        "reward_grammar_terms": ["custom", "design", "decorate", "collection", "кастом", "дизайн", "украш", "коллекц"]
+      }
+    }
+  ]
+}

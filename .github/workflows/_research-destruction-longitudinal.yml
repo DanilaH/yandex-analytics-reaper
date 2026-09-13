@@ -50,17 +50,19 @@ jobs:
           PY
       - name: Run exact refined thesis with frozen prior
         run: |
+          set -o pipefail
           PRIOR_ZIP="$(cat prior-experiment-path.txt)"
           yandex-reaper-thesis run \
             research/satisfying-destruction-p7-2026-09-02/suite-v2.json \
             --prior "$PRIOR_ZIP" \
-            --workers 4 | tee longitudinal-result.json
+            --workers 2 | tee longitudinal-result.json
       - name: Upload observation artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: satisfying-destruction-longitudinal-2026-09-13
+          name: satisfying-destruction-longitudinal-2026-09-13-${{ github.run_attempt }}
           path: |
             longitudinal-result.json
             artifacts/
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30

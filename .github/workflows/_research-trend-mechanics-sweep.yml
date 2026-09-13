@@ -1,0 +1,40 @@
+name: Trend mechanics sweep
+
+on:
+  push:
+    branches:
+      - research/trend-mechanics-sweep-2026-09-13
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Install Reaper
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e .
+      - name: Run focused suite
+        shell: bash
+        run: |
+          set -o pipefail
+          yandex-reaper-thesis run research/trend-mechanics-sweep-2026-09-13/suite.json --workers 2 | tee trend-mechanics-result.json
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trend-mechanics-sweep-2026-09-13
+          path: |
+            trend-mechanics-result.json
+            artifacts/
+          if-no-files-found: error
+          retention-days: 30

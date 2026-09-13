@@ -1,14 +1,57 @@
 {
   "spec_version":"thesis-suite-v1",
-  "suite_id":"trend-mechanics-round3-2026-09-13",
-  "suite_version":3,
+  "suite_id":"trend-mechanics-round4-2026-09-13",
+  "suite_version":4,
   "context":{"pages":3,"session_profile":"clean_anonymous","lang":"ru","device":"desktop","platform":"desktop_other"},
   "anomaly_policy":{"spec_version":"thesis-anomaly-policy-v1","max_age_days":180,"min_rating_count":50,"min_lifetime_ratings_per_day":2.0},
   "theses":[
-    {"thesis_id":"hold-release-suspicion","thesis_version":1,"label":"hold release timing x do not get caught","queries":["не попадись игра","не дай себя поймать игра","подкрадись игра","убей короля не попадись","зажми отпусти игра","don't get caught game","hold release timing game","sneak without getting caught game","kill king timing game","one button timing game"],"semantic":{"theme_terms":["caught","king","sneak","пойм","корол","подкрад"],"mechanic_terms":["hold","release","timing","зажм","отпуст","момент"],"reward_grammar_terms":["risk","watch","turn","риск","смотр","оберн"]}},
-    {"thesis_id":"resell-bargain-sim","thesis_version":1,"label":"buy resell negotiate x simple ui simulator","queries":["перепродажа игра","симулятор перепродажи","торгуйся с покупателем игра","купи дешевле продай дороже игра","продажа вещей симулятор","resell simulator game","bargain seller game","buy low sell high game","marketplace seller simulator","negotiate price game"],"semantic":{"theme_terms":["resell","seller","marketplace","перепрод","продаж","покупател"],"mechanic_terms":["bargain","negotiate","price","sell","buy","торг","цен","продай","купи"],"reward_grammar_terms":["profit","money","deal","прибыл","деньг","сделк"]}},
-    {"thesis_id":"trace-reveal","thesis_version":1,"label":"trace contour x visual reveal","queries":["обведи контур игра","рисуй по контуру игра","проведи по линии игра","неоновый рисунок игра","обведи картинку игра","trace drawing game","trace line game","draw along outline game","neon drawing game","trace and reveal game"],"semantic":{"theme_terms":["trace","outline","contour","neon","контур","линии","неон"],"mechanic_terms":["draw","trace","follow","обвод","рис","вед"],"reward_grammar_terms":["reveal","complete","glow","откр","готов","свеч"]}},
-    {"thesis_id":"tap-arrow-puzzle","thesis_version":1,"label":"tap arrows in correct order puzzle","queries":["тап стрелка игра","убери стрелки игра","стрелки головоломка","нажимай стрелки по порядку","освободи стрелки игра","tap arrow puzzle","tap away arrows game","remove arrows puzzle","arrow order puzzle","free the arrows game"],"semantic":{"theme_terms":["arrow","стрел"],"mechanic_terms":["tap","remove","order","free","нажим","убер","поряд"],"reward_grammar_terms":["puzzle","clear","level","головолом","очист","уров"]}},
-    {"thesis_id":"clean-sort-asmr","thesis_version":1,"label":"clean sort and place objects x asmr","queries":["убери магазин игра","сортировка магазина игра","расставь товары игра","очисти магазин игра","уборка и сортировка игра","clean store game","sort shop game","organize store game","clean and sort asmr game","put items on shelves game"],"semantic":{"theme_terms":["store","shop","магазин","товар","полк"],"mechanic_terms":["clean","sort","organize","place","убер","сортир","расстав","очист"],"reward_grammar_terms":["asmr","satisfying","tidy","порядок","чист","прият"]}}
+    {
+      "thesis_id":"one-button-suspicion-timing",
+      "thesis_version":2,
+      "label":"one-button hold release timing with suspicion risk",
+      "queries":[
+        "не попадись игра",
+        "не дай себя поймать игра",
+        "подкрадись и не попадись игра",
+        "убей короля не попадись",
+        "зажми отпусти не попадись",
+        "игра на один палец не попадись",
+        "one button don't get caught game",
+        "hold release don't get caught game",
+        "sneak timing game",
+        "assassin timing game",
+        "hold to attack release to hide game",
+        "one button risk timing game"
+      ],
+      "semantic":{
+        "theme_terms":["caught","sneak","assassin","king","пойм","подкрад","убей корол","корол"],
+        "mechanic_terms":["hold","release","timing","attack","hide","зажм","отпуст","момент","атак","спряч"],
+        "reward_grammar_terms":["risk","watch","turn","suspicion","риск","смотр","оберн","подозр"]
+      }
+    },
+    {
+      "thesis_id":"lightweight-resell-bargain",
+      "thesis_version":2,
+      "label":"list item bargain with buyer and sell for profit",
+      "queries":[
+        "перепродай вещь игра",
+        "торгуйся с покупателем игра",
+        "выставь товар на продажу игра",
+        "назначь цену товару игра",
+        "купи дешевле продай дороже игра",
+        "перепродажа вещей симулятор",
+        "resell item game",
+        "bargain with buyer game",
+        "list item for sale game",
+        "negotiate price seller game",
+        "buy low sell high simple game",
+        "marketplace reseller game"
+      ],
+      "semantic":{
+        "theme_terms":["resell","seller","marketplace","buyer","перепрод","покупател","продавец","товар"],
+        "mechanic_terms":["bargain","negotiate","list","price","sell","buy","торг","цен","выстав","продай","купи"],
+        "reward_grammar_terms":["profit","deal","money","margin","прибыл","сделк","деньг","марж"]
+      }
+    }
   ]
 }

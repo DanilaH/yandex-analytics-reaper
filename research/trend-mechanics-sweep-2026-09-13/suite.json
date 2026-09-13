@@ -1,0 +1,130 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "trend-mechanics-sweep-2026-09-13",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 50,
+    "min_lifetime_ratings_per_day": 2.0
+  },
+  "theses": [
+    {
+      "thesis_id": "gummy-squish",
+      "thesis_version": 1,
+      "label": "squish or stretch x gummy/jelly object",
+      "queries": [
+        "мни желе",
+        "сожми желе",
+        "растяни желе",
+        "желейный антистресс",
+        "мягкий желейный антистресс",
+        "squish jelly",
+        "squish gummy",
+        "stretch jelly",
+        "jelly stress toy",
+        "gummy asmr game"
+      ],
+      "semantic": {
+        "theme_terms": ["jelly", "gummy", "желе", "желей", "мармелад"],
+        "mechanic_terms": ["squish", "stretch", "squeeze", "press", "мни", "сожм", "растян", "дав", "нажим"],
+        "reward_grammar_terms": ["asmr", "antistress", "антистресс", "deform", "shape", "форм"]
+      }
+    },
+    {
+      "thesis_id": "bag-charm-maker",
+      "thesis_version": 1,
+      "label": "assemble or customize x bag/keychain charm",
+      "queries": [
+        "собери брелок",
+        "сделай брелок",
+        "укрась брелок",
+        "собери подвеску на сумку",
+        "сделай подвеску на сумку",
+        "bag charm maker",
+        "make bag charm",
+        "keychain maker",
+        "make keychain charms",
+        "charm bracelet maker"
+      ],
+      "semantic": {
+        "theme_terms": ["bag charm", "keychain", "bracelet", "брелок", "подвеск", "браслет"],
+        "mechanic_terms": ["make", "maker", "assemble", "customiz", "собер", "сдел", "украш", "кастом"],
+        "reward_grammar_terms": ["bead", "charm", "clip", "бус", "шарм", "подвес", "цепоч"]
+      }
+    },
+    {
+      "thesis_id": "decoden-piping",
+      "thesis_version": 1,
+      "label": "pipe cream and place charms x accessory decoration",
+      "queries": [
+        "декоден чехол игра",
+        "укрась чехол кремом",
+        "крем клей чехол",
+        "укрась зеркало кремом",
+        "украшение чехла подвесками",
+        "decoden game",
+        "decoden phone case game",
+        "cream glue decorating game",
+        "decorate case with charms",
+        "decoden mirror game"
+      ],
+      "semantic": {
+        "theme_terms": ["case", "mirror", "чехол", "зеркал", "phone"],
+        "mechanic_terms": ["decoden", "cream glue", "pipe", "decorate", "декоден", "крем", "украш"],
+        "reward_grammar_terms": ["charm", "pearl", "rhinestone", "cream", "шарм", "подвес", "жемч", "страз"]
+      }
+    },
+    {
+      "thesis_id": "visible-mending-thrift-flip",
+      "thesis_version": 1,
+      "label": "repair or patch x thrift/upcycle clothing",
+      "queries": [
+        "зашей одежду игра",
+        "почини порванную одежду",
+        "поставь заплатку на одежду",
+        "переделай старую одежду",
+        "апсайкл одежда игра",
+        "visible mending game",
+        "repair torn clothes game",
+        "patch clothes game",
+        "thrift flip game",
+        "upcycle clothes game"
+      ],
+      "semantic": {
+        "theme_terms": ["clothes", "clothing", "shirt", "jeans", "одежд", "футбол", "джинс"],
+        "mechanic_terms": ["repair", "mend", "patch", "stitch", "upcycle", "заш", "почин", "заплат", "передел"],
+        "reward_grammar_terms": ["style", "fashion", "design", "стиль", "мод", "дизайн"]
+      }
+    },
+    {
+      "thesis_id": "trinket-shelf-arrange",
+      "thesis_version": 1,
+      "label": "arrange or organize x trinket shelf collection",
+      "queries": [
+        "расставь коллекцию на полке",
+        "расставь фигурки на полке",
+        "организуй полку с коллекцией",
+        "полка с брелоками игра",
+        "полка с безделушками игра",
+        "arrange trinket shelf game",
+        "organize collectible shelf game",
+        "arrange figures shelf game",
+        "trinket shelf game",
+        "collection display game"
+      ],
+      "semantic": {
+        "theme_terms": ["shelf", "trinket", "collection", "figure", "полк", "коллекц", "фигур", "безделуш"],
+        "mechanic_terms": ["arrange", "organize", "place", "sort", "расстав", "организ", "разлож", "сортир"],
+        "reward_grammar_terms": ["display", "aesthetic", "decorate", "витрин", "декор", "красив"]
+      }
+    }
+  ]
+}

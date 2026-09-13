@@ -1,0 +1,130 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "one-tool-crafts-2026-09-13",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 50,
+    "min_lifetime_ratings_per_day": 2.0
+  },
+  "theses": [
+    {
+      "thesis_id": "candle-making",
+      "thesis_version": 1,
+      "label": "pour or craft x candle",
+      "queries": [
+        "сделай свечу игра",
+        "создай свечу игра",
+        "залей свечу",
+        "свеча своими руками игра",
+        "резьба по свече игра",
+        "candle maker game",
+        "candle craft game",
+        "make candle game",
+        "pour candle game",
+        "candle carving game"
+      ],
+      "semantic": {
+        "theme_terms": ["candle", "свеч"],
+        "mechanic_terms": ["make", "maker", "craft", "pour", "melt", "dip", "carv", "сдел", "созд", "зал", "плав", "рез"],
+        "reward_grammar_terms": ["wax", "color", "shape", "decorate", "воск", "цвет", "форм", "украш"]
+      }
+    },
+    {
+      "thesis_id": "rug-tufting",
+      "thesis_version": 1,
+      "label": "tuft or trim x rug",
+      "queries": [
+        "тафтинг игра",
+        "сделай ковёр игра",
+        "сделай коврик игра",
+        "тафтинг ковёр игра",
+        "коврик своими руками игра",
+        "rug tufting game",
+        "tuft rug game",
+        "carpet maker game",
+        "make rug game",
+        "rug trimming game"
+      ],
+      "semantic": {
+        "theme_terms": ["rug", "carpet", "ковер", "ковёр", "коврик"],
+        "mechanic_terms": ["tuft", "trim", "shave", "glue", "тафт", "стричь", "подстриг", "клей", "сдел"],
+        "reward_grammar_terms": ["pattern", "design", "smooth", "gallery", "узор", "дизайн", "глад", "коллекц"]
+      }
+    },
+    {
+      "thesis_id": "mini-terrarium-maker",
+      "thesis_version": 1,
+      "label": "build or decorate x mini terrarium",
+      "queries": [
+        "собери террариум игра",
+        "сделай террариум игра",
+        "мини сад в банке игра",
+        "укрась террариум игра",
+        "создай мини сад игра",
+        "terrarium maker game",
+        "build terrarium game",
+        "mini garden maker game",
+        "decorate terrarium game",
+        "bottle garden game"
+      ],
+      "semantic": {
+        "theme_terms": ["terrarium", "mini garden", "bottle garden", "террариум", "мини сад", "сад в бан"],
+        "mechanic_terms": ["build", "make", "decorate", "plant", "place", "собер", "сдел", "украш", "посад", "расстав"],
+        "reward_grammar_terms": ["plant", "moss", "stone", "miniature", "растен", "мох", "камн", "миниатюр"]
+      }
+    },
+    {
+      "thesis_id": "clay-charm-sculpting",
+      "thesis_version": 1,
+      "label": "sculpt clay x charm/keychain",
+      "queries": [
+        "сделай брелок из глины игра",
+        "глиняный брелок игра",
+        "слепи брелок игра",
+        "сделай подвеску из глины игра",
+        "лепка брелка игра",
+        "clay charm maker game",
+        "clay bag charm game",
+        "sculpt charm game",
+        "air dry clay charm game",
+        "clay keychain maker game"
+      ],
+      "semantic": {
+        "theme_terms": ["charm", "keychain", "bag charm", "брелок", "подвеск"],
+        "mechanic_terms": ["clay", "sculpt", "mold", "shape", "глин", "леп", "слеп", "форм"],
+        "reward_grammar_terms": ["paint", "decorate", "attach", "color", "раскрас", "украш", "прикреп", "цвет"]
+      }
+    },
+    {
+      "thesis_id": "potion-apothecary-ritual",
+      "thesis_version": 1,
+      "label": "mix or brew x potion/apothecary",
+      "queries": [
+        "свари зелье игра",
+        "сделай зелье игра",
+        "смешай зелье игра",
+        "алхимия зелье игра",
+        "аптекарь травы игра",
+        "potion maker game",
+        "brew potion game",
+        "mix potion game",
+        "apothecary game",
+        "potion craft game"
+      ],
+      "semantic": {
+        "theme_terms": ["potion", "apothecary", "alchemy", "зель", "алхим", "аптек"],
+        "mechanic_terms": ["brew", "mix", "grind", "pour", "stir", "свар", "смеш", "измельч", "нал", "меш"],
+        "reward_grammar_terms": ["ingredient", "bottle", "recipe", "herb", "ингреди", "бутыл", "рецепт", "трав"]
+      }
+    }
+  ]
+}

@@ -1,130 +1,18 @@
 {
-  "spec_version": "thesis-suite-v1",
-  "suite_id": "trend-mechanics-sweep-2026-09-13",
-  "suite_version": 1,
-  "context": {
-    "pages": 3,
-    "session_profile": "clean_anonymous",
-    "lang": "ru",
-    "device": "desktop",
-    "platform": "desktop_other"
-  },
-  "anomaly_policy": {
-    "spec_version": "thesis-anomaly-policy-v1",
-    "max_age_days": 180,
-    "min_rating_count": 50,
-    "min_lifetime_ratings_per_day": 2.0
-  },
-  "theses": [
-    {
-      "thesis_id": "gummy-squish",
-      "thesis_version": 1,
-      "label": "squish or stretch x gummy/jelly object",
-      "queries": [
-        "мни желе",
-        "сожми желе",
-        "растяни желе",
-        "желейный антистресс",
-        "мягкий желейный антистресс",
-        "squish jelly",
-        "squish gummy",
-        "stretch jelly",
-        "jelly stress toy",
-        "gummy asmr game"
-      ],
-      "semantic": {
-        "theme_terms": ["jelly", "gummy", "желе", "желей", "мармелад"],
-        "mechanic_terms": ["squish", "stretch", "squeeze", "press", "мни", "сожм", "растян", "дав", "нажим"],
-        "reward_grammar_terms": ["asmr", "antistress", "антистресс", "deform", "shape", "форм"]
-      }
-    },
-    {
-      "thesis_id": "bag-charm-maker",
-      "thesis_version": 1,
-      "label": "assemble or customize x bag/keychain charm",
-      "queries": [
-        "собери брелок",
-        "сделай брелок",
-        "укрась брелок",
-        "собери подвеску на сумку",
-        "сделай подвеску на сумку",
-        "bag charm maker",
-        "make bag charm",
-        "keychain maker",
-        "make keychain charms",
-        "charm bracelet maker"
-      ],
-      "semantic": {
-        "theme_terms": ["bag charm", "keychain", "bracelet", "брелок", "подвеск", "браслет"],
-        "mechanic_terms": ["make", "maker", "assemble", "customiz", "собер", "сдел", "украш", "кастом"],
-        "reward_grammar_terms": ["bead", "charm", "clip", "бус", "шарм", "подвес", "цепоч"]
-      }
-    },
-    {
-      "thesis_id": "decoden-piping",
-      "thesis_version": 1,
-      "label": "pipe cream and place charms x accessory decoration",
-      "queries": [
-        "декоден чехол игра",
-        "укрась чехол кремом",
-        "крем клей чехол",
-        "укрась зеркало кремом",
-        "украшение чехла подвесками",
-        "decoden game",
-        "decoden phone case game",
-        "cream glue decorating game",
-        "decorate case with charms",
-        "decoden mirror game"
-      ],
-      "semantic": {
-        "theme_terms": ["case", "mirror", "чехол", "зеркал", "phone"],
-        "mechanic_terms": ["decoden", "cream glue", "pipe", "decorate", "декоден", "крем", "украш"],
-        "reward_grammar_terms": ["charm", "pearl", "rhinestone", "cream", "шарм", "подвес", "жемч", "страз"]
-      }
-    },
-    {
-      "thesis_id": "visible-mending-thrift-flip",
-      "thesis_version": 1,
-      "label": "repair or patch x thrift/upcycle clothing",
-      "queries": [
-        "зашей одежду игра",
-        "почини порванную одежду",
-        "поставь заплатку на одежду",
-        "переделай старую одежду",
-        "апсайкл одежда игра",
-        "visible mending game",
-        "repair torn clothes game",
-        "patch clothes game",
-        "thrift flip game",
-        "upcycle clothes game"
-      ],
-      "semantic": {
-        "theme_terms": ["clothes", "clothing", "shirt", "jeans", "одежд", "футбол", "джинс"],
-        "mechanic_terms": ["repair", "mend", "patch", "stitch", "upcycle", "заш", "почин", "заплат", "передел"],
-        "reward_grammar_terms": ["style", "fashion", "design", "стиль", "мод", "дизайн"]
-      }
-    },
-    {
-      "thesis_id": "trinket-shelf-arrange",
-      "thesis_version": 1,
-      "label": "arrange or organize x trinket shelf collection",
-      "queries": [
-        "расставь коллекцию на полке",
-        "расставь фигурки на полке",
-        "организуй полку с коллекцией",
-        "полка с брелоками игра",
-        "полка с безделушками игра",
-        "arrange trinket shelf game",
-        "organize collectible shelf game",
-        "arrange figures shelf game",
-        "trinket shelf game",
-        "collection display game"
-      ],
-      "semantic": {
-        "theme_terms": ["shelf", "trinket", "collection", "figure", "полк", "коллекц", "фигур", "безделуш"],
-        "mechanic_terms": ["arrange", "organize", "place", "sort", "расстав", "организ", "разлож", "сортир"],
-        "reward_grammar_terms": ["display", "aesthetic", "decorate", "витрин", "декор", "красив"]
-      }
-    }
+  "spec_version":"thesis-suite-v1",
+  "suite_id":"trend-mechanics-round2-2026-09-13",
+  "suite_version":2,
+  "context":{"pages":3,"session_profile":"clean_anonymous","lang":"ru","device":"desktop","platform":"desktop_other"},
+  "anomaly_policy":{"spec_version":"thesis-anomaly-policy-v1","max_age_days":180,"min_rating_count":50,"min_lifetime_ratings_per_day":2.0},
+  "theses":[
+    {"thesis_id":"squishy-maker","thesis_version":2,"label":"make customize and squeeze squishy","queries":["сделай сквиши","создай сквиши","сквиши своими руками игра","сделай таба лапку","сделай дамплинг сквиши","укрась сквиши","squishy maker game","make squishy game","dumpling squishy maker","diy squishy game"],"semantic":{"theme_terms":["squish","сквиш","таба","дамплинг"],"mechanic_terms":["make","maker","diy","customiz","squeeze","press","сдел","созд","украш","мни","нажим"],"reward_grammar_terms":["collect","decorate","asmr","коллекц","декор","антистресс"]}},
+    {"thesis_id":"bag-charm-maker","thesis_version":2,"label":"assemble beads into bag charm or keychain","queries":["сделай брелок из бусин","собери брелок из бусин","сделай подвеску на сумку","собери подвеску на сумку","нанизывай бусины брелок","bag charm maker game","bead keychain maker game","make bag charm game","string beads keychain game","charm maker game"],"semantic":{"theme_terms":["bag charm","keychain","брелок","подвеск"],"mechanic_terms":["bead","string","thread","assemble","make","бус","наниз","собер","сдел"],"reward_grammar_terms":["charm","clip","chain","шарм","цепоч","коллекц"]}},
+    {"thesis_id":"rug-tufting","thesis_version":1,"label":"tuft and trim rug","queries":["тафтинг игра","сделай ковёр игра","сделай коврик игра","тафтинг ковёр игра","коврик своими руками игра","rug tufting game","tuft rug game","carpet maker game","make rug game","rug trimming game"],"semantic":{"theme_terms":["rug","carpet","ковер","ковёр","коврик"],"mechanic_terms":["tuft","trim","shave","glue","тафт","стричь","подстриг","клей","сдел"],"reward_grammar_terms":["pattern","design","smooth","gallery","узор","дизайн","глад"]}},
+    {"thesis_id":"mini-terrarium-maker","thesis_version":1,"label":"build mini terrarium","queries":["собери террариум игра","сделай террариум игра","мини сад в банке игра","укрась террариум игра","создай мини сад игра","terrarium maker game","build terrarium game","mini garden maker game","decorate terrarium game","bottle garden game"],"semantic":{"theme_terms":["terrarium","mini garden","bottle garden","террариум","мини сад"],"mechanic_terms":["build","make","decorate","plant","place","собер","сдел","украш","посад"],"reward_grammar_terms":["plant","moss","stone","miniature","растен","мох","камн"]}},
+    {"thesis_id":"candle-making","thesis_version":1,"label":"make pour or carve candle","queries":["сделай свечу игра","создай свечу игра","залей свечу","свеча своими руками игра","резьба по свече игра","candle maker game","candle craft game","make candle game","pour candle game","candle carving game"],"semantic":{"theme_terms":["candle","свеч"],"mechanic_terms":["make","maker","craft","pour","melt","dip","carv","сдел","созд","зал","рез"],"reward_grammar_terms":["wax","color","shape","decorate","воск","цвет","форм","украш"]}},
+    {"thesis_id":"clay-charm-sculpting","thesis_version":1,"label":"sculpt clay charm or keychain","queries":["сделай брелок из глины игра","глиняный брелок игра","слепи брелок игра","сделай подвеску из глины игра","лепка брелка игра","clay charm maker game","clay bag charm game","sculpt charm game","air dry clay charm game","clay keychain maker game"],"semantic":{"theme_terms":["charm","keychain","bag charm","брелок","подвеск"],"mechanic_terms":["clay","sculpt","mold","shape","глин","леп","слеп","форм"],"reward_grammar_terms":["paint","decorate","attach","color","раскрас","украш","цвет"]}},
+    {"thesis_id":"visible-mending","thesis_version":2,"label":"patch or stitch clothing transformation","queries":["зашей одежду игра","почини одежду игра","заплатка на одежду игра","переделай старую одежду","вышивка на одежде игра","visible mending game","repair clothes game","patch clothes game","thrift flip game","upcycle clothes game"],"semantic":{"theme_terms":["clothes","clothing","shirt","jeans","одежд","джинс"],"mechanic_terms":["repair","mend","patch","stitch","upcycle","заш","почин","заплат","передел","вышив"],"reward_grammar_terms":["style","fashion","design","стиль","мод","дизайн"]}},
+    {"thesis_id":"custom-headphones","thesis_version":2,"label":"customize headphones","queries":["укрась наушники","кастом наушников","кастомизация наушников","наушники со стразами","наушники с подвесками","раскрась наушники","decorate headphones","bedazzle headphones","headphone charms","paint headphones"],"semantic":{"theme_terms":["headphone","наушник"],"mechanic_terms":["decorate","customiz","bedazzle","paint","украш","кастом","страз","подвеск","раскрас","наклей"],"reward_grammar_terms":["sticker","charm","rhinestone","color","material","наклей","подвес","страз","цвет"]}},
+    {"thesis_id":"satisfying-destruction","thesis_version":3,"label":"simple repeated destruction of ordinary objects","queries":["разбей предметы","ломай предметы","разбей всё","разнеси всё","разрушай предметы","круши предметы","симулятор разрушений предметов","разбей стекло","разбей бутылки","сломай технику","break objects","smash objects","destroy objects","break everything","smash everything","satisfying destruction","tap to break","click to destroy","break glass","smash bottles"],"semantic":{"theme_terms":["разбей предмет","ломай предмет","разнести всё","разрушай предмет","круши предмет","разбей стекло","разбей бутыл","сломай техник","break objects","smash objects","destroy objects","break everything","smash everything","break glass","smash bottles"],"mechanic_terms":["клик","тап","оруж","click","tap","weapon"],"reward_grammar_terms":["damage","destroy","break","smash","разруш","разб","слом"]}}
   ]
 }

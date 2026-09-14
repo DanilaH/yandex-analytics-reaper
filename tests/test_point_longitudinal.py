@@ -120,10 +120,16 @@ def test_longitudinal_comparison_preserves_delta_revision_and_missing_semantics(
 
     persisted = json.loads(output.read_text(encoding="utf-8"))
     assert persisted["interpretation_boundary"] == (
-        "point_velocity_not_search_visibility_dau_installs_revenue_or_retention"
+        "point_velocity_not_search_visibility_lifetime_pace_dau_installs_revenue_or_retention"
     )
     assert persisted["previous"]["artifact_sha256"] == comparison.previous.artifact_sha256
     assert persisted["current"]["artifact_sha256"] == comparison.current.artifact_sha256
+    assert persisted["previous"]["source_id"] == "yandex_public"
+    assert persisted["previous"]["source_request_key"] == "catalogue.get_games"
+    assert persisted["previous"]["parser_name"] == "YandexGetGamesParser"
+    assert persisted["current"]["source_id"] == "yandex_public"
+    assert persisted["current"]["source_request_key"] == "catalogue.get_games"
+    assert persisted["current"]["parser_name"] == "YandexGetGamesParser"
 
 
 def test_longitudinal_output_is_create_only_before_artifact_work(tmp_path: Path) -> None:

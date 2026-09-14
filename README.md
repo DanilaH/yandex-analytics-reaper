@@ -53,6 +53,7 @@ Implemented:
 - frozen primary-archetype review protocol with exact gold-set binding and support/confidence diagnostics;
 - frozen independent-annotation primary agreement/confusion protocol with symmetric confusion pairs, `unknown`/`other` diagnostics, and explicit adjudication-alignment metrics;
 - offline `yandex-reaper-taxonomy` file-in/file-out execution CLI for annotation validation, gold-set construction, primary review, and agreement/confusion artifacts with create-only report writes;
+- digest-bound durable evidence archive tooling that preserves exact CI artifact bytes in Release assets, inventories every inner member, and safely reconstructs verified prior experiment ZIPs after Actions retention expires;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
@@ -88,6 +89,7 @@ See `ROADMAP.md` for the authoritative sequence and phase Definition of Done.
 src/yandex_analytics_reaper/   application/source/domain code
 tests/                         unit/fixture-driven tests
 data/                          local runtime data; collected/session data is gitignored
+research/archive/              small durable-evidence request catalog; heavy bytes stay in Releases
 docs/spec/                     living analytical/domain specifications
 docs/research/                 dated factual probes/research evidence
 docs/history/                  historical review/decision records
@@ -366,6 +368,38 @@ Existing manual search probes persist the exact `query_text` actually sent. Quer
 `SQLiteComparableSetStore` persists the exact family version, run mapping, first-occurrence member order, observation interval, parser identity, and ordered raw membership evidence. Identical `(set_id, version)` writes are idempotent; conflicting content is rejected, and reads fail closed if referenced family/run/page provenance drifts.
 
 This is deliberately a **provisional search-derived candidate peer set**. Phase 3 taxonomy is still draft, so `yandex_search_union_v1` does not claim every member is a validated gameplay comparable and does not silently filter with an unvalidated classifier. Later taxonomy-refined construction must create a new version/method rather than rewrite historical v1 sets.
+
+## Durable CI evidence archive
+
+Decision-relevant CI evidence must not depend on an expiring Actions download URL. `docs/spec/durable-evidence-archive.md` defines the durability contract.
+
+Committed requests live under `research/archive/requests/`; the heavy exact Actions ZIP is published as a GitHub Release asset. The generated manifest binds the wrapper SHA-256/size and every non-directory ZIP member by exact path, uncompressed size and SHA-256.
+
+Offline commands:
+
+```bash
+# Build a create-only manifest after downloading the exact Actions artifact.
+yandex-reaper-archive build \
+  research/archive/requests/example.json \
+  example.actions.zip \
+  example.manifest.json \
+  --checksum-output example.sha256
+
+# Verify a durable Release download against both the generated manifest and committed request.
+yandex-reaper-archive verify \
+  example.manifest.json \
+  example.actions.zip \
+  --request research/archive/requests/example.json
+
+# Recover one exact inner experiment ZIP for existing longitudinal tooling.
+yandex-reaper-archive extract \
+  example.manifest.json \
+  example.actions.zip \
+  'artifacts/exports/<experiment>/<run>.zip' \
+  prior-experiment.zip
+```
+
+The archive CLI performs no network calls. `.github/workflows/durable-evidence-archive.yml` owns GitHub transport and create-only Release reconciliation. Existing `yandex-reaper-thesis --prior` semantics remain unchanged: it still consumes the verified local experiment ZIP produced by the final extraction step.
 
 ## Listing histories
 

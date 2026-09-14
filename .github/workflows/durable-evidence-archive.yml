@@ -78,11 +78,8 @@ jobs:
                 echo "Release lookup returned the wrong tag for ${archive_id}." >&2
                 exit 1
               fi
-              target="$(jq -r '.targetCommitish' <<<"${release_json}")"
-              if [[ "${target}" != "${source_sha}" ]]; then
-                echo "Release ${tag} targets ${target}, expected source commit ${source_sha}." >&2
-                exit 1
-              fi
+              transport_target="$(jq -r '.targetCommitish' <<<"${release_json}")"
+              echo "Release ${tag} transport target: ${transport_target}; evidence source: ${source_sha}."
 
               existing_assets="$(jq -r '.assets[].name' <<<"${release_json}")"
               missing=0
@@ -185,9 +182,9 @@ jobs:
             if [[ -z "${release_json}" ]]; then
               gh release create "${tag}" \
                 --draft \
-                --target "${source_sha}" \
+                --target "${GITHUB_SHA}" \
                 --title "Evidence: ${archive_id}" \
-                --notes "Durable, digest-bound archive of GitHub Actions evidence. See research/archive/requests and docs/spec/durable-evidence-archive.md."
+                --notes "Durable, digest-bound archive of GitHub Actions evidence. Evidence provenance is bound by the committed request and manifest; the Release target is transport metadata only."
               release_json="$(gh release view "${tag}" --json tagName,isDraft,targetCommitish,assets)"
             fi
 

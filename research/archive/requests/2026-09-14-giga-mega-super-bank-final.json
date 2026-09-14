@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "giga-mega-super-bank-final-2026-09-14",
+  "source": {
+    "workflow_run_id": 34861437397,
+    "workflow_artifact_id": 10354954342,
+    "workflow_artifact_name": "giga-mega-super-bank-final-2026-09-14",
+    "artifact_created_at": "2026-09-14T15:21:14Z",
+    "artifact_expires_at": "2026-12-13T15:19:49Z",
+    "source_commit_sha": "6d7f93fb20eed6004c8a4a169a203ce5f7137f65",
+    "source_branch": "research/giga-mega-super-bank-2026-09-14"
+  },
+  "expected": {
+    "sha256": "cd0636824c4830a8baf0f33a5398ba66b273b376a5c8251d854d732b0c5b2e45",
+    "size_bytes": 13320866
+  },
+  "release": {
+    "tag": "evidence-2026-09-14-giga-mega-super-bank-final",
+    "asset_name": "giga-mega-super-bank-final-2026-09-14.actions.zip",
+    "manifest_asset_name": "giga-mega-super-bank-final-2026-09-14.manifest.json",
+    "checksum_asset_name": "giga-mega-super-bank-final-2026-09-14.sha256"
+  }
+}

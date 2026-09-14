@@ -1,0 +1,90 @@
+name: Apply point observation review fixes
+
+on:
+  push:
+    branches:
+      - feature/r0.4-p1-point-observation
+    paths:
+      - .github/workflows/_patch-point-observation-review.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feature/r0.4-p1-point-observation
+      - name: Patch review findings fail-closed
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/yandex_analytics_reaper/point_observation.py')
+          text = path.read_text(encoding='utf-8')
+
+          old = 'from collections.abc import Mapping, Sequence\n'
+          new = 'from collections.abc import Sequence\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one unused Mapping import, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = '''        declaration = ListingObservationSetDeclaration.model_validate(declaration.model_dump())
+          result = self.rich_collector.collect(declaration.app_ids)
+          metadata = result.raw_snapshot
+          '''
+          new = '''        declaration = ListingObservationSetDeclaration.model_validate(declaration.model_dump())
+          if artifact_path.exists():
+              raise ListingObservationError(
+                  f"refusing to overwrite existing observation artifact: {artifact_path}"
+              )
+          result = self.rich_collector.collect(declaration.app_ids)
+          metadata = result.raw_snapshot
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one collector entry block, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          old = '''    if manifest.declaration_content_hash != declaration_hash:
+              raise ListingObservationError("manifest declaration hash does not match declaration")
+          if report.declaration_content_hash != declaration_hash:
+              raise ListingObservationError("report declaration hash does not match declaration")
+          if manifest.source_snapshot_id != metadata.id:
+          '''
+          new = '''    if manifest.declaration_content_hash != declaration_hash:
+              raise ListingObservationError("manifest declaration hash does not match declaration")
+          if report.declaration_content_hash != declaration_hash:
+              raise ListingObservationError("report declaration hash does not match declaration")
+          declaration_identity = (
+              declaration.observation_set_id,
+              declaration.observation_set_version,
+          )
+          if (
+              manifest.observation_set_id,
+              manifest.observation_set_version,
+          ) != declaration_identity:
+              raise ListingObservationError("manifest observation-set identity does not match declaration")
+          if (
+              report.observation_set_id,
+              report.observation_set_version,
+          ) != declaration_identity:
+              raise ListingObservationError("report observation-set identity does not match declaration")
+          if manifest.source_snapshot_id != metadata.id:
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one verifier binding block, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+          git diff --check
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/yandex_analytics_reaper/point_observation.py
+          git commit -m "Harden point observation identity and create-only gate"
+          git push origin HEAD:feature/r0.4-p1-point-observation

@@ -1,0 +1,130 @@
+name: Close R0.4 P1 docs
+
+on:
+  push:
+    branches:
+      - feature/r0.4-p1-point-observation
+    paths:
+      - .github/workflows/_close-r0.4-p1.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/r0.4-p1-point-observation
+      - name: Patch docs fail-closed
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_str: str, old: str, new: str) -> None:
+              path = Path(path_str)
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path_str}: expected exactly one match, found {count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          replace_once(
+              'ROADMAP.md',
+              '''R0.4-P0 contract freeze + independent review — COMPLETE
+          -> R0.4-P1 exact-ID point observation artifact — NEXT
+          -> R0.4-P2 known-ID longitudinal comparison''',
+              '''R0.4-P0 contract freeze + independent review — COMPLETE
+          -> R0.4-P1 exact-ID point observation artifact — COMPLETE
+          -> R0.4-P2 known-ID longitudinal comparison — NEXT''',
+          )
+
+          replace_once(
+              'ROADMAP.md',
+              '''### R0.4-P1 — Exact-ID point observation artifact — NEXT
+
+          Reuse the existing `YandexRichMetadataCollector` and `catalogue.get_games` path.
+
+          Definition of Done:
+
+          - [ ] versioned `listing-observation-set-v1` declaration with unique ordered app IDs;
+          - [ ] raw-first exact-ID collection through the existing Yandex client/collector;
+          - [ ] explicit requested / returned / missing / unexpected ID accounting;
+          - [ ] deterministic create-only artifact with declaration, observation, exact raw bytes and member manifest;
+          - [ ] offline verifier reparses raw evidence and reconstructs observation identity/facts;
+          - [ ] no search/query membership is invented for point-observed IDs;
+          - [ ] CLI entry point and focused tests;
+          - [ ] full `ruff`, strict `mypy`, `pytest`/coverage gate passes;
+          - [ ] live Keycap control observes `540402`, `559445`, `553722` without modifying the historical search union;
+          - [ ] implementation receives independent diff/code review before merge.
+
+          ### R0.4-P2 — Known-ID longitudinal comparison''',
+              '''### R0.4-P1 — Exact-ID point observation artifact — COMPLETE 2026-09-14
+
+          Reuses the existing `YandexRichMetadataCollector` and `catalogue.get_games` path. Independent implementation review is recorded in [`docs/history/reaper-r0.4-p1-review-2026-09-14.md`](docs/history/reaper-r0.4-p1-review-2026-09-14.md); live acceptance is recorded in [`docs/history/reaper-r0.4-p1-validation-2026-09-14.md`](docs/history/reaper-r0.4-p1-validation-2026-09-14.md).
+
+          Definition of Done:
+
+          - [x] versioned `listing-observation-set-v1` declaration with unique ordered app IDs;
+          - [x] raw-first exact-ID collection through the existing Yandex client/collector;
+          - [x] explicit requested / returned / missing / unexpected ID accounting;
+          - [x] deterministic create-only artifact with declaration, observation, exact raw bytes and member manifest;
+          - [x] offline verifier reparses raw evidence and reconstructs observation identity/facts;
+          - [x] no search/query membership is invented for point-observed IDs;
+          - [x] CLI entry point and focused tests;
+          - [x] full `ruff`, strict `mypy`, `pytest`/coverage gate passes in clean CI run `34841270353`;
+          - [x] live Keycap control requests `540402`, `559445`, `553722`; current source returns `540402`/`559445` and preserves `553722` explicitly as missing evidence, with offline verification PASS and no historical search-union mutation;
+          - [x] implementation receives independent diff/code review; create-only side effects and cohort-identity binding findings are repaired before merge.
+
+          Live run `34841547344` produced inner observation SHA-256 `ae5bd96dca5485f447eb556d3acc5328d18e0fea402c3324efdef3ee1a082a3f` and manifest content hash `b9761b69210f1fdb689d56be99d411ba7821d4add560c6da7b93307dde837079`. The source omission of `553722` is deliberately not interpreted as zero/deleted/unpublished; it validates the explicit missing-evidence semantics.
+
+          ### R0.4-P2 — Known-ID longitudinal comparison — NEXT''',
+          )
+
+          replace_once(
+              'README.md',
+              '- digest-bound durable evidence archive tooling that preserves exact CI artifact bytes in Release assets, inventories every inner member, and safely reconstructs verified prior experiment ZIPs after Actions retention expires;\n- evidence/candidate/taxonomy foundations;',
+              '- digest-bound durable evidence archive tooling that preserves exact CI artifact bytes in Release assets, inventories every inner member, and safely reconstructs verified prior experiment ZIPs after Actions retention expires;\n- exact-ID `point_observed` artifacts for known Yandex listing cohorts, with explicit requested/returned/missing identity accounting, create-only packaging of exact raw evidence, and fully offline replay verification;\n- evidence/candidate/taxonomy foundations;',
+          )
+
+          replace_once(
+              'README.md',
+              '''Game page / `__playPageData__`:
+
+          ```bash
+          yandex-reaper probe-page 438560 --output data/raw
+          ```
+
+          For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run.''',
+              '''Game page / `__playPageData__`:
+
+          ```bash
+          yandex-reaper probe-page 438560 --output data/raw
+          ```
+
+          Exact-ID immutable point observation for a declared known-listing cohort:
+
+          ```bash
+          yandex-reaper-observe run \\
+            research/observations/keycap-known-direct-v1.json \\
+            data/observations/keycap-known-direct-v1.zip
+
+          yandex-reaper-observe verify \\
+            data/observations/keycap-known-direct-v1.zip
+          ```
+
+          Point observations are listing-specific evidence, not search evidence. A returned ID does not acquire query/rank/search-union membership, and a requested ID omitted by the current source response remains explicit `missing` evidence rather than being coerced to zero/deleted/unpublished.
+
+          For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run.''',
+          )
+          PY
+          git diff --check
+      - name: Commit closure docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ROADMAP.md README.md
+          git commit -m "Close R0.4 P1 and advance P2"
+          git push origin HEAD:feature/r0.4-p1-point-observation

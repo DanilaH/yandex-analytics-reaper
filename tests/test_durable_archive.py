@@ -10,9 +10,12 @@ from yandex_analytics_reaper.durable_archive import (
     DurableArchiveError,
     DurableArchiveRequest,
     ExpectedArtifactIdentity,
+    ReleaseBinding,
+    WorkflowArtifactSource,
     build_archive_manifest,
     extract_verified_member,
     load_archive_manifest,
+    validate_request_catalog,
     verify_archive,
     write_manifest_create_only,
 )
@@ -51,6 +54,33 @@ def _request(artifact: Path) -> DurableArchiveRequest:
                 "manifest_asset_name": "trend-mechanics-round2-2026-09-13.manifest.json",
                 "checksum_asset_name": "trend-mechanics-round2-2026-09-13.sha256",
             },
+        }
+    )
+
+
+def _write_request(path: Path, request: DurableArchiveRequest) -> None:
+    path.write_text(request.model_dump_json(indent=2) + "\n", encoding="utf-8")
+
+
+def _second_request(request: DurableArchiveRequest) -> DurableArchiveRequest:
+    return request.model_copy(
+        update={
+            "archive_id": "trend-mechanics-round3-2026-09-13",
+            "source": WorkflowArtifactSource(
+                workflow_run_id=request.source.workflow_run_id + 1,
+                workflow_artifact_id=request.source.workflow_artifact_id + 1,
+                workflow_artifact_name=request.source.workflow_artifact_name,
+                artifact_created_at=request.source.artifact_created_at,
+                artifact_expires_at=request.source.artifact_expires_at,
+                source_commit_sha=request.source.source_commit_sha,
+                source_branch=request.source.source_branch,
+            ),
+            "release": ReleaseBinding(
+                tag="evidence-2026-09-13-trend-mechanics-r3",
+                asset_name="trend-mechanics-round3-2026-09-13.actions.zip",
+                manifest_asset_name="trend-mechanics-round3-2026-09-13.manifest.json",
+                checksum_asset_name="trend-mechanics-round3-2026-09-13.sha256",
+            ),
         }
     )
 
@@ -97,6 +127,17 @@ def test_verify_rejects_manifest_member_drift(tmp_path: Path) -> None:
         verify_archive(changed, artifact)
 
 
+def test_verify_rejects_manifest_that_does_not_match_committed_request(tmp_path: Path) -> None:
+    artifact = tmp_path / "actions.zip"
+    _write_zip(artifact, {"result.json": b"original"})
+    request = _request(artifact)
+    manifest = build_archive_manifest(request, artifact)
+    other_request = _second_request(request)
+
+    with pytest.raises(DurableArchiveError, match="archive_id disagrees"):
+        verify_archive(manifest, artifact, request=other_request)
+
+
 def test_extract_verified_member_outputs_exact_bound_bytes(tmp_path: Path) -> None:
     artifact = tmp_path / "actions.zip"
     payload = b"prior experiment zip bytes"
@@ -122,6 +163,65 @@ def test_build_rejects_unsafe_zip_member_path(tmp_path: Path) -> None:
 
     with pytest.raises(DurableArchiveError, match="unsafe ZIP member path"):
         build_archive_manifest(_request(artifact), artifact)
+
+
+def test_build_rejects_duplicate_zip_member_path(tmp_path: Path) -> None:
+    artifact = tmp_path / "actions.zip"
+    with ZipFile(artifact, mode="w", compression=ZIP_DEFLATED) as archive:
+        archive.writestr("result.json", b"first")
+        archive.writestr("result.json", b"second")
+
+    with pytest.raises(DurableArchiveError, match="duplicate member path"):
+        build_archive_manifest(_request(artifact), artifact)
+
+
+def test_catalog_accepts_unique_requests(tmp_path: Path) -> None:
+    artifact = tmp_path / "actions.zip"
+    _write_zip(artifact, {"result.json": b"original"})
+    first = _request(artifact)
+    second = _second_request(first)
+    first_path = tmp_path / "first.json"
+    second_path = tmp_path / "second.json"
+    _write_request(first_path, first)
+    _write_request(second_path, second)
+
+    result = validate_request_catalog((first_path, second_path))
+
+    assert result.status == "pass"
+    assert result.request_count == 2
+
+
+@pytest.mark.parametrize("collision", ["archive_id", "release_tag", "artifact_id"])
+def test_catalog_rejects_identity_collisions(tmp_path: Path, collision: str) -> None:
+    artifact = tmp_path / "actions.zip"
+    _write_zip(artifact, {"result.json": b"original"})
+    first = _request(artifact)
+    second = _second_request(first)
+
+    if collision == "archive_id":
+        second = second.model_copy(update={"archive_id": first.archive_id})
+    elif collision == "release_tag":
+        second = second.model_copy(
+            update={
+                "release": second.release.model_copy(update={"tag": first.release.tag}),
+            }
+        )
+    else:
+        second = second.model_copy(
+            update={
+                "source": second.source.model_copy(
+                    update={"workflow_artifact_id": first.source.workflow_artifact_id}
+                ),
+            }
+        )
+
+    first_path = tmp_path / "first.json"
+    second_path = tmp_path / "second.json"
+    _write_request(first_path, first)
+    _write_request(second_path, second)
+
+    with pytest.raises(DurableArchiveError, match="duplicate"):
+        validate_request_catalog((first_path, second_path))
 
 
 def test_create_only_manifest_allows_same_identity_but_rejects_replacement(

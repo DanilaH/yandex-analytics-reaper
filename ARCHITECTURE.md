@@ -52,6 +52,8 @@ src/yandex_analytics_reaper/
     yandex/        Yandex client + source DTO parsers/contracts
   storage/        raw snapshot + normalized operational + frozen-plan persistence
   taxonomy/       draft taxonomy schema foundations
+  durable_archive.py      offline digest/member verification for durable CI evidence
+  durable_archive_cli.py  build/verify/extract interface for durable evidence bundles
   cli.py          explicit local probes/debug/calibration interface
 ```
 
@@ -233,6 +235,31 @@ immutable stored cadence plan
 The cadence report records `plan_id`, immutable `plan_hash`, DB-generated `frozen_at`, deterministic evidence `manifest_id`, exact run bindings, and exact normalized observation/raw snapshot IDs for eligible state points. A later backfill therefore cannot silently rewrite the evidence behind a saved report.
 
 Synthetic fixtures validate analyzer mechanics but are not empirical calibration evidence. Feed-depth, session-profile, and collection-cadence roadmap parents remain empirically incomplete until their frozen real-sample guards are satisfied and real reports produce the declared outputs.
+
+## Durable CI evidence boundary
+
+Decision-relevant experiment history may outlive GitHub Actions artifact retention. Durability is therefore a transport/storage concern around an already-immutable artifact, not a new analytical history model.
+
+```text
+successful Actions artifact
+→ committed durable archive request (expected run/artifact/SHA/size/release identity)
+→ download exact Actions ZIP bytes
+→ offline wrapper SHA/size verification
+→ deterministic member SHA/size inventory
+→ create-only Release publication
+→ later Release download
+→ wrapper + manifest verification
+→ verified inner experiment ZIP extraction
+→ existing current/prior experiment binding and replay
+```
+
+`durable_archive.py` owns only offline identity, ZIP-member inventory, create-only manifest semantics and safe verified extraction. It contains no GitHub client and performs no network access. `.github/workflows/durable-evidence-archive.yml` owns GitHub transport/release reconciliation around that offline core.
+
+The heavy durable source is a GitHub Release asset; normal Git history stores only small request/catalog files. The primary durable asset is the exact Actions artifact wrapper ZIP, byte-for-byte, so its SHA-256 remains directly comparable with the source Actions artifact digest. The generated manifest binds every inner file by path, uncompressed size and SHA-256, allowing an exact experiment ZIP to be recovered without weakening the original wrapper provenance.
+
+This boundary does not change Thesis Intelligence longitudinal semantics. `yandex-reaper-thesis --prior` continues to consume a verified local experiment ZIP; the archive layer merely makes that ZIP recoverable after CI retention expires. A missing or invalid durable archive remains missing/invalid evidence and must never be substituted with a nearby run.
+
+Normative publication/reconciliation semantics live in `docs/spec/durable-evidence-archive.md`.
 
 ## Comparable-set construction boundary
 

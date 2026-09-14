@@ -17,7 +17,14 @@ trend-mechanics-round4-2026-09-13
 trend-mechanics-round5-2026-09-13
 ```
 
-Their Actions copies expire on 2026-10-13, so durable publication must complete before that retention boundary.
+**Migration status:** COMPLETE 2026-09-14.
+
+All four Actions wrappers were published as durable GitHub Releases before their 2026-10-13 retention expiry. The live workflow redownloaded each wrapper, manifest and checksum and verified the committed request binding plus `sha256sum` before publication.
+
+Acceptance evidence:
+[`docs/history/durable-evidence-archive-live-migration-2026-09-14.md`](../../docs/history/durable-evidence-archive-live-migration-2026-09-14.md).
+
+GitHub currently reports `immutable = false` for these Releases. The archive contract therefore continues to rely on create-only/no-clobber workflow behavior and cryptographic request/manifest verification rather than assuming repository-level immutable releases are enabled.
 
 ## Adding a future archive
 

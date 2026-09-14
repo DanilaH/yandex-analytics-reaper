@@ -30,7 +30,7 @@ M0 evidence foundation — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
 -> R0.3 Reaper 0.3.0 / Thesis Intelligence — COMPLETE
--> R0.3.1 durable evidence archive — IMPLEMENTED; LIVE MIGRATION PENDING
+-> R0.3.1 durable evidence archive — COMPLETE
 
 PRODUCT-VALIDATION LANE
 M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
@@ -376,7 +376,7 @@ release preemptively.
 
 ---
 
-# R0.3.1 — Durable evidence archive — IMPLEMENTED; LIVE MIGRATION PENDING 2026-09-14
+# R0.3.1 — Durable evidence archive — COMPLETE 2026-09-14
 
 Real 0.3 usage exposed one bounded infrastructure defect: longitudinal analysis deliberately binds
 old immutable experiment artifacts, while the September trend-sweep copies existed only as
@@ -400,6 +400,9 @@ Specification:
 Initial request catalog:
 [`research/archive/`](research/archive/).
 
+Live migration acceptance:
+[`docs/history/durable-evidence-archive-live-migration-2026-09-14.md`](docs/history/durable-evidence-archive-live-migration-2026-09-14.md).
+
 Implementation gate:
 
 - [x] preserve the exact Actions wrapper ZIP bytes rather than repacking them;
@@ -411,10 +414,12 @@ Implementation gate:
 - [x] use draft-first, create-only Release reconciliation with no clobber path;
 - [x] keep heavy evidence out of normal Git history;
 - [x] declare the four Sep-13 round-2..5 artifacts before their 2026-10-13 expiry;
-- [ ] full repository quality gate passes on the implementation PR;
-- [ ] implementation/spec receive independent review and any findings are repaired;
-- [ ] all four historical requests are published to durable Releases and re-downloaded/verified;
-- [ ] final live migration review is recorded and this milestone is marked COMPLETE.
+- [x] full repository quality gate passes on the implementation PR;
+- [x] implementation/spec receive independent review and any findings are repaired;
+- [x] all four historical requests are published to durable Releases and re-downloaded/verified;
+- [x] final live migration review is recorded and this milestone is marked COMPLETE.
+
+Live publication completed on 2026-09-14 in GitHub Actions run `34828794788`. All four wrappers, manifests and checksums were redownloaded and verified before publication. GitHub currently reports `immutable = false` for the Releases, so repository-level immutable releases are not assumed; create-only/no-clobber behavior and cryptographic verification remain the evidence-integrity boundary.
 
 This work does **not** reopen product sequencing. `P2` remains the next primary product path, and a
 scheduler, object-storage abstraction, remote-history database or generic artifact platform remain

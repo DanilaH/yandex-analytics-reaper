@@ -478,3 +478,109 @@ candidate identity
 The result is a **BUILD — small probe**, not a profitability claim.
 
 ---
+
+# PRIMARY PRODUCT PATH — BUILD PROBE
+
+## P1 — Production-ready micro-spec — COMPLETE 2026-09-01
+
+Frozen implementation artifacts:
+
+- [`implementation-spec-v1.md`](research/candidates/tactile-mystery-collectibles-v1/implementation-spec-v1.md)
+- [`probe-config-v1.json`](research/candidates/tactile-mystery-collectibles-v1/probe-config-v1.json)
+- [`implementation-review-v1.md`](research/candidates/tactile-mystery-collectibles-v1/implementation-review-v1.md)
+
+The implementation contract freezes:
+
+```text
+24 original collectibles
+4 rarities
+3 package tiers
+Paper Pouch always free
+one soft currency
+one deterministic pull-tab interaction
+transactional pendingReveal save
+one optional rewarded +20 acceleration point
+no manual fullscreen interstitial in the first probe
+Yandex safe storage
+Yandex loading/gameplay/pause-resume boundaries
+12 custom Metrica funnel goals
+mouse + touch + keyboard
+<=7 focused-day hard kill boundary
+```
+
+Independent implementation-readiness review: **PASS**.
+
+Mandatory before producing all 24 final assets: integrate a four-item representative asset spike
+(common/rare/epic/legendary) into the actual reveal UI and verify that the production method scales
+inside the frozen art/time budget.
+
+## P2 — Cheapest credible build/release probe — NEXT
+
+Start only in a concrete game repository/worktree. Do not put the game implementation inside the
+Reaper research codebase.
+
+Recommended stack remains deliberately small:
+
+```text
+Vite
+React
+TypeScript strict
+plain CSS/CSS modules
+useReducer + pure domain functions
+Yandex Games SDK adapter
+Yandex Metrica adapter
+Vitest domain tests
+```
+
+The first behavioral question is:
+
+> After one reveal, do real players voluntarily initiate another package and continue filling the
+> collection?
+
+Pre-build stop conditions:
+
+- credible plan exceeds 7 focused person-days;
+- 4-item asset spike cannot establish one coherent original family cheaply;
+- implementation needs physics/3D/complex bespoke animation;
+- reveal is not satisfying without adding a second gameplay system;
+- creative requires recognizable third-party IP.
+
+If the released loop is weak, do not rescue it by adding a heavy meta game. Re-theme or kill the
+hypothesis according to the frozen M2 conditions.
+
+---
+
+# Deferred beyond accepted 0.3 / product validation work
+
+Potential later work remains valid but is not automatically next:
+
+- broad taxonomy validation/classification beyond the narrow semantic/directness contracts;
+- historical backtesting beyond the bounded 0.3 metric-delta use case;
+- external trend-source integration;
+- portfolio calibration;
+- dashboards/scheduling;
+- automated ranking;
+- multi-platform collection.
+
+Promote any of these only when a real decision/build loop exposes a concrete bottleneck they solve.
+
+## Current sequencing guard
+
+Even with 0.3 approved, reject work whose main effect is:
+
+```text
+another runner redesign
+scheduler
+dashboard
+generic orchestration framework
+ML/ranking
+broad external-source integration
+extra gameplay/meta systems inside Reaper
+```
+
+0.3 is justified only because repeated real thesis research exposed concrete manual analysis costs.
+It must remain a thin evidence/intelligence layer over the proven collector and must not become a
+separate platform-analytics product.
+
+The primary product job is still to test whether a **very cheap, original, reward-first collectible
+opener** can produce repeat-opening behavior with real Yandex traffic.

@@ -3,12 +3,20 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path, PurePosixPath
 from typing import Literal, Protocol, Self
 from zipfile import ZIP_DEFLATED, BadZipFile, ZipFile, ZipInfo
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from yandex_analytics_reaper.ingestion import RichMetadataCollectionResult
 from yandex_analytics_reaper.sources.yandex import GameDetails, YandexGetGamesParser
@@ -89,9 +97,7 @@ class PointListingObservation(BaseModel):
 class ListingObservationReport(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    spec_version: Literal["listing-observation-report-v1"] = (
-        LISTING_OBSERVATION_REPORT_SPEC_VERSION
-    )
+    spec_version: Literal["listing-observation-report-v1"] = LISTING_OBSERVATION_REPORT_SPEC_VERSION
     provenance_channel: Literal["point_observed"] = "point_observed"
     observation_set_id: str = Field(pattern=_ID_PATTERN, max_length=80)
     observation_set_version: int = Field(ge=1)
@@ -130,7 +136,9 @@ class ListingObservationReport(BaseModel):
         requested_set = set(requested)
         returned_set = set(returned)
         if tuple(item for item in requested if item not in returned_set) != missing:
-            raise ValueError("missing_app_ids must be declaration-ordered requested IDs not returned")
+            raise ValueError(
+                "missing_app_ids must be declaration-ordered requested IDs not returned"
+            )
         if tuple(item for item in returned if item not in requested_set) != unexpected:
             raise ValueError("unexpected_app_ids must be returned IDs outside the declaration")
         return self
@@ -147,12 +155,7 @@ class ObservationArtifactMember(BaseModel):
     @classmethod
     def validate_path(cls, value: str) -> str:
         path = PurePosixPath(value)
-        if (
-            path.is_absolute()
-            or ".." in path.parts
-            or "\\" in value
-            or value != path.as_posix()
-        ):
+        if path.is_absolute() or ".." in path.parts or "\\" in value or value != path.as_posix():
             raise ValueError("artifact member path must be a normalized safe relative POSIX path")
         return value
 
@@ -236,6 +239,10 @@ class ListingObservationArtifactCollector:
         artifact_path: Path,
     ) -> ListingObservationArtifactVerification:
         declaration = ListingObservationSetDeclaration.model_validate(declaration.model_dump())
+        if artifact_path.exists():
+            raise ListingObservationError(
+                f"refusing to overwrite existing observation artifact: {artifact_path}"
+            )
         result = self.rich_collector.collect(declaration.app_ids)
         metadata = result.raw_snapshot
         body = self.raw_store.get_body(metadata.source_id, metadata.id)
@@ -383,7 +390,8 @@ def verify_listing_observation_artifact(
                 raise ListingObservationError("observation artifact contains duplicate ZIP members")
             if names != _REQUIRED_MEMBERS:
                 raise ListingObservationError(
-                    "observation artifact must contain only the canonical members in canonical order"
+                    "observation artifact must contain only the canonical members "
+                    "in canonical order"
                 )
             for name in names:
                 _validate_member_path(name)
@@ -403,7 +411,9 @@ def verify_listing_observation_artifact(
         metadata = RawSnapshotMetadata.model_validate_json(metadata_bytes)
         manifest = ListingObservationArtifactManifest.model_validate_json(manifest_bytes)
     except ValidationError as exc:
-        raise ListingObservationError(f"observation artifact model validation failed: {exc}") from exc
+        raise ListingObservationError(
+            f"observation artifact model validation failed: {exc}"
+        ) from exc
 
     payloads = {
         "input/declaration.json": declaration_bytes,
@@ -421,6 +431,22 @@ def verify_listing_observation_artifact(
         raise ListingObservationError("manifest declaration hash does not match declaration")
     if report.declaration_content_hash != declaration_hash:
         raise ListingObservationError("report declaration hash does not match declaration")
+    declaration_identity = (
+        declaration.observation_set_id,
+        declaration.observation_set_version,
+    )
+    if (
+        manifest.observation_set_id,
+        manifest.observation_set_version,
+    ) != declaration_identity:
+        raise ListingObservationError(
+            "manifest observation-set identity does not match declaration"
+        )
+    if (
+        report.observation_set_id,
+        report.observation_set_version,
+    ) != declaration_identity:
+        raise ListingObservationError("report observation-set identity does not match declaration")
     if manifest.source_snapshot_id != metadata.id:
         raise ListingObservationError("manifest source snapshot does not match raw metadata")
     if manifest.source_content_hash != metadata.content_hash:
@@ -430,7 +456,9 @@ def verify_listing_observation_artifact(
 
     rebuilt = build_listing_observation_report(declaration, metadata, body)
     if rebuilt != report:
-        raise ListingObservationError("offline replay does not reproduce packaged observation report")
+        raise ListingObservationError(
+            "offline replay does not reproduce packaged observation report"
+        )
 
     return ListingObservationArtifactVerification(
         artifact_sha256=_sha256_file(artifact_path),

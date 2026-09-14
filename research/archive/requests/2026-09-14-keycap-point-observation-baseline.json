@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "keycap-point-observation-baseline-2026-09-14",
+  "source": {
+    "workflow_run_id": 34841547344,
+    "workflow_artifact_id": 10346401822,
+    "workflow_artifact_name": "keycap-known-direct-point-observation-2026-09-14",
+    "artifact_created_at": "2026-09-14T12:06:08Z",
+    "artifact_expires_at": "2026-10-14T12:06:07Z",
+    "source_commit_sha": "10251bacf237ee6656a44b3d53251135ae10c166",
+    "source_branch": "feature/r0.4-p1-point-observation"
+  },
+  "expected": {
+    "sha256": "aaa2c6b4e4b1d43def770485c544d5f2b6aa51770fcc1280e5e58d45544508bd",
+    "size_bytes": 8529
+  },
+  "release": {
+    "tag": "evidence-2026-09-14-keycap-point-observation-baseline",
+    "asset_name": "keycap-known-direct-point-observation-2026-09-14.actions.zip",
+    "manifest_asset_name": "keycap-known-direct-point-observation-2026-09-14.manifest.json",
+    "checksum_asset_name": "keycap-known-direct-point-observation-2026-09-14.sha256"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "spec_version": "listing-observation-set-v1",
+  "observation_set_id": "keycap-known-direct",
+  "observation_set_version": 1,
+  "app_ids": [540402, 559445, 553722],
+  "source_surface": "catalogue.get_games"
+}

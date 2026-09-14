@@ -1,0 +1,82 @@
+name: Validate live Keycap point observation
+
+on:
+  push:
+    branches:
+      - feature/r0.4-p1-point-observation
+    paths:
+      - .github/workflows/_validate-point-observation-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/r0.4-p1-point-observation
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Install
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e ".[dev]"
+      - name: Collect exact-ID Keycap cohort
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/reaper/raw /tmp/point-observation
+          yandex-reaper-observe run \
+            research/observations/keycap-known-direct-v1.json \
+            /tmp/point-observation/keycap-known-direct-v1.zip \
+            --raw-root /tmp/reaper/raw \
+            | tee /tmp/point-observation/run-verification.json
+          yandex-reaper-observe verify \
+            /tmp/point-observation/keycap-known-direct-v1.zip \
+            | tee /tmp/point-observation/offline-verification.json
+      - name: Assert live acceptance semantics
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from zipfile import ZipFile
+
+          artifact = "/tmp/point-observation/keycap-known-direct-v1.zip"
+          with ZipFile(artifact, "r") as archive:
+              report = json.loads(archive.read("reports/observation.json"))
+
+          expected = [540402, 559445, 553722]
+          assert report["provenance_channel"] == "point_observed", report
+          assert report["requested_app_ids"] == expected, report
+          assert report["returned_app_ids"] == expected, report
+          assert report["missing_app_ids"] == [], report
+          assert report["unexpected_app_ids"] == [], report
+          assert [item["app_id"] for item in report["listings"]] == expected, report
+
+          for item in report["listings"]:
+              print(
+                  f'app_id={item["app_id"]} '
+                  f'title={item["title"]!r} '
+                  f'rating_count={item["rating_count"]!r} '
+                  f'first_published={item["first_published"]!r}'
+              )
+          print("live_keycap_point_observation=PASS")
+          PY
+      - name: Upload immutable point-observation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keycap-known-direct-point-observation-2026-09-14
+          path: |
+            /tmp/point-observation/keycap-known-direct-v1.zip
+            /tmp/point-observation/run-verification.json
+            /tmp/point-observation/offline-verification.json
+          if-no-files-found: error
+          retention-days: 30

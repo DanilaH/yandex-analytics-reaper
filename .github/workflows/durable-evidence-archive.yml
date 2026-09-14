@@ -1,0 +1,221 @@
+name: Durable evidence archive
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "research/archive/requests/**"
+      - ".github/workflows/durable-evidence-archive.yml"
+      - "src/yandex_analytics_reaper/durable_archive.py"
+      - "src/yandex_analytics_reaper/durable_archive_cli.py"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: durable-evidence-archive
+  cancel-in-progress: false
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - run: python -m pip install "pip==26.2.1"
+      - run: pip install -c constraints-dev.txt -e .
+      - name: Reconcile durable evidence releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          requests=(research/archive/requests/*.json)
+          if (( ${#requests[@]} == 0 )); then
+            echo "No durable archive requests found."
+            exit 0
+          fi
+
+          yandex-reaper-archive validate-catalog "${requests[@]}"
+
+          work_root="${RUNNER_TEMP}/durable-evidence-archive"
+          mkdir -p "${work_root}"
+
+          for request in "${requests[@]}"; do
+            archive_id="$(jq -r '.archive_id' "${request}")"
+            artifact_id="$(jq -r '.source.workflow_artifact_id' "${request}")"
+            workflow_run_id="$(jq -r '.source.workflow_run_id' "${request}")"
+            artifact_name="$(jq -r '.source.workflow_artifact_name' "${request}")"
+            artifact_created_at="$(jq -r '.source.artifact_created_at' "${request}")"
+            artifact_expires_at="$(jq -r '.source.artifact_expires_at' "${request}")"
+            source_sha="$(jq -r '.source.source_commit_sha' "${request}")"
+            source_branch="$(jq -r '.source.source_branch' "${request}")"
+            expected_sha="$(jq -r '.expected.sha256' "${request}")"
+            expected_size="$(jq -r '.expected.size_bytes' "${request}")"
+            tag="$(jq -r '.release.tag' "${request}")"
+            asset_name="$(jq -r '.release.asset_name' "${request}")"
+            manifest_name="$(jq -r '.release.manifest_asset_name' "${request}")"
+            checksum_name="$(jq -r '.release.checksum_asset_name' "${request}")"
+
+            echo "::group::${archive_id}"
+            archive_dir="${work_root}/${archive_id}"
+            rm -rf "${archive_dir}"
+            mkdir -p "${archive_dir}"
+
+            release_json="$(gh release view "${tag}" --json tagName,isDraft,targetCommitish,assets 2>/dev/null || true)"
+            if [[ -n "${release_json}" ]]; then
+              if [[ "$(jq -r '.tagName' <<<"${release_json}")" != "${tag}" ]]; then
+                echo "Release lookup returned the wrong tag for ${archive_id}." >&2
+                exit 1
+              fi
+              target="$(jq -r '.targetCommitish' <<<"${release_json}")"
+              if [[ "${target}" != "${source_sha}" ]]; then
+                echo "Release ${tag} targets ${target}, expected source commit ${source_sha}." >&2
+                exit 1
+              fi
+
+              existing_assets="$(jq -r '.assets[].name' <<<"${release_json}")"
+              missing=0
+              for required_name in "${asset_name}" "${manifest_name}" "${checksum_name}"; do
+                if ! grep -Fxq "${required_name}" <<<"${existing_assets}"; then
+                  echo "Release ${tag} is missing ${required_name}."
+                  missing=1
+                fi
+              done
+
+              if (( missing == 0 )); then
+                gh release download "${tag}" --pattern "${asset_name}" --dir "${archive_dir}"
+                gh release download "${tag}" --pattern "${manifest_name}" --dir "${archive_dir}"
+                gh release download "${tag}" --pattern "${checksum_name}" --dir "${archive_dir}"
+                yandex-reaper-archive verify \
+                  "${archive_dir}/${manifest_name}" \
+                  "${archive_dir}/${asset_name}" \
+                  --request "${request}"
+                (
+                  cd "${archive_dir}"
+                  sha256sum -c "${checksum_name}"
+                )
+                if [[ "$(jq -r '.isDraft' <<<"${release_json}")" == "true" ]]; then
+                  gh release edit "${tag}" --draft=false --latest=false
+                fi
+                echo "Durable archive already satisfied: ${archive_id}"
+                echo "::endgroup::"
+                continue
+              fi
+
+              if [[ "$(jq -r '.isDraft' <<<"${release_json}")" != "true" ]]; then
+                echo "Published release ${tag} is incomplete; refusing to mutate it." >&2
+                exit 1
+              fi
+              echo "Completing partial draft release ${tag} without replacing existing assets."
+            fi
+
+            metadata="$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}")"
+
+            if [[ "$(jq -r '.id' <<<"${metadata}")" != "${artifact_id}" ]]; then
+              echo "Actions artifact id disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.expired' <<<"${metadata}")" != "false" ]]; then
+              echo "Source Actions artifact ${artifact_id} has expired before durable archival." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.workflow_run.id' <<<"${metadata}")" != "${workflow_run_id}" ]]; then
+              echo "Actions artifact workflow_run.id disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.name' <<<"${metadata}")" != "${artifact_name}" ]]; then
+              echo "Actions artifact name disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.created_at' <<<"${metadata}")" != "${artifact_created_at}" ]]; then
+              echo "Actions artifact created_at disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.expires_at' <<<"${metadata}")" != "${artifact_expires_at}" ]]; then
+              echo "Actions artifact expires_at disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.workflow_run.head_sha' <<<"${metadata}")" != "${source_sha}" ]]; then
+              echo "Actions artifact source SHA disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.workflow_run.head_branch' <<<"${metadata}")" != "${source_branch}" ]]; then
+              echo "Actions artifact source branch disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.size_in_bytes' <<<"${metadata}")" != "${expected_size}" ]]; then
+              echo "Actions artifact size disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.digest' <<<"${metadata}")" != "sha256:${expected_sha}" ]]; then
+              echo "Actions artifact digest disagrees with request ${request}." >&2
+              exit 1
+            fi
+
+            artifact_path="${archive_dir}/${asset_name}"
+            manifest_path="${archive_dir}/${manifest_name}"
+            checksum_path="${archive_dir}/${checksum_name}"
+
+            curl --fail --location --retry 3 \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}/zip" \
+              --output "${artifact_path}"
+
+            yandex-reaper-archive build \
+              "${request}" \
+              "${artifact_path}" \
+              "${manifest_path}" \
+              --checksum-output "${checksum_path}"
+
+            if [[ -z "${release_json}" ]]; then
+              gh release create "${tag}" \
+                --draft \
+                --target "${source_sha}" \
+                --title "Evidence: ${archive_id}" \
+                --notes "Durable, digest-bound archive of GitHub Actions evidence. See research/archive/requests and docs/spec/durable-evidence-archive.md."
+              release_json="$(gh release view "${tag}" --json tagName,isDraft,targetCommitish,assets)"
+            fi
+
+            current_assets="$(jq -r '.assets[].name' <<<"${release_json}")"
+            for upload_path in "${artifact_path}" "${manifest_path}" "${checksum_path}"; do
+              upload_name="$(basename "${upload_path}")"
+              if grep -Fxq "${upload_name}" <<<"${current_assets}"; then
+                echo "Draft already contains ${upload_name}; leaving it untouched."
+              else
+                gh release upload "${tag}" "${upload_path}"
+              fi
+            done
+
+            rm -rf "${archive_dir}/verify"
+            mkdir -p "${archive_dir}/verify"
+            gh release download "${tag}" --pattern "${asset_name}" --dir "${archive_dir}/verify"
+            gh release download "${tag}" --pattern "${manifest_name}" --dir "${archive_dir}/verify"
+            gh release download "${tag}" --pattern "${checksum_name}" --dir "${archive_dir}/verify"
+            yandex-reaper-archive verify \
+              "${archive_dir}/verify/${manifest_name}" \
+              "${archive_dir}/verify/${asset_name}" \
+              --request "${request}"
+            (
+              cd "${archive_dir}/verify"
+              sha256sum -c "${checksum_name}"
+            )
+
+            gh release edit "${tag}" --draft=false --latest=false
+            echo "Published durable evidence archive: ${archive_id}"
+            echo "::endgroup::"
+          done

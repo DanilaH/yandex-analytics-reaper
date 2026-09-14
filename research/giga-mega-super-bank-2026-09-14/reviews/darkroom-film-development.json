@@ -1,0 +1,20 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "darkroom-film-development",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "6da133dbcc3ebee411ab52f63fe25a932c26cc4b8ce8a12259e0aa8815b0f42d",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {
+      "platform_listing_id": "yandex_games:526573",
+      "analyst_verdict": "adjacent",
+      "reason_code": "other",
+      "note": "Photo-investigation game uses exposure/contrast/saturation to reveal anomalies, but has no darkroom development ritual or collectible print loop.",
+      "reviewed_at": "2026-09-14T15:15:00Z",
+      "semantic_directness": "direct_candidate"
+    }
+  ],
+  "content_hash": "a74dcd6c272df28d759e77828651b68618639fe969008646279c3ac2ed22a738"
+}

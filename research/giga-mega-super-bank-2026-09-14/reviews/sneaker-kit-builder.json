@@ -1,0 +1,18 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "sneaker-kit-builder",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "1b9a0fb278a2dc910d5bec367ea22ff3711ce640f817554e9447b38b66190d6c",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {"platform_listing_id":"yandex_games:553194","analyst_verdict":"not_direct","reason_code":"theme_incidental","note":"Sneakers are incidental to platform-jump gameplay; no shoe assembly or customization loop.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:566367","analyst_verdict":"not_direct","reason_code":"theme_incidental","note":"Sneakers/items are incidental to arena progression; no shoe assembly or customization core.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:393633","analyst_verdict":"not_direct","reason_code":"theme_incidental","note":"Sneaker vocabulary is incidental to the experience; no shoe-building loop.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:545758","analyst_verdict":"not_direct","reason_code":"theme_incidental","note":"Shoes can appear as case items, but the core is case simulation rather than sneaker assembly/customization.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:535405","analyst_verdict":"not_direct","reason_code":"broader_multi_object_scope","note":"Broad idol dress-up includes footwear as one wardrobe category; no sneaker-kit assembly core.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:541842","analyst_verdict":"not_direct","reason_code":"broader_multi_object_scope","note":"Broad dress-up game includes shoes but no sneaker assembly/customization core.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"}
+  ],
+  "content_hash": "21fffd7888896cf858c8f5d94db06d97a7a3377e003bfc0759344b7691b6664d"
+}

@@ -1,0 +1,244 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "context": {
+    "pages": 3,
+    "session_profile": "clean_anonymous",
+    "lang": "ru",
+    "device": "desktop",
+    "platform": "desktop_other"
+  },
+  "anomaly_policy": {
+    "spec_version": "thesis-anomaly-policy-v1",
+    "max_age_days": 180,
+    "min_rating_count": 50,
+    "min_lifetime_ratings_per_day": 2.0
+  },
+  "theses": [
+    {
+      "thesis_id": "model-kit-builder",
+      "thesis_version": 1,
+      "label": "cut parts from sprue assemble paint decal and display a scale model",
+      "queries": [
+        "собрать модель игра",
+        "сборная модель игра",
+        "модельный набор игра",
+        "собрать модель машины игра",
+        "собрать робота модель игра",
+        "покрасить сборную модель игра",
+        "model kit builder game",
+        "assemble model kit game",
+        "plastic model builder game",
+        "sprue model game"
+      ],
+      "semantic": {
+        "theme_terms": ["model kit", "scale model", "plastic model", "sprue", "сборн", "модельн набор", "масштабн модел"],
+        "mechanic_terms": ["assemble", "build", "cut", "clip", "paint", "decal", "собир", "собрат", "вырез", "покрас", "наклей"],
+        "reward_grammar_terms": ["display", "collection", "finished model", "showcase", "витрин", "коллекц", "готовая модель"]
+      }
+    },
+    {
+      "thesis_id": "darkroom-film-development",
+      "thesis_version": 1,
+      "label": "develop analogue film or photographs through a darkroom reveal ritual and collect prints",
+      "queries": [
+        "проявить пленку игра",
+        "фотолаборатория игра",
+        "проявка фотографий игра",
+        "темная комната фотография игра",
+        "проявлять фото игра",
+        "darkroom game",
+        "film developing game",
+        "develop photos game",
+        "photo lab game",
+        "analog photography game"
+      ],
+      "semantic": {
+        "theme_terms": ["darkroom", "film", "negative", "photo lab", "analog photo", "пленк", "негатив", "фотолаб", "проявк"],
+        "mechanic_terms": ["develop", "dip", "expose", "fix", "dry", "print", "прояв", "опуск", "суш", "печат"],
+        "reward_grammar_terms": ["photo reveal", "print", "album", "contact sheet", "collection", "проявлен", "снимок", "альбом", "коллекц"]
+      }
+    },
+    {
+      "thesis_id": "origami-fold-collector",
+      "thesis_version": 1,
+      "label": "fold paper through simple steps into an origami figure and collect finished forms",
+      "queries": [
+        "оригами игра",
+        "складывать бумагу игра",
+        "бумажные фигурки игра",
+        "собирай оригами игра",
+        "paper fold game",
+        "origami game",
+        "fold paper puzzle",
+        "paper folding craft game"
+      ],
+      "semantic": {
+        "theme_terms": ["origami", "paper fold", "folding paper", "оригами", "склад бума", "бумажн фигур"],
+        "mechanic_terms": ["fold", "crease", "swipe", "склад", "сгиб", "загиб"],
+        "reward_grammar_terms": ["figure", "shape", "collection", "reveal", "фигур", "форма", "коллекц", "готов"]
+      }
+    },
+    {
+      "thesis_id": "fossil-prep-museum",
+      "thesis_version": 1,
+      "label": "excavate clean prepare or assemble fossils then place specimens in a museum or collection",
+      "queries": [
+        "раскопки окаменелостей игра",
+        "чистить окаменелости игра",
+        "собрать скелет динозавра игра",
+        "музей окаменелостей игра",
+        "fossil dig game",
+        "fossil cleaning game",
+        "fossil museum game",
+        "dinosaur skeleton restoration game"
+      ],
+      "semantic": {
+        "theme_terms": ["fossil", "skeleton", "paleont", "окаменел", "ископаем", "скелет диноз", "палеонт"],
+        "mechanic_terms": ["dig", "excavate", "clean", "brush", "chisel", "assemble", "копа", "раскоп", "чист", "щетк", "собир"],
+        "reward_grammar_terms": ["museum", "display", "specimen", "collection", "skeleton", "музей", "экспонат", "коллекц", "витрин"]
+      }
+    },
+    {
+      "thesis_id": "watchmaker-mechanical-assembly",
+      "thesis_version": 1,
+      "label": "assemble or repair a watch or clockwork mechanism then wind it and display the working object",
+      "queries": [
+        "собрать часы игра",
+        "ремонт часов игра",
+        "часовой мастер игра",
+        "собрать механизм часов игра",
+        "watchmaker game",
+        "watch assembly game",
+        "repair watch game",
+        "clockwork assembly game"
+      ],
+      "semantic": {
+        "theme_terms": ["watchmaker", "watch mechanism", "clockwork", "wristwatch", "часов мастер", "механизм часов", "наручн час"],
+        "mechanic_terms": ["assemble", "repair", "gear", "wind", "tighten", "собир", "ремонт", "шестер", "завод", "винт"],
+        "reward_grammar_terms": ["working watch", "tick", "display", "collection", "работающ", "тика", "витрин", "коллекц"]
+      }
+    },
+    {
+      "thesis_id": "miniature-painting",
+      "thesis_version": 1,
+      "label": "paint and finish collectible tabletop miniatures or figures then display a collection",
+      "queries": [
+        "покрасить миниатюру игра",
+        "раскраска фигурок игра",
+        "покрасить модель игра",
+        "миниатюры покраска игра",
+        "miniature painting game",
+        "paint figures game",
+        "model painting game",
+        "paint collectible figure game"
+      ],
+      "semantic": {
+        "theme_terms": ["miniature", "tabletop figure", "collectible figure", "миниатюр", "фигурк", "модель для покраск"],
+        "mechanic_terms": ["paint", "prime", "brush", "shade", "highlight", "покрас", "кист", "грунт", "раскраш"],
+        "reward_grammar_terms": ["finished figure", "display", "collection", "showcase", "готовая фигур", "витрин", "коллекц"]
+      }
+    },
+    {
+      "thesis_id": "upcycle-miniature-diorama",
+      "thesis_version": 1,
+      "label": "transform scrap or small found objects into miniatures or a tiny diorama and display the result",
+      "queries": [
+        "миниатюры из мусора игра",
+        "сделай мини комнату игра",
+        "диорама игра",
+        "миниатюрная комната крафт игра",
+        "miniature diorama game",
+        "mini room craft game",
+        "upcycle miniatures game",
+        "trash to miniature game"
+      ],
+      "semantic": {
+        "theme_terms": ["diorama", "mini room", "miniature room", "upcycle", "диорам", "мини комнат", "миниатюрн комнат", "из мусора"],
+        "mechanic_terms": ["craft", "cut", "paint", "assemble", "place", "reuse", "крафт", "вырез", "покрас", "собир", "размещ"],
+        "reward_grammar_terms": ["tiny room", "diorama", "display", "collection", "reveal", "мини комнат", "диорам", "витрин", "коллекц", "готов"]
+      }
+    },
+    {
+      "thesis_id": "print-press-studio",
+      "thesis_version": 1,
+      "label": "ink a plate or stamp press paper or fabric peel it back and collect finished prints",
+      "queries": [
+        "печатный станок игра",
+        "сделай принт игра",
+        "печать на ткани игра",
+        "штамповать рисунок игра",
+        "гравюра игра",
+        "printing press game",
+        "printmaking game",
+        "screen printing game",
+        "stamp art game",
+        "linocut game"
+      ],
+      "semantic": {
+        "theme_terms": ["printing press", "printmaking", "screen print", "linocut", "letterpress", "печатн стан", "гравюр", "линограв", "шелкограф"],
+        "mechanic_terms": ["ink", "press", "peel", "stamp", "print", "roll", "краск", "приж", "печат", "штамп", "валик"],
+        "reward_grammar_terms": ["print reveal", "poster", "fabric print", "collection", "reveal", "оттиск", "принт", "плакат", "коллекц", "готов"]
+      }
+    },
+    {
+      "thesis_id": "rock-polish-specimen-cabinet",
+      "thesis_version": 1,
+      "label": "clean cut polish or tumble rocks minerals or gems then classify and display specimens",
+      "queries": [
+        "полировать камни игра",
+        "коллекция минералов игра",
+        "огранка камней игра",
+        "чистить минералы игра",
+        "rock polishing game",
+        "gem polishing game",
+        "mineral collection game",
+        "rock tumbler game"
+      ],
+      "semantic": {
+        "theme_terms": ["mineral", "rock tumbler", "polished rock", "gemstone", "минерал", "самоцвет", "камн", "огранк"],
+        "mechanic_terms": ["polish", "tumble", "cut", "clean", "grind", "огран", "полир", "чист", "шлиф"],
+        "reward_grammar_terms": ["specimen", "cabinet", "display", "collection", "gem reveal", "образец", "витрин", "коллекц", "самоцвет"]
+      }
+    },
+    {
+      "thesis_id": "sneaker-kit-builder",
+      "thesis_version": 1,
+      "label": "assemble or customize sneaker parts laces charms and finishes then display the completed shoe",
+      "queries": [
+        "собрать кроссовки игра",
+        "создать кроссовки игра",
+        "кастом кроссовок игра",
+        "дизайн кроссовок игра",
+        "sneaker builder game",
+        "custom sneakers game",
+        "assemble sneaker game",
+        "shoe maker game"
+      ],
+      "semantic": {
+        "theme_terms": ["sneaker", "trainer shoe", "кроссов", "кед", "обув"],
+        "mechanic_terms": ["assemble", "lace", "customize", "paint", "attach", "собир", "шнур", "кастом", "покрас", "креп"],
+        "reward_grammar_terms": ["finished sneaker", "shoe collection", "display", "custom shoe", "готов", "коллекц", "витрин"]
+      }
+    },
+    {
+      "thesis_id": "wood-carving-control",
+      "thesis_version": 1,
+      "label": "carve sand polish and paint a wooden object into a finished collectible shape",
+      "queries": [
+        "резьба по дереву игра",
+        "вытачивать дерево игра",
+        "полировать дерево игра",
+        "wood carving game",
+        "wood shop game",
+        "whittling game"
+      ],
+      "semantic": {
+        "theme_terms": ["wood carving", "whittling", "wood shop", "резьб по дерев", "вытачив", "деревянн фигур"],
+        "mechanic_terms": ["carve", "cut", "sand", "polish", "paint", "рез", "точ", "шлиф", "полир", "покрас"],
+        "reward_grammar_terms": ["finished carving", "wood figure", "display", "collection", "готов", "фигур", "витрин", "коллекц"]
+      }
+    }
+  ]
+}

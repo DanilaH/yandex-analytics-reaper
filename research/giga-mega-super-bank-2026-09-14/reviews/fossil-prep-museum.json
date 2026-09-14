@@ -1,0 +1,20 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "fossil-prep-museum",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "0572438e84c381eb3e3f2a7c208a3611d6c379d923123a07e201cfbbd273f0ed",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {
+      "platform_listing_id": "yandex_games:548823",
+      "analyst_verdict": "not_direct",
+      "reason_code": "mechanic_mismatch",
+      "note": "Obby/mining progression; no fossil excavation, cleaning, assembly, classification, or museum display.",
+      "reviewed_at": "2026-09-14T15:15:00Z",
+      "semantic_directness": "direct_candidate"
+    }
+  ],
+  "content_hash": "3941d60acbb4830114eaa046de9e49d5303a504618cb636ea521f664793109ad"
+}

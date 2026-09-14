@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "keycap-traction-final-2026-09-14",
+  "source": {
+    "workflow_run_id": 34833262380,
+    "workflow_artifact_id": 10343191852,
+    "workflow_artifact_name": "keycap-traction-final-2026-09-14",
+    "artifact_created_at": "2026-09-14T10:27:45Z",
+    "artifact_expires_at": "2026-10-14T10:27:44Z",
+    "source_commit_sha": "b6743f023619a46d3e933b70edc7945c669051b7",
+    "source_branch": "research/keycap-finalize-2026-09-14"
+  },
+  "expected": {
+    "sha256": "08505a570324be5d1d328d733c208f967145970260e722d4035ba4e8b9d68c66",
+    "size_bytes": 2997346
+  },
+  "release": {
+    "tag": "evidence-2026-09-14-keycap-traction-final",
+    "asset_name": "keycap-traction-final-2026-09-14.actions.zip",
+    "manifest_asset_name": "keycap-traction-final-2026-09-14.manifest.json",
+    "checksum_asset_name": "keycap-traction-final-2026-09-14.sha256"
+  }
+}

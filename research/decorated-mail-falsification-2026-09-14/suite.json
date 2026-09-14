@@ -1,0 +1,37 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "decorated-mail-falsification-2026-09-14",
+  "suite_version": 1,
+  "context": {"pages": 3, "session_profile": "clean_anonymous", "lang": "ru", "device": "desktop", "platform": "desktop_other"},
+  "anomaly_policy": {"spec_version": "thesis-anomaly-policy-v1", "max_age_days": 180, "min_rating_count": 50, "min_lifetime_ratings_per_day": 2.0},
+  "theses": [
+    {
+      "thesis_id": "decorated-mail-pen-pal",
+      "thesis_version": 1,
+      "label": "decorate physical mail send receive and collect stamps or postmarks",
+      "queries": [
+        "укрась конверт игра",
+        "укрась письмо игра",
+        "оформи письмо игра",
+        "отправлять письма игра",
+        "создай открытку игра",
+        "укрась открытку игра",
+        "почтовые марки коллекция игра",
+        "коллекционируй марки игра",
+        "сургучная печать игра",
+        "decorate envelope game",
+        "decorate letter game",
+        "pen pal game",
+        "snail mail game",
+        "postcard maker game",
+        "stamp collection game",
+        "wax seal game"
+      ],
+      "semantic": {
+        "theme_terms": ["mail", "letter", "envelope", "postcard", "stamp", "pen pal", "snail mail", "почт", "письм", "конверт", "открытк", "марк", "сургуч"],
+        "mechanic_terms": ["decorate", "make", "send", "seal", "collect", "write", "украш", "оформ", "созда", "отправ", "печат", "коллекц"],
+        "reward_grammar_terms": ["reply", "postmark", "album", "collection", "letterbox", "ответ", "штемпел", "альбом", "коллекц", "ящик"]
+      }
+    }
+  ]
+}

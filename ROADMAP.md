@@ -30,6 +30,7 @@ M0 evidence foundation — COMPLETE
 -> M1.6 Mystery / Unboxing / Collection sweep — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
 -> R0.3 Reaper 0.3.0 / Thesis Intelligence — COMPLETE
+-> R0.3.1 durable evidence archive — IMPLEMENTED; LIVE MIGRATION PENDING
 
 PRODUCT-VALIDATION LANE
 M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
@@ -372,6 +373,52 @@ fabricated 7d/30d/90d velocity without repeated frozen observations
 Potential `0.3.1+` work such as controlled query expansion, cross-thesis reuse diagnostics, and
 sweep-to-sweep change detection must be justified by real 0.3 usage rather than pulled into the
 release preemptively.
+
+---
+
+# R0.3.1 — Durable evidence archive — IMPLEMENTED; LIVE MIGRATION PENDING 2026-09-14
+
+Real 0.3 usage exposed one bounded infrastructure defect: longitudinal analysis deliberately binds
+old immutable experiment artifacts, while the September trend-sweep copies existed only as
+30-day GitHub Actions artifacts. Expiration would destroy replayable source evidence even though
+0.3's delta semantics were otherwise correct.
+
+This correction is intentionally narrower than a storage platform:
+
+```text
+committed expected artifact provenance + SHA/size
+-> exact Actions artifact ZIP download
+-> deterministic wrapper/member hash manifest
+-> create-only GitHub Release publication
+-> verified later extraction of exact inner experiment ZIP
+-> unchanged existing --prior longitudinal path
+```
+
+Specification:
+[`docs/spec/durable-evidence-archive.md`](docs/spec/durable-evidence-archive.md).
+
+Initial request catalog:
+[`research/archive/`](research/archive/).
+
+Implementation gate:
+
+- [x] preserve the exact Actions wrapper ZIP bytes rather than repacking them;
+- [x] fail closed unless downloaded SHA-256 and size equal the committed request;
+- [x] inventory every non-directory inner member by exact path, size and SHA-256;
+- [x] reject unsafe/duplicate ZIP member paths;
+- [x] support offline wrapper verification and hash-checked inner-member extraction;
+- [x] keep GitHub transport outside the offline archive core;
+- [x] use draft-first, create-only Release reconciliation with no clobber path;
+- [x] keep heavy evidence out of normal Git history;
+- [x] declare the four Sep-13 round-2..5 artifacts before their 2026-10-13 expiry;
+- [ ] full repository quality gate passes on the implementation PR;
+- [ ] implementation/spec receive independent review and any findings are repaired;
+- [ ] all four historical requests are published to durable Releases and re-downloaded/verified;
+- [ ] final live migration review is recorded and this milestone is marked COMPLETE.
+
+This work does **not** reopen product sequencing. `P2` remains the next primary product path, and a
+scheduler, object-storage abstraction, remote-history database or generic artifact platform remain
+out of scope.
 
 ---
 

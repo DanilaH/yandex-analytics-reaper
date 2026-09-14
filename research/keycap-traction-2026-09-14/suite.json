@@ -1,0 +1,33 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "keycap-traction-2026-09-14",
+  "suite_version": 1,
+  "context": {"pages": 3, "session_profile": "clean_anonymous", "lang": "ru", "device": "desktop", "platform": "desktop_other"},
+  "anomaly_policy": {"spec_version": "thesis-anomaly-policy-v1", "max_age_days": 180, "min_rating_count": 50, "min_lifetime_ratings_per_day": 2.0},
+  "theses": [
+    {
+      "thesis_id": "keycap-asmr-collector",
+      "thesis_version": 1,
+      "label": "keyboard and keycap customization collection",
+      "queries": [
+        "клавиатура кликер игра",
+        "клавиатура asmr игра",
+        "механическая клавиатура игра",
+        "кейкапы игра",
+        "клавиши кликер игра",
+        "прокачай клавиатуру игра",
+        "собери клавиатуру игра",
+        "редкие клавиши игра",
+        "keyboard clicker game",
+        "keyboard asmr game",
+        "keycap game",
+        "keycap collector game"
+      ],
+      "semantic": {
+        "theme_terms": ["keyboard", "keycap", "switch", "клавиатур", "кейкап", "клавиш", "механичес"],
+        "mechanic_terms": ["click", "clicker", "tap", "upgrade", "customize", "collect", "клик", "нажим", "прокач", "кастом", "собир"],
+        "reward_grammar_terms": ["asmr", "rare", "rarity", "unlock", "collection", "редк", "разблок", "коллекц"]
+      }
+    }
+  ]
+}

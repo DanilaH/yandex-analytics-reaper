@@ -1,0 +1,65 @@
+name: Finalize frozen Decorated Mail baseline
+
+on:
+  push:
+    branches:
+      - research/decorated-mail-finalize-2026-09-14
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - name: Install Reaper
+        run: |
+          python -m pip install "pip==26.2.1"
+          pip install -c constraints-dev.txt -e .
+      - name: Download frozen collector evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p baseline
+          gh run download 34834287680 \
+            --repo "${{ github.repository }}" \
+            --name decorated-mail-falsification-2026-09-14 \
+            --dir baseline
+          test -f baseline/decorated-mail-result.json
+          test -d baseline/artifacts
+          cp -R baseline/artifacts ./artifacts
+      - name: Build hash-bound analyst review
+        run: python research/decorated-mail-falsification-2026-09-14/finalize_evidence.py
+      - name: Build reviewed intelligence from frozen baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_artifact="$(find artifacts/exports/decorated-mail-falsification-2026-09-14 -type f -name '*.zip' | sort | tail -n 1)"
+          test -n "$current_artifact"
+          yandex-reaper-thesis build \
+            research/decorated-mail-falsification-2026-09-14/suite.json \
+            "$current_artifact" \
+            --review research/decorated-mail-falsification-2026-09-14/directness-review.json \
+            | tee decorated-mail-reviewed-result.json
+      - name: Upload final decision evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: decorated-mail-falsification-final-2026-09-14
+          path: |
+            baseline/decorated-mail-result.json
+            decorated-mail-reviewed-result.json
+            research/decorated-mail-falsification-2026-09-14/suite.json
+            research/decorated-mail-falsification-2026-09-14/directness-review.json
+            artifacts/
+          if-no-files-found: error
+          retention-days: 30

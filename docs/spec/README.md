@@ -23,6 +23,7 @@ search-query-family.md
 comparable-set.md
 analyst-experiment-runner.md
 durable-evidence-archive.md
+evidence-completeness-v1.md
 analyst-snapshot.md
 listing-state-observations.md
 analyst-market-export.md
@@ -50,6 +51,6 @@ Ownership reminder:
 /docs/history/*   historical review/decision records
 ```
 
-`thesis-intelligence.md` owns the 0.3 product/analytical semantics. `thesis-intelligence-contracts-v1.md` freezes the exact v1 schemas and method boundaries. `thesis-intelligence-build-identity-v1.md` is the normative companion that freezes collision-safe rebuild identity/publication for multiple review states over one experiment artifact. `durable-evidence-archive.md` owns the digest-bound durability/retrieval contract that keeps those immutable artifacts available after CI retention expires without changing their analytical meaning.
+`thesis-intelligence.md` owns the 0.3 product/analytical semantics. `thesis-intelligence-contracts-v1.md` freezes the exact v1 schemas and method boundaries. `thesis-intelligence-build-identity-v1.md` is the normative companion that freezes collision-safe rebuild identity/publication for multiple review states over one experiment artifact. `durable-evidence-archive.md` owns the digest-bound durability/retrieval contract that keeps those immutable artifacts available after CI retention expires without changing their analytical meaning. `evidence-completeness-v1.md` owns the additive R0.4 semantics for exact-ID point observations, supplemental analyst evidence and later evidence-pack binding without mutating the frozen 0.3 contracts.
 
 Do not duplicate roadmap phases in these specs. When a spec changes semantics that code already implements, update the implementation/tests in the same PR or explicitly record the implementation gap in `ROADMAP.md`.

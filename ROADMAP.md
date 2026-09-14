@@ -450,8 +450,8 @@ The review removed a proposed duplicate rich-metadata layer because the current 
 ```text
 R0.4-P0 contract freeze + independent review — COMPLETE
 -> R0.4-P1 exact-ID point observation artifact — COMPLETE
--> R0.4-P2 known-ID longitudinal comparison — NEXT
--> R0.4-P3 supplemental evidence bundle
+-> R0.4-P2 known-ID longitudinal comparison — ACTIVE (implementation complete; real interval validation pending)
+-> R0.4-P3 supplemental evidence bundle — BLOCKED ON P2 REAL-DATA GATE
 -> R0.4-P4 thesis evidence-pack integration
 -> R0.4-P5 real-data validation
 -> optional scheduled watch only after artifact acceptance
@@ -487,16 +487,20 @@ Definition of Done:
 
 Live run `34841547344` produced inner observation SHA-256 `ae5bd96dca5485f447eb556d3acc5328d18e0fea402c3324efdef3ee1a082a3f` and manifest content hash `b9761b69210f1fdb689d56be99d411ba7821d4add560c6da7b93307dde837079`. The source omission of `553722` is deliberately not interpreted as zero/deleted/unpublished; it validates the explicit missing-evidence semantics.
 
-### R0.4-P2 — Known-ID longitudinal comparison — NEXT
+### R0.4-P2 — Known-ID longitudinal comparison — ACTIVE
 
-- [ ] compare compatible point-observation artifacts for an explicit cohort;
-- [ ] derive rating-count delta/day only across actual frozen observations;
-- [ ] preserve missing values and negative/revision deltas;
-- [ ] expose elapsed interval and exact artifact/source identity;
-- [ ] keep point velocity distinct from search visibility and lifetime pace;
+Offline implementation is complete and independently reviewed in [`docs/history/reaper-r0.4-p2-review-2026-09-14.md`](docs/history/reaper-r0.4-p2-review-2026-09-14.md). The milestone remains active because the real longitudinal acceptance control requires a later Keycap observation after a meaningful interval; same-day repetition is explicitly insufficient.
+
+- [x] compare compatible point-observation artifacts for an explicit cohort;
+- [x] derive rating-count delta/day only across actual frozen observations;
+- [x] preserve missing values and negative/revision deltas;
+- [x] expose elapsed interval and exact artifact/source identity;
+- [x] keep point velocity distinct from search visibility and lifetime pace;
 - [ ] validate with a second real Keycap observation after a meaningful interval.
 
-### R0.4-P3 — Supplemental evidence bundle
+Implementation quality gate: CI run `34844286971` passed Ruff, strict mypy, pytest and coverage after independent review fixes. The comparator is offline, create-only and additive to the frozen 0.3 contracts.
+
+### R0.4-P3 — Supplemental evidence bundle — BLOCKED ON P2 REAL-DATA GATE
 
 - [ ] versioned analyst-owned bundle for external/manual evidence;
 - [ ] bind thesis/listing target, source kind/reference, observation time, claim/measurement and confidence;

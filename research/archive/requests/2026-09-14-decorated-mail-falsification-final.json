@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "decorated-mail-falsification-final-2026-09-14",
+  "source": {
+    "workflow_run_id": 34834535345,
+    "workflow_artifact_id": 10343217552,
+    "workflow_artifact_name": "decorated-mail-falsification-final-2026-09-14",
+    "artifact_created_at": "2026-09-14T10:43:04Z",
+    "artifact_expires_at": "2026-10-14T10:43:04Z",
+    "source_commit_sha": "20d38c7a94ad2d22e66aa26783ac8f5a8a10edb4",
+    "source_branch": "research/decorated-mail-finalize-2026-09-14"
+  },
+  "expected": {
+    "sha256": "b688cf064c921821d46fff243012e8ca4617a123631e74900eb3eb8f1d1c095c",
+    "size_bytes": 3306720
+  },
+  "release": {
+    "tag": "evidence-2026-09-14-decorated-mail-falsification-final",
+    "asset_name": "decorated-mail-falsification-final-2026-09-14.actions.zip",
+    "manifest_asset_name": "decorated-mail-falsification-final-2026-09-14.manifest.json",
+    "checksum_asset_name": "decorated-mail-falsification-final-2026-09-14.sha256"
+  }
+}

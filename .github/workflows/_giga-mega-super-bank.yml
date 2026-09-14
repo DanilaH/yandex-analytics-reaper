@@ -1,0 +1,246 @@
+name: Giga Mega Super Bank Sweep
+
+on:
+  push:
+    branches:
+      - research/giga-mega-super-bank-2026-09-14
+    paths:
+      - research/giga-mega-super-bank-2026-09-14/**
+      - .github/workflows/_giga-mega-super-bank.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Reaper
+        run: pip install -e ".[dev]"
+
+      - name: Run thesis intersection sweep
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis run research/giga-mega-super-bank-2026-09-14/suite.json --workers 4 \
+            | tee /tmp/thesis-result.json
+
+      - name: Mine young Yandex feed outliers
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          from datetime import UTC, datetime
+          from pathlib import Path
+
+          from yandex_analytics_reaper.domain.models import ProbeContext
+          from yandex_analytics_reaper.sources.yandex.client import YandexPublicClient
+          from yandex_analytics_reaper.sources.yandex.parsers import (
+              YandexFeedParser,
+              YandexGetGamesParser,
+          )
+
+          root = Path('/tmp/young-outliers')
+          raw_root = root / 'raw'
+          raw_root.mkdir(parents=True, exist_ok=True)
+          context = ProbeContext()
+          feed_parser = YandexFeedParser()
+          games_parser = YandexGetGamesParser()
+          cards = {}
+          page_records = []
+          page_id = None
+          rtx_reqid = None
+
+          def persist_raw(name, response):
+              body_path = raw_root / f'{name}.body'
+              meta_path = raw_root / f'{name}.json'
+              body_path.write_bytes(response.body)
+              meta_path.write_text(
+                  json.dumps(
+                      {
+                          'source_id': response.source_id,
+                          'request_key': response.request_key,
+                          'method': response.method,
+                          'url': response.url,
+                          'status_code': response.status_code,
+                          'retrieved_at': response.retrieved_at.isoformat(),
+                          'request_context': response.request_context,
+                          'body_size': len(response.body),
+                          'body_sha256': hashlib.sha256(response.body).hexdigest(),
+                      },
+                      ensure_ascii=False,
+                      indent=2,
+                      sort_keys=True,
+                  ) + '\n',
+                  encoding='utf-8',
+              )
+
+          with YandexPublicClient() as client:
+              for page_index in range(1, 6):
+                  response = client.collect_feed(
+                      context,
+                      count=100,
+                      page_id=page_id,
+                      rtx_reqid=rtx_reqid,
+                  )
+                  persist_raw(f'feed-{page_index:02d}', response)
+                  if response.status_code >= 400:
+                      raise RuntimeError(f'feed page {page_index} HTTP {response.status_code}')
+                  page = feed_parser.parse(response.body)
+                  organic = [game for game in page.games if not game.sponsored]
+                  for game in organic:
+                      cards.setdefault(game.app_id, game)
+                  page_records.append(
+                      {
+                          'page': page_index,
+                          'games': len(page.games),
+                          'organic_games': len(organic),
+                          'unique_organic_so_far': len(cards),
+                          'has_next_page': page.page_info.has_next_page,
+                      }
+                  )
+                  if not page.page_info.has_next_page:
+                      break
+                  page_id = page.page_info.next_page_id
+                  rtx_reqid = page.page_info.rtx_reqid
+                  if not page_id:
+                      break
+
+              app_ids = sorted(cards)
+              details = []
+              for batch_index, start in enumerate(range(0, len(app_ids), 100), start=1):
+                  batch = app_ids[start:start + 100]
+                  response = client.collect_games(batch)
+                  persist_raw(f'get-games-{batch_index:02d}', response)
+                  if response.status_code >= 400:
+                      raise RuntimeError(
+                          f'get_games batch {batch_index} HTTP {response.status_code}'
+                      )
+                  details.extend(games_parser.parse(response.body).games)
+
+          observed_at = datetime.now(UTC)
+          rows = []
+          for game in details:
+              if game.first_published is None:
+                  continue
+              timestamp = float(game.first_published)
+              if timestamp > 10_000_000_000:
+                  timestamp /= 1000.0
+              try:
+                  published = datetime.fromtimestamp(timestamp, tz=UTC)
+              except (OverflowError, OSError, ValueError):
+                  continue
+              age_days = max((observed_at - published).total_seconds() / 86400.0, 0.0)
+              if age_days > 90.0:
+                  continue
+              rating_count = game.rating_count
+              pace = None
+              if rating_count is not None and age_days > 0:
+                  pace = rating_count / age_days
+              rows.append(
+                  {
+                      'app_id': game.app_id,
+                      'title': game.title,
+                      'first_published': published.isoformat(),
+                      'age_days': round(age_days, 4),
+                      'rating_count': rating_count,
+                      'player_rating': game.player_rating,
+                      'lifetime_rating_count_per_day_proxy': (
+                          round(pace, 6) if pace is not None else None
+                      ),
+                      'categories_names': list(game.categories_names),
+                      'description': game.description,
+                      'instruction': game.instruction,
+                  }
+              )
+
+          rows.sort(
+              key=lambda item: (
+                  item['lifetime_rating_count_per_day_proxy'] is not None,
+                  item['lifetime_rating_count_per_day_proxy'] or -1,
+                  item['rating_count'] or -1,
+              ),
+              reverse=True,
+          )
+          payload = {
+              'spec_version': 'feed-young-outlier-scan-v1',
+              'observed_at': observed_at.isoformat(),
+              'scope': {
+                  'surface': 'yandex catalogue feed',
+                  'session_profile': 'clean_anonymous',
+                  'language': 'ru',
+                  'device': 'desktop',
+                  'platform': 'desktop_other',
+                  'requested_pages': 5,
+                  'games_per_page': 100,
+                  'actual_pages': len(page_records),
+                  'unique_organic_feed_ids': len(cards),
+                  'get_games_returned': len(details),
+              },
+              'limitations': [
+                  'feed-sampled only; this is not a platform-wide census',
+                  'lifetime ratingCount/day is a normalization proxy, not current growth',
+                  'feed ranking/exposure is context-dependent and is not demand by itself',
+                  'a missing ID from get_games is uncertainty, not zero or deletion',
+              ],
+              'feed_pages': page_records,
+              'recent_90d': rows,
+              'top_30d': [row for row in rows if row['age_days'] <= 30][:40],
+              'top_60d': [row for row in rows if row['age_days'] <= 60][:40],
+              'top_90d': rows[:60],
+          }
+          (root / 'young-outliers.json').write_text(
+              json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(
+              json.dumps(
+                  {
+                      'pages': len(page_records),
+                      'unique_feed_ids': len(cards),
+                      'get_games_returned': len(details),
+                      'recent_90d': len(rows),
+                      'top': [
+                          {
+                              'app_id': row['app_id'],
+                              'title': row['title'],
+                              'age_days': row['age_days'],
+                              'rating_count': row['rating_count'],
+                              'proxy': row['lifetime_rating_count_per_day_proxy'],
+                          }
+                          for row in rows[:20]
+                      ],
+                  },
+                  ensure_ascii=False,
+                  indent=2,
+              )
+          )
+          PY
+
+      - name: Stage frozen evidence
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/giga-mega-super-bank
+          cp research/giga-mega-super-bank-2026-09-14/suite.json /tmp/giga-mega-super-bank/
+          cp /tmp/thesis-result.json /tmp/giga-mega-super-bank/
+          cp -R /tmp/young-outliers /tmp/giga-mega-super-bank/
+          if [ -d artifacts ]; then
+            cp -R artifacts /tmp/giga-mega-super-bank/
+          fi
+          find /tmp/giga-mega-super-bank -type f -print | sort
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: giga-mega-super-bank-2026-09-14
+          path: /tmp/giga-mega-super-bank
+          if-no-files-found: error
+          retention-days: 30

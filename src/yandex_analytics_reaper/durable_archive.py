@@ -4,16 +4,19 @@ import hashlib
 import json
 import os
 import tempfile
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path, PurePosixPath
-from typing import Literal
+from typing import Literal, Self
 from zipfile import BadZipFile, ZipFile
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _MANIFEST_SPEC_VERSION = "durable-evidence-archive-v1"
 _SHA256_LENGTH = 64
 _COPY_CHUNK_SIZE = 1024 * 1024
+_SAFE_ARCHIVE_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
+_SAFE_RELEASE_NAME_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]*$"
 
 
 class DurableArchiveError(ValueError):
@@ -46,6 +49,12 @@ class WorkflowArtifactSource(BaseModel):
             raise ValueError("source_commit_sha must be a 40-character hexadecimal SHA")
         return normalized
 
+    @model_validator(mode="after")
+    def validate_retention_window(self) -> Self:
+        if self.artifact_expires_at <= self.artifact_created_at:
+            raise ValueError("artifact_expires_at must be after artifact_created_at")
+        return self
+
 
 class ExpectedArtifactIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -65,10 +74,17 @@ class ExpectedArtifactIdentity(BaseModel):
 class ReleaseBinding(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    tag: str = Field(min_length=1)
-    asset_name: str = Field(min_length=1)
-    manifest_asset_name: str = Field(min_length=1)
-    checksum_asset_name: str = Field(min_length=1)
+    tag: str = Field(min_length=1, pattern=_SAFE_RELEASE_NAME_PATTERN)
+    asset_name: str = Field(min_length=1, pattern=_SAFE_RELEASE_NAME_PATTERN)
+    manifest_asset_name: str = Field(min_length=1, pattern=_SAFE_RELEASE_NAME_PATTERN)
+    checksum_asset_name: str = Field(min_length=1, pattern=_SAFE_RELEASE_NAME_PATTERN)
+
+    @model_validator(mode="after")
+    def require_distinct_asset_names(self) -> Self:
+        names = {self.asset_name, self.manifest_asset_name, self.checksum_asset_name}
+        if len(names) != 3:
+            raise ValueError("release asset, manifest and checksum names must be distinct")
+        return self
 
 
 class DurableArchiveRequest(BaseModel):
@@ -77,7 +93,7 @@ class DurableArchiveRequest(BaseModel):
     spec_version: Literal["durable-evidence-archive-request-v1"] = (
         "durable-evidence-archive-request-v1"
     )
-    archive_id: str = Field(min_length=1)
+    archive_id: str = Field(min_length=1, pattern=_SAFE_ARCHIVE_ID_PATTERN)
     source: WorkflowArtifactSource
     expected: ExpectedArtifactIdentity
     release: ReleaseBinding
@@ -103,7 +119,7 @@ class DurableArchiveManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     spec_version: Literal["durable-evidence-archive-v1"] = "durable-evidence-archive-v1"
-    archive_id: str
+    archive_id: str = Field(pattern=_SAFE_ARCHIVE_ID_PATTERN)
     source: WorkflowArtifactSource
     release: ReleaseBinding
     artifact: ExpectedArtifactIdentity
@@ -130,6 +146,14 @@ class DurableArchiveVerification(BaseModel):
     status: Literal["pass"] = "pass"
 
 
+class DurableArchiveCatalogVerification(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    request_count: int = Field(gt=0)
+    archive_ids: tuple[str, ...]
+    status: Literal["pass"] = "pass"
+
+
 def load_archive_request(path: Path) -> DurableArchiveRequest:
     try:
         return DurableArchiveRequest.model_validate_json(path.read_bytes())
@@ -142,6 +166,22 @@ def load_archive_manifest(path: Path) -> DurableArchiveManifest:
         return DurableArchiveManifest.model_validate_json(path.read_bytes())
     except (OSError, ValueError) as exc:
         raise DurableArchiveError(f"cannot load durable archive manifest {path}: {exc}") from exc
+
+
+def validate_request_catalog(paths: Sequence[Path]) -> DurableArchiveCatalogVerification:
+    if not paths:
+        raise DurableArchiveError("durable archive request catalog must not be empty")
+    requests = tuple(load_archive_request(path) for path in paths)
+    _require_unique("archive_id", tuple(request.archive_id for request in requests))
+    _require_unique("release tag", tuple(request.release.tag for request in requests))
+    _require_unique(
+        "workflow artifact id",
+        tuple(str(request.source.workflow_artifact_id) for request in requests),
+    )
+    return DurableArchiveCatalogVerification(
+        request_count=len(requests),
+        archive_ids=tuple(request.archive_id for request in requests),
+    )
 
 
 def build_archive_manifest(
@@ -276,9 +316,10 @@ def write_manifest_create_only(manifest: DurableArchiveManifest, output_path: Pa
         if existing != manifest:
             raise DurableArchiveError(
                 f"refusing to replace different durable archive manifest: {output_path}"
-            )
+            ) from None
     except OSError as exc:
-        raise DurableArchiveError(f"cannot write durable archive manifest {output_path}: {exc}") from exc
+        message = f"cannot write durable archive manifest {output_path}: {exc}"
+        raise DurableArchiveError(message) from exc
 
 
 def checksum_line(manifest: DurableArchiveManifest) -> str:
@@ -344,6 +385,18 @@ def _validate_member_path(value: str) -> None:
     path = PurePosixPath(value)
     if path.is_absolute() or ".." in path.parts or not path.parts:
         raise DurableArchiveError(f"unsafe ZIP member path: {value}")
+
+
+def _require_unique(label: str, values: tuple[str, ...]) -> None:
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for value in values:
+        if value in seen:
+            duplicates.add(value)
+        seen.add(value)
+    if duplicates:
+        rendered = ", ".join(sorted(duplicates))
+        raise DurableArchiveError(f"duplicate {label} in archive request catalog: {rendered}")
 
 
 def _canonical_sha256(value: object) -> str:

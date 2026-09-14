@@ -69,7 +69,7 @@ uncompressed size_bytes
 member SHA-256
 ```
 
-A later consumer can verify the wrapper and then extract one exact bound inner experiment ZIP for the existing `--prior-artifact` interface. No longitudinal analytical code needs to understand GitHub Releases.
+A later consumer can verify the wrapper and then extract one exact bound inner experiment ZIP for the existing `yandex-reaper-thesis --prior <zip>` interface. No longitudinal analytical code needs to understand GitHub Releases.
 
 ## Request contract
 
@@ -106,11 +106,18 @@ release:
 
 Rules:
 
-- `archive_id` is stable and unique by convention;
+- `archive_id` is stable and unique across the committed request catalog;
+- release tag is unique across the committed request catalog;
+- one Actions `workflow_artifact_id` cannot be assigned to two archive identities;
+- archive IDs, release tags and asset names use a shell-safe `[A-Za-z0-9._-]` vocabulary;
+- the three Release asset names are distinct;
+- `artifact_expires_at` must be later than `artifact_created_at`;
 - the expected SHA-256 and size bind one exact Actions artifact;
 - source commit SHA is the commit that produced the CI artifact, not the later archival implementation commit;
 - Release tag and asset names are fixed before publication;
 - changing the evidence bytes requires a new archive identity, never a replacement under the old identity.
+
+The workflow runs `yandex-reaper-archive validate-catalog` across the complete committed request set before making any Release side effects. Catalog identity collisions therefore fail as a preflight error rather than after partial publication.
 
 ## Generated manifest
 
@@ -135,22 +142,42 @@ The generated manifest is uploaded next to the wrapper ZIP as a Release asset. A
 
 The GitHub Actions publisher uses the repository-scoped `GITHUB_TOKEN` with only the permissions required to read Actions artifacts and write Release contents.
 
+Archive workflow runs are serialized by one repository-level concurrency group. A later trigger waits rather than canceling a publication already in progress.
+
+Before downloading bytes, the workflow resolves the numeric Actions artifact and requires GitHub metadata to agree with the committed request for:
+
+```text
+artifact id
+workflow run id
+artifact name
+created_at
+expires_at
+source commit SHA
+source branch
+size_in_bytes
+SHA-256 digest
+expired = false
+```
+
 Publication sequence:
 
 ```text
-committed request
+validate complete request catalog
+→ resolve exact Actions artifact metadata
+→ verify committed provenance + digest + size
 → download exact Actions artifact by numeric artifact ID
-→ verify expected SHA-256 + size
+→ verify downloaded SHA-256 + size offline
 → inventory members + build manifest
 → create draft Release at the source commit
-→ upload wrapper ZIP + manifest + checksum
-→ verify the uploaded/retrievable identity on reconciliation runs
+→ upload wrapper ZIP + manifest + checksum without clobber
+→ download the Release assets again
+→ verify request + manifest + wrapper + checksum
 → publish Release
 ```
 
 Creating a draft before attaching assets is deliberate. If the repository enables GitHub's immutable-releases setting, publishing then also gives platform-level protection against changing the release tag or assets. The Reaper contract does **not** silently assume that repository setting is enabled: create-only workflow behavior plus hash verification remains mandatory either way.
 
-A published release is never repaired by overwriting an existing asset. A conflicting existing tag/asset is an integrity failure. A partially created **draft** may only be completed with missing assets when all already-present assets agree with the committed request and generated manifest.
+A published release is never repaired by overwriting an existing asset. A conflicting existing tag/asset is an integrity failure. A partially created **draft** may only be completed with missing assets; already-present assets are never replaced and the complete draft must pass the same download-and-verify gate before publication.
 
 ## Reconciliation / rerun semantics
 
@@ -159,12 +186,14 @@ Archival workflows are expected to be rerunnable.
 For each request:
 
 1. if no Release exists, perform first publication;
-2. if a Release exists, download its wrapper and manifest;
-3. verify wrapper SHA-256/size/member inventory/content hash;
-4. verify the manifest agrees with the committed request;
-5. if all checks pass, report the archive as already satisfied;
-6. if any identity differs, fail closed;
-7. never pass `--clobber` or otherwise replace evidence under the same archive identity.
+2. if a Release exists, require its target commit to equal the committed source SHA;
+3. if all three assets exist, download wrapper, manifest and checksum;
+4. verify wrapper SHA-256/size/member inventory/content hash and request binding;
+5. verify the checksum file against the downloaded wrapper;
+6. if all checks pass, report the archive as already satisfied;
+7. if a published Release is incomplete or any identity differs, fail closed;
+8. if an incomplete draft exists, add only missing assets and then run the full verification gate;
+9. never pass `--clobber` or otherwise replace evidence under the same archive identity.
 
 This makes a successful rerun idempotent while keeping evidence create-only.
 
@@ -177,7 +206,7 @@ High-level retrieval:
 ```text
 archive request
 → Release wrapper ZIP + manifest
-→ yandex-reaper-archive verify
+→ yandex-reaper-archive verify --request <request>
 → choose exact manifest member path
 → yandex-reaper-archive extract
 → resulting verified experiment ZIP
@@ -216,10 +245,14 @@ No unit test may call GitHub or any other network service. GitHub API/release tr
 
 Archive publication/retrieval fails closed when:
 
+- committed catalog identities collide;
+- GitHub artifact provenance disagrees with the request;
 - expected wrapper digest or size differs;
 - the Actions artifact has already expired before a durable copy exists;
 - the downloaded object is not a readable ZIP;
 - ZIP member paths are unsafe or duplicated;
+- an existing Release targets a different source commit;
+- an existing published Release is incomplete;
 - an existing Release uses the same tag with different bytes/provenance;
 - a manifest content hash or member inventory does not replay;
 - the requested inner member is absent;

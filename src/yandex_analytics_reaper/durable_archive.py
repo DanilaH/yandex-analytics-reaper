@@ -11,7 +11,6 @@ from zipfile import BadZipFile, ZipFile
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-_REQUEST_SPEC_VERSION = "durable-evidence-archive-request-v1"
 _MANIFEST_SPEC_VERSION = "durable-evidence-archive-v1"
 _SHA256_LENGTH = 64
 _COPY_CHUNK_SIZE = 1024 * 1024
@@ -75,7 +74,9 @@ class ReleaseBinding(BaseModel):
 class DurableArchiveRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    spec_version: Literal["durable-evidence-archive-request-v1"] = _REQUEST_SPEC_VERSION
+    spec_version: Literal["durable-evidence-archive-request-v1"] = (
+        "durable-evidence-archive-request-v1"
+    )
     archive_id: str = Field(min_length=1)
     source: WorkflowArtifactSource
     expected: ExpectedArtifactIdentity
@@ -101,7 +102,7 @@ class ArchivedMember(BaseModel):
 class DurableArchiveManifest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    spec_version: Literal["durable-evidence-archive-v1"] = _MANIFEST_SPEC_VERSION
+    spec_version: Literal["durable-evidence-archive-v1"] = "durable-evidence-archive-v1"
     archive_id: str
     source: WorkflowArtifactSource
     release: ReleaseBinding
@@ -175,17 +176,35 @@ def build_archive_manifest(
     )
 
 
+def require_manifest_matches_request(
+    request: DurableArchiveRequest,
+    manifest: DurableArchiveManifest,
+) -> None:
+    if manifest.archive_id != request.archive_id:
+        raise DurableArchiveError("manifest archive_id disagrees with committed request")
+    if manifest.source != request.source:
+        raise DurableArchiveError("manifest source provenance disagrees with committed request")
+    if manifest.release != request.release:
+        raise DurableArchiveError("manifest release binding disagrees with committed request")
+    if manifest.artifact != request.expected:
+        raise DurableArchiveError("manifest artifact identity disagrees with committed request")
+
+
 def verify_archive(
     manifest: DurableArchiveManifest,
     artifact_path: Path,
+    *,
+    request: DurableArchiveRequest | None = None,
 ) -> DurableArchiveVerification:
-    request = DurableArchiveRequest(
+    if request is not None:
+        require_manifest_matches_request(request, manifest)
+    rebuild_request = DurableArchiveRequest(
         archive_id=manifest.archive_id,
         source=manifest.source,
         expected=manifest.artifact,
         release=manifest.release,
     )
-    rebuilt = build_archive_manifest(request, artifact_path)
+    rebuilt = build_archive_manifest(rebuild_request, artifact_path)
     if rebuilt != manifest:
         raise DurableArchiveError(
             "durable archive manifest disagrees with the artifact or canonical manifest identity"

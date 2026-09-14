@@ -1,0 +1,101 @@
+name: Sync R0.4 P2 docs
+
+on:
+  push:
+    branches:
+      - feature/r0.4-p2-longitudinal-comparison
+    paths:
+      - .github/workflows/_sync-r0.4-p2-docs.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/r0.4-p2-longitudinal-comparison
+      - name: Patch README and ROADMAP
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_str: str, old: str, new: str) -> None:
+              path = Path(path_str)
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path_str}: expected exactly one match, found {count}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "README.md",
+              '''yandex-reaper-observe verify \\
+            data/observations/keycap-known-direct-v1.zip
+          ```
+
+          Point observations are listing-specific evidence, not search evidence.''',
+              '''yandex-reaper-observe verify \\
+            data/observations/keycap-known-direct-v1.zip
+
+          yandex-reaper-observe compare \\
+            data/observations/keycap-known-direct-v1.previous.zip \\
+            data/observations/keycap-known-direct-v1.current.zip \\
+            data/observations/keycap-known-direct-v1.longitudinal.json
+          ```
+
+          `compare` is fully offline and requires two compatible frozen point-observation artifacts with strictly increasing observation time. It preserves missing endpoints/metrics and negative source revisions instead of coercing them to zero. The resulting rating-count delta/day is point-observation evidence only; it is not search visibility, lifetime pace, DAU, installs, revenue, or retention.
+
+          Point observations are listing-specific evidence, not search evidence.''',
+          )
+
+          replace_once(
+              "ROADMAP.md",
+              '''-> R0.4-P1 exact-ID point observation artifact — COMPLETE
+          -> R0.4-P2 known-ID longitudinal comparison — NEXT
+          -> R0.4-P3 supplemental evidence bundle''',
+              '''-> R0.4-P1 exact-ID point observation artifact — COMPLETE
+          -> R0.4-P2 known-ID longitudinal comparison — ACTIVE (implementation complete; real interval validation pending)
+          -> R0.4-P3 supplemental evidence bundle — BLOCKED ON P2 REAL-DATA GATE''',
+          )
+
+          replace_once(
+              "ROADMAP.md",
+              '''### R0.4-P2 — Known-ID longitudinal comparison — NEXT
+
+          - [ ] compare compatible point-observation artifacts for an explicit cohort;
+          - [ ] derive rating-count delta/day only across actual frozen observations;
+          - [ ] preserve missing values and negative/revision deltas;
+          - [ ] expose elapsed interval and exact artifact/source identity;
+          - [ ] keep point velocity distinct from search visibility and lifetime pace;
+          - [ ] validate with a second real Keycap observation after a meaningful interval.
+
+          ### R0.4-P3 — Supplemental evidence bundle''',
+              '''### R0.4-P2 — Known-ID longitudinal comparison — ACTIVE
+
+          Offline implementation is complete and independently reviewed in [`docs/history/reaper-r0.4-p2-review-2026-09-14.md`](docs/history/reaper-r0.4-p2-review-2026-09-14.md). The milestone remains active because the real longitudinal acceptance control requires a later Keycap observation after a meaningful interval; same-day repetition is explicitly insufficient.
+
+          - [x] compare compatible point-observation artifacts for an explicit cohort;
+          - [x] derive rating-count delta/day only across actual frozen observations;
+          - [x] preserve missing values and negative/revision deltas;
+          - [x] expose elapsed interval and exact artifact/source identity;
+          - [x] keep point velocity distinct from search visibility and lifetime pace;
+          - [ ] validate with a second real Keycap observation after a meaningful interval.
+
+          Implementation quality gate: CI run `34844286971` passed Ruff, strict mypy, pytest and coverage after independent review fixes. The comparator is offline, create-only and additive to the frozen 0.3 contracts.
+
+          ### R0.4-P3 — Supplemental evidence bundle — BLOCKED ON P2 REAL-DATA GATE''',
+          )
+          PY
+          git diff --check
+      - name: Commit synchronized docs
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md ROADMAP.md
+          git commit -m "Synchronize R0.4 P2 implementation status"
+          git push origin HEAD:feature/r0.4-p2-longitudinal-comparison

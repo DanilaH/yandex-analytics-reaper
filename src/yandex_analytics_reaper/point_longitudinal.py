@@ -5,11 +5,19 @@ from pathlib import Path
 from typing import Literal, Self
 from zipfile import BadZipFile, ZipFile
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import (
+    AwareDatetime,
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    model_validator,
+)
 
 from yandex_analytics_reaper.point_observation import (
     ListingObservationError,
     ListingObservationReport,
+    PointListingObservation,
     verify_listing_observation_artifact,
 )
 
@@ -23,9 +31,12 @@ class ObservationArtifactIdentity(BaseModel):
 
     artifact_sha256: str
     manifest_content_hash: str
+    source_id: Literal["yandex_public"]
+    source_request_key: Literal["catalogue.get_games"]
     source_snapshot_id: str
     source_content_hash: str
     observed_at: AwareDatetime
+    parser_name: Literal["YandexGetGamesParser"]
     parser_version: str
 
     @model_validator(mode="after")
@@ -79,10 +90,15 @@ class ListingLongitudinalFact(BaseModel):
             if self.revision_status != expected_revision:
                 raise ValueError("revision_status does not match rating_count_delta")
         else:
-            if self.rating_count_delta is not None or self.observed_rating_delta_per_day is not None:
+            if (
+                self.rating_count_delta is not None
+                or self.observed_rating_delta_per_day is not None
+            ):
                 raise ValueError("unavailable metric comparison must not invent a delta")
             if self.revision_status != "unavailable":
-                raise ValueError("unavailable metric comparison requires revision_status=unavailable")
+                raise ValueError(
+                    "unavailable metric comparison requires revision_status=unavailable"
+                )
         return self
 
 
@@ -104,8 +120,8 @@ class ListingLongitudinalComparison(BaseModel):
     elapsed_days: float = Field(gt=0)
     facts: tuple[ListingLongitudinalFact, ...]
     interpretation_boundary: Literal[
-        "point_velocity_not_search_visibility_dau_installs_revenue_or_retention"
-    ] = "point_velocity_not_search_visibility_dau_installs_revenue_or_retention"
+        "point_velocity_not_search_visibility_lifetime_pace_dau_installs_revenue_or_retention"
+    ] = "point_velocity_not_search_visibility_lifetime_pace_dau_installs_revenue_or_retention"
 
     @model_validator(mode="after")
     def validate_comparison(self) -> Self:
@@ -155,28 +171,35 @@ def compare_listing_observation_artifacts(
         observation_set_version=previous_report.observation_set_version,
         declaration_content_hash=previous_report.declaration_content_hash,
         requested_app_ids=previous_report.requested_app_ids,
-        previous=ObservationArtifactIdentity(
-            artifact_sha256=previous_verification.artifact_sha256,
-            manifest_content_hash=previous_verification.manifest_content_hash,
-            source_snapshot_id=previous_report.source_snapshot_id,
-            source_content_hash=previous_report.source_content_hash,
-            observed_at=previous_report.observed_at,
-            parser_version=previous_report.parser_version,
-        ),
-        current=ObservationArtifactIdentity(
-            artifact_sha256=current_verification.artifact_sha256,
-            manifest_content_hash=current_verification.manifest_content_hash,
-            source_snapshot_id=current_report.source_snapshot_id,
-            source_content_hash=current_report.source_content_hash,
-            observed_at=current_report.observed_at,
-            parser_version=current_report.parser_version,
-        ),
+        previous=_artifact_identity(previous_report, previous_verification),
+        current=_artifact_identity(current_report, current_verification),
         elapsed_seconds=elapsed_seconds,
         elapsed_days=elapsed_days,
         facts=facts,
     )
     _write_create_only_json(output_path, comparison)
     return comparison
+
+
+def _artifact_identity(
+    report: ListingObservationReport,
+    verification: object,
+) -> ObservationArtifactIdentity:
+    from yandex_analytics_reaper.point_observation import ListingObservationArtifactVerification
+
+    if not isinstance(verification, ListingObservationArtifactVerification):
+        raise ListingObservationError("invalid observation artifact verification result")
+    return ObservationArtifactIdentity(
+        artifact_sha256=verification.artifact_sha256,
+        manifest_content_hash=verification.manifest_content_hash,
+        source_id="yandex_public",
+        source_request_key=report.source_request_key,
+        source_snapshot_id=report.source_snapshot_id,
+        source_content_hash=report.source_content_hash,
+        observed_at=report.observed_at,
+        parser_name=report.parser_name,
+        parser_version=report.parser_version,
+    )
 
 
 def _load_report(artifact_path: Path) -> ListingObservationReport:
@@ -224,22 +247,18 @@ def _require_compatible_reports(
 def _build_fact(
     app_id: int,
     *,
-    previous: object | None,
-    current: object | None,
+    previous: PointListingObservation | None,
+    current: PointListingObservation | None,
     elapsed_days: float,
 ) -> ListingLongitudinalFact:
-    from yandex_analytics_reaper.point_observation import PointListingObservation
-
-    previous_listing = previous if isinstance(previous, PointListingObservation) else None
-    current_listing = current if isinstance(current, PointListingObservation) else None
     previous_presence: Literal["observed", "missing"] = (
-        "observed" if previous_listing is not None else "missing"
+        "observed" if previous is not None else "missing"
     )
     current_presence: Literal["observed", "missing"] = (
-        "observed" if current_listing is not None else "missing"
+        "observed" if current is not None else "missing"
     )
-    previous_count = previous_listing.rating_count if previous_listing is not None else None
-    current_count = current_listing.rating_count if current_listing is not None else None
+    previous_count = previous.rating_count if previous is not None else None
+    current_count = current.rating_count if current is not None else None
 
     status = _measurement_status(
         previous_presence,

@@ -169,7 +169,8 @@ def test_build_rejects_duplicate_zip_member_path(tmp_path: Path) -> None:
     artifact = tmp_path / "actions.zip"
     with ZipFile(artifact, mode="w", compression=ZIP_DEFLATED) as archive:
         archive.writestr("result.json", b"first")
-        archive.writestr("result.json", b"second")
+        with pytest.warns(UserWarning, match="Duplicate name"):
+            archive.writestr("result.json", b"second")
 
     with pytest.raises(DurableArchiveError, match="duplicate member path"):
         build_archive_manifest(_request(artifact), artifact)

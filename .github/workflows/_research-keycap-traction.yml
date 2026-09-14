@@ -29,12 +29,28 @@ jobs:
         run: |
           set -o pipefail
           yandex-reaper-thesis run research/keycap-traction-2026-09-14/suite.json --workers 2 | tee keycap-traction-result.json
+      - name: Finalize known-direct observation and analyst review
+        run: python research/keycap-traction-2026-09-14/finalize_evidence.py
+      - name: Build reviewed intelligence
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_artifact="$(find artifacts/exports/keycap-traction-2026-09-14 -type f -name '*.zip' | sort | tail -n 1)"
+          test -n "$current_artifact"
+          yandex-reaper-thesis build \
+            research/keycap-traction-2026-09-14/suite.json \
+            "$current_artifact" \
+            --review research/keycap-traction-2026-09-14/directness-review.json \
+            | tee keycap-reviewed-result.json
       - name: Upload evidence
         uses: actions/upload-artifact@v4
         with:
           name: keycap-traction-2026-09-14
           path: |
             keycap-traction-result.json
+            keycap-reviewed-result.json
+            known-direct-553722.json
+            research/keycap-traction-2026-09-14/directness-review.json
             artifacts/
           if-no-files-found: error
           retention-days: 30

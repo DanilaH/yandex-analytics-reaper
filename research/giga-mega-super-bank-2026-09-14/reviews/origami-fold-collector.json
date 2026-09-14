@@ -1,0 +1,20 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "origami-fold-collector",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "5140af71787b8930698c2a5d79c3a15a211d3a59c575ceaf5d28b8b02e556c60",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {
+      "platform_listing_id": "yandex_games:236799",
+      "analyst_verdict": "not_direct",
+      "reason_code": "mechanic_mismatch",
+      "note": "Despite the title, gameplay places geometric pieces into target positions rather than folding paper.",
+      "reviewed_at": "2026-09-14T15:15:00Z",
+      "semantic_directness": "direct_candidate"
+    }
+  ],
+  "content_hash": "85fdfd06ae7dcf5f32620b5dc96a8962d415566bae75d4d3cf5d1c0354e8a49b"
+}

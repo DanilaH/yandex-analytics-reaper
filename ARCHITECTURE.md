@@ -261,6 +261,21 @@ This boundary does not change Thesis Intelligence longitudinal semantics. `yande
 
 Normative publication/reconciliation semantics live in `docs/spec/durable-evidence-archive.md`.
 
+## Evidence-completeness boundary
+
+R0.4 adds evidence channels around the existing collection/replay system; it does not redefine search comparables or frozen Thesis Intelligence semantics.
+
+```text
+search experiment artifact -> search_discovered evidence
+explicit listing IDs -> existing get_games raw-first collector -> point_observed artifact
+analyst-supplied external/manual bytes -> supplemental evidence bundle
+existing verified Thesis Intelligence + new immutable evidence artifacts -> later evidence-pack envelope
+```
+
+Point-observed listings remain outside search-union membership unless independently present in the frozen search evidence. Supplemental evidence remains source/analyst-labeled and cannot become Yandex first-party evidence through packaging. Exact-ID collection reuses the current client, schema-drift, parser, normalizer and raw-store boundaries rather than introducing a second ingestion path.
+
+Scheduling is deliberately outside the initial boundary: first freeze and validate the observation artifact, then automate its production only if real longitudinal use justifies it. Normative semantics live in `docs/spec/evidence-completeness-v1.md`.
+
 ## Comparable-set construction boundary
 
 Comparable-set construction consumes persisted search evidence; it does not own query generation or collection. The first implementation is `comparables/yandex_search.py` with construction method `yandex_search_union_v1`.

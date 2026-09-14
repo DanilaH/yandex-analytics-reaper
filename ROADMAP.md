@@ -31,6 +31,7 @@ M0 evidence foundation — COMPLETE
 -> M1.7 semantic/directness triage — COMPLETE
 -> R0.3 Reaper 0.3.0 / Thesis Intelligence — COMPLETE
 -> R0.3.1 durable evidence archive — COMPLETE
+-> R0.4 evidence completeness / data quality — ACTIVE; P1 NEXT
 
 PRODUCT-VALIDATION LANE
 M2 candidate dossier / FIRST DECISION LOOP — COMPLETE
@@ -424,6 +425,114 @@ Live publication completed on 2026-09-14 in GitHub Actions run `34828794788`. Al
 This work does **not** reopen product sequencing. `P2` remains the next primary product path, and a
 scheduler, object-storage abstraction, remote-history database or generic artifact platform remain
 out of scope.
+
+---
+
+# R0.4 — Evidence completeness / data quality — ACTIVE 2026-09-14
+
+Real post-0.3 usage exposed a different class of evidence defect than durable storage:
+
+- a known direct listing can exist outside the bounded search surface, so exact-ID evidence must not depend on rediscovery;
+- repeated observations of known competitors should not require repeating a whole search experiment;
+- external/manual evidence used in decisions needs explicit provenance and durable hash binding;
+- search-derived, point-observed and supplemental evidence must never be silently flattened into one market-supply claim.
+
+Normative semantics:
+[`docs/spec/evidence-completeness-v1.md`](docs/spec/evidence-completeness-v1.md).
+
+Independent plan review:
+[`docs/history/reaper-r0.4-plan-review-2026-09-14.md`](docs/history/reaper-r0.4-plan-review-2026-09-14.md).
+
+The review removed a proposed duplicate rich-metadata layer because the current experiment runner and `YandexRichMetadataCollector` already provide raw-first `get_games` enrichment. It also rejects query expansion as a guaranteed recall fix, defers scheduling until the observation artifact is accepted, and keeps visual/review judgments as labeled analyst evidence rather than automatic scores.
+
+## R0.4 sequencing
+
+```text
+R0.4-P0 contract freeze + independent review — COMPLETE
+-> R0.4-P1 exact-ID point observation artifact — NEXT
+-> R0.4-P2 known-ID longitudinal comparison
+-> R0.4-P3 supplemental evidence bundle
+-> R0.4-P4 thesis evidence-pack integration
+-> R0.4-P5 real-data validation
+-> optional scheduled watch only after artifact acceptance
+```
+
+### R0.4-P0 — Contract freeze + review — COMPLETE 2026-09-14
+
+- [x] separate `search_discovered`, `point_observed`, `supplemental_attached` and weaker `reference_only` provenance;
+- [x] preserve frozen 0.3 Thesis Intelligence/build-identity contracts unchanged;
+- [x] define exact-ID requested/returned/missing/unexpected semantics;
+- [x] require self-contained hash-bound point-observation artifacts with offline replay verification;
+- [x] define real longitudinal delta only from repeated frozen observations;
+- [x] define supplemental external/manual evidence with attachment SHA/size identity;
+- [x] keep human qualitative judgments explicitly analyst-owned;
+- [x] independently review for duplicate collection paths, measurement overclaim and infrastructure scope creep.
+
+### R0.4-P1 — Exact-ID point observation artifact — NEXT
+
+Reuse the existing `YandexRichMetadataCollector` and `catalogue.get_games` path.
+
+Definition of Done:
+
+- [ ] versioned `listing-observation-set-v1` declaration with unique ordered app IDs;
+- [ ] raw-first exact-ID collection through the existing Yandex client/collector;
+- [ ] explicit requested / returned / missing / unexpected ID accounting;
+- [ ] deterministic create-only artifact with declaration, observation, exact raw bytes and member manifest;
+- [ ] offline verifier reparses raw evidence and reconstructs observation identity/facts;
+- [ ] no search/query membership is invented for point-observed IDs;
+- [ ] CLI entry point and focused tests;
+- [ ] full `ruff`, strict `mypy`, `pytest`/coverage gate passes;
+- [ ] live Keycap control observes `540402`, `559445`, `553722` without modifying the historical search union;
+- [ ] implementation receives independent diff/code review before merge.
+
+### R0.4-P2 — Known-ID longitudinal comparison
+
+- [ ] compare compatible point-observation artifacts for an explicit cohort;
+- [ ] derive rating-count delta/day only across actual frozen observations;
+- [ ] preserve missing values and negative/revision deltas;
+- [ ] expose elapsed interval and exact artifact/source identity;
+- [ ] keep point velocity distinct from search visibility and lifetime pace;
+- [ ] validate with a second real Keycap observation after a meaningful interval.
+
+### R0.4-P3 — Supplemental evidence bundle
+
+- [ ] versioned analyst-owned bundle for external/manual evidence;
+- [ ] bind thesis/listing target, source kind/reference, observation time, claim/measurement and confidence;
+- [ ] hash attached bytes by exact SHA-256/size;
+- [ ] mark URL-only evidence as `reference_only` rather than immutable proof;
+- [ ] support typed human visual/review-contamination annotations without automatic scoring;
+- [ ] validate against one real external-evidence thesis package.
+
+### R0.4-P4 — Thesis evidence pack integration
+
+- [ ] introduce additive `thesis-evidence-pack-v1` rather than mutate 0.3 v1 build inputs;
+- [ ] bind one verified Thesis Intelligence artifact plus optional point/supplemental artifacts;
+- [ ] preserve channel-specific provenance/counts in compact JSON/Markdown output;
+- [ ] point-observed listings never inflate search-union supply/direct-search counts;
+- [ ] evidence pack remains deterministic/hash-verifiable and makes no automatic portfolio decision.
+
+### R0.4-P5 — Real-data validation
+
+- [ ] Keycap proves exact known-ID coverage outside search recall;
+- [ ] Decorated Mail proves external supplemental evidence remains external rather than Yandex demand proof;
+- [ ] one repeated Keycap observation proves real longitudinal delta semantics;
+- [ ] final review confirms manual evidence loss is materially reduced without creating a generic data platform.
+
+## R0.4 explicit non-goals
+
+```text
+second Yandex rich-metadata collector
+uncontrolled query expansion
+automatic competitor truth
+generic web crawler
+app-store/trend connectors before the manual bundle proves the contract useful
+visual ML / LLM classifier
+generic scheduler / daemon in P0-P5
+cross-platform entity-resolution engine
+dashboard / opportunity score / automatic BUILD-WATCH-SKIP
+```
+
+R0.4 is a research-tool lane improvement only. It may proceed in parallel with product work and must not silently reorder the production queue.
 
 ---
 

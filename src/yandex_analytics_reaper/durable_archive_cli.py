@@ -37,7 +37,8 @@ def _build(args: argparse.Namespace) -> None:
 
 def _verify(args: argparse.Namespace) -> None:
     manifest = load_archive_manifest(Path(args.manifest))
-    result = verify_archive(manifest, Path(args.artifact))
+    request = load_archive_request(Path(args.request)) if args.request is not None else None
+    result = verify_archive(manifest, Path(args.artifact), request=request)
     print(result.model_dump_json(indent=2))
 
 
@@ -80,6 +81,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     verify.add_argument("manifest", help="durable-evidence-archive-v1 manifest JSON.")
     verify.add_argument("artifact", help="Archived Actions artifact ZIP.")
+    verify.add_argument(
+        "--request",
+        help="Optional committed request that the manifest must match exactly.",
+    )
     verify.set_defaults(handler=_verify)
 
     extract = sub.add_parser(

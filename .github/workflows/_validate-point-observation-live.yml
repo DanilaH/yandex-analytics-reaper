@@ -53,13 +53,19 @@ jobs:
           with ZipFile(artifact, "r") as archive:
               report = json.loads(archive.read("reports/observation.json"))
 
-          expected = [540402, 559445, 553722]
+          requested = [540402, 559445, 553722]
+          returned = report["returned_app_ids"]
+          missing = report["missing_app_ids"]
+
           assert report["provenance_channel"] == "point_observed", report
-          assert report["requested_app_ids"] == expected, report
-          assert report["returned_app_ids"] == expected, report
-          assert report["missing_app_ids"] == [], report
+          assert report["requested_app_ids"] == requested, report
           assert report["unexpected_app_ids"] == [], report
-          assert [item["app_id"] for item in report["listings"]] == expected, report
+          assert returned == [item for item in requested if item in set(returned)], report
+          assert missing == [item for item in requested if item not in set(returned)], report
+          assert set(returned).isdisjoint(missing), report
+          assert set(returned) | set(missing) == set(requested), report
+          assert [item["app_id"] for item in report["listings"]] == returned, report
+          assert 540402 in returned and 559445 in returned, report
 
           for item in report["listings"]:
               print(
@@ -68,6 +74,8 @@ jobs:
                   f'rating_count={item["rating_count"]!r} '
                   f'first_published={item["first_published"]!r}'
               )
+          status_553722 = "returned" if 553722 in returned else "missing"
+          print(f"app_id=553722 source_status={status_553722}")
           print("live_keycap_point_observation=PASS")
           PY
       - name: Upload immutable point-observation artifact

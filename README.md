@@ -54,6 +54,7 @@ Implemented:
 - frozen independent-annotation primary agreement/confusion protocol with symmetric confusion pairs, `unknown`/`other` diagnostics, and explicit adjudication-alignment metrics;
 - offline `yandex-reaper-taxonomy` file-in/file-out execution CLI for annotation validation, gold-set construction, primary review, and agreement/confusion artifacts with create-only report writes;
 - digest-bound durable evidence archive tooling that preserves exact CI artifact bytes in Release assets, inventories every inner member, and safely reconstructs verified prior experiment ZIPs after Actions retention expires;
+- exact-ID `point_observed` artifacts for known Yandex listing cohorts, with explicit requested/returned/missing identity accounting, create-only packaging of exact raw evidence, and fully offline replay verification;
 - evidence/candidate/taxonomy foundations;
 - Yandex public-source HTTP client;
 - source-specific parsers for `feed`, `search`, `get_games`, and `__playPageData__` response shapes;
@@ -172,6 +173,19 @@ Game page / `__playPageData__`:
 ```bash
 yandex-reaper probe-page 438560 --output data/raw
 ```
+
+Exact-ID immutable point observation for a declared known-listing cohort:
+
+```bash
+yandex-reaper-observe run \
+  research/observations/keycap-known-direct-v1.json \
+  data/observations/keycap-known-direct-v1.zip
+
+yandex-reaper-observe verify \
+  data/observations/keycap-known-direct-v1.zip
+```
+
+Point observations are listing-specific evidence, not search evidence. A returned ID does not acquire query/rank/search-union membership, and a requested ID omitted by the current source response remains explicit `missing` evidence rather than being coerced to zero/deleted/unpublished.
 
 For feed/search, `clean_anonymous` creates a fresh cookie jar for every logical run. `persistent_anonymous` stores and reuses one local anonymous cookie jar under the runtime `sessions/` directory. Raw cookie values stay only in that local session-state file; raw snapshots and SQLite probe contexts receive the session profile, a stable non-secret local profile-instance ID, a SHA-256 cookie-state fingerprint, and profile age. The instance ID stays stable across ordinary cookie churn and changes after an explicit local profile reset; it is not a Yandex user/account identifier. Do not commit or share the runtime session directory.
 

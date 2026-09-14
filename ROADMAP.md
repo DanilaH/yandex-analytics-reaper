@@ -449,8 +449,8 @@ The review removed a proposed duplicate rich-metadata layer because the current 
 
 ```text
 R0.4-P0 contract freeze + independent review — COMPLETE
--> R0.4-P1 exact-ID point observation artifact — NEXT
--> R0.4-P2 known-ID longitudinal comparison
+-> R0.4-P1 exact-ID point observation artifact — COMPLETE
+-> R0.4-P2 known-ID longitudinal comparison — NEXT
 -> R0.4-P3 supplemental evidence bundle
 -> R0.4-P4 thesis evidence-pack integration
 -> R0.4-P5 real-data validation
@@ -468,24 +468,26 @@ R0.4-P0 contract freeze + independent review — COMPLETE
 - [x] keep human qualitative judgments explicitly analyst-owned;
 - [x] independently review for duplicate collection paths, measurement overclaim and infrastructure scope creep.
 
-### R0.4-P1 — Exact-ID point observation artifact — NEXT
+### R0.4-P1 — Exact-ID point observation artifact — COMPLETE 2026-09-14
 
-Reuse the existing `YandexRichMetadataCollector` and `catalogue.get_games` path.
+Reuses the existing `YandexRichMetadataCollector` and `catalogue.get_games` path. Independent implementation review is recorded in [`docs/history/reaper-r0.4-p1-review-2026-09-14.md`](docs/history/reaper-r0.4-p1-review-2026-09-14.md); live acceptance is recorded in [`docs/history/reaper-r0.4-p1-validation-2026-09-14.md`](docs/history/reaper-r0.4-p1-validation-2026-09-14.md).
 
 Definition of Done:
 
-- [ ] versioned `listing-observation-set-v1` declaration with unique ordered app IDs;
-- [ ] raw-first exact-ID collection through the existing Yandex client/collector;
-- [ ] explicit requested / returned / missing / unexpected ID accounting;
-- [ ] deterministic create-only artifact with declaration, observation, exact raw bytes and member manifest;
-- [ ] offline verifier reparses raw evidence and reconstructs observation identity/facts;
-- [ ] no search/query membership is invented for point-observed IDs;
-- [ ] CLI entry point and focused tests;
-- [ ] full `ruff`, strict `mypy`, `pytest`/coverage gate passes;
-- [ ] live Keycap control observes `540402`, `559445`, `553722` without modifying the historical search union;
-- [ ] implementation receives independent diff/code review before merge.
+- [x] versioned `listing-observation-set-v1` declaration with unique ordered app IDs;
+- [x] raw-first exact-ID collection through the existing Yandex client/collector;
+- [x] explicit requested / returned / missing / unexpected ID accounting;
+- [x] deterministic create-only artifact with declaration, observation, exact raw bytes and member manifest;
+- [x] offline verifier reparses raw evidence and reconstructs observation identity/facts;
+- [x] no search/query membership is invented for point-observed IDs;
+- [x] CLI entry point and focused tests;
+- [x] full `ruff`, strict `mypy`, `pytest`/coverage gate passes in clean CI run `34841270353`;
+- [x] live Keycap control requests `540402`, `559445`, `553722`; current source returns `540402`/`559445` and preserves `553722` explicitly as missing evidence, with offline verification PASS and no historical search-union mutation;
+- [x] implementation receives independent diff/code review; create-only side effects and cohort-identity binding findings are repaired before merge.
 
-### R0.4-P2 — Known-ID longitudinal comparison
+Live run `34841547344` produced inner observation SHA-256 `ae5bd96dca5485f447eb556d3acc5328d18e0fea402c3324efdef3ee1a082a3f` and manifest content hash `b9761b69210f1fdb689d56be99d411ba7821d4add560c6da7b93307dde837079`. The source omission of `553722` is deliberately not interpreted as zero/deleted/unpublished; it validates the explicit missing-evidence semantics.
+
+### R0.4-P2 — Known-ID longitudinal comparison — NEXT
 
 - [ ] compare compatible point-observation artifacts for an explicit cohort;
 - [ ] derive rating-count delta/day only across actual frozen observations;

@@ -73,6 +73,12 @@ jobs:
                   '    if manifest.source_snapshot_id != metadata.id:\n',
                   'verifier cohort identity block',
               ),
+              (
+                  '                    "observation artifact must contain only the canonical members in canonical order"\n',
+                  '                    "observation artifact must contain only the canonical members "\n'
+                  '                    "in canonical order"\n',
+                  'canonical member error line',
+              ),
           ]
 
           for old, new, label in replacements:

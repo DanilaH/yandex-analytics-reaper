@@ -183,7 +183,14 @@ yandex-reaper-observe run \
 
 yandex-reaper-observe verify \
   data/observations/keycap-known-direct-v1.zip
+
+yandex-reaper-observe compare \
+  data/observations/keycap-known-direct-v1.previous.zip \
+  data/observations/keycap-known-direct-v1.current.zip \
+  data/observations/keycap-known-direct-v1.longitudinal.json
 ```
+
+`compare` is fully offline and requires two compatible frozen point-observation artifacts with strictly increasing observation time. It preserves missing endpoints/metrics and negative source revisions instead of coercing them to zero. The resulting rating-count delta/day is point-observation evidence only; it is not search visibility, lifetime pace, DAU, installs, revenue, or retention.
 
 Point observations are listing-specific evidence, not search evidence. A returned ID does not acquire query/rank/search-union membership, and a requested ID omitted by the current source response remains explicit `missing` evidence rather than being coerced to zero/deleted/unpublished.
 

@@ -11,6 +11,7 @@ from yandex_analytics_reaper.ingestion import (
     YandexNormalizationPersistence,
     YandexRichMetadataCollector,
 )
+from yandex_analytics_reaper.point_longitudinal import compare_listing_observation_artifacts
 from yandex_analytics_reaper.point_observation import (
     ListingObservationArtifactCollector,
     ListingObservationError,
@@ -71,10 +72,25 @@ def _verify(args: argparse.Namespace) -> None:
     print(verification.model_dump_json(indent=2))
 
 
+def _compare(args: argparse.Namespace) -> None:
+    try:
+        comparison = compare_listing_observation_artifacts(
+            Path(args.previous_artifact),
+            Path(args.current_artifact),
+            Path(args.output),
+        )
+    except ListingObservationError as exc:
+        raise SystemExit(str(exc)) from exc
+    print(comparison.model_dump_json(indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-observe",
-        description="Collect and verify immutable exact-ID Yandex listing observations.",
+        description=(
+            "Collect, verify, and longitudinally compare immutable exact-ID "
+            "Yandex listing observations."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -90,6 +106,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify = sub.add_parser("verify", help="Offline-verify one observation artifact.")
     verify.add_argument("artifact", help="Observation artifact ZIP path.")
     verify.set_defaults(handler=_verify)
+
+    compare = sub.add_parser(
+        "compare",
+        help="Offline-compare two compatible point-observation artifacts.",
+    )
+    compare.add_argument("previous_artifact", help="Earlier verified observation ZIP.")
+    compare.add_argument("current_artifact", help="Later verified observation ZIP.")
+    compare.add_argument("output", help="Create-only longitudinal JSON output path.")
+    compare.set_defaults(handler=_compare)
     return parser
 
 

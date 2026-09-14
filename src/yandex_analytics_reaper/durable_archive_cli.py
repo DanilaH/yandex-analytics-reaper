@@ -11,6 +11,7 @@ from yandex_analytics_reaper.durable_archive import (
     extract_verified_member,
     load_archive_manifest,
     load_archive_request,
+    validate_request_catalog,
     verify_archive,
     write_manifest_create_only,
 )
@@ -53,14 +54,32 @@ def _extract(args: argparse.Namespace) -> None:
     print(member.model_dump_json(indent=2))
 
 
+def _validate_catalog(args: argparse.Namespace) -> None:
+    paths = tuple(Path(value) for value in args.request)
+    result = validate_request_catalog(paths)
+    print(result.model_dump_json(indent=2))
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="yandex-reaper-archive",
         description=(
-            "Build, verify and extract hash-bound durable copies of ephemeral CI evidence artifacts."
+            "Build, verify and extract hash-bound durable copies of ephemeral "
+            "CI evidence artifacts."
         ),
     )
     sub = parser.add_subparsers(dest="command", required=True)
+
+    validate_catalog = sub.add_parser(
+        "validate-catalog",
+        help="Fail before side effects when committed archive requests collide.",
+    )
+    validate_catalog.add_argument(
+        "request",
+        nargs="+",
+        help="One or more durable-evidence-archive-request-v1 JSON declarations.",
+    )
+    validate_catalog.set_defaults(handler=_validate_catalog)
 
     build = sub.add_parser(
         "build",

@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "trend-mechanics-round3-2026-09-13",
+  "source": {
+    "workflow_run_id": 34766379308,
+    "workflow_artifact_id": 10320311984,
+    "workflow_artifact_name": "trend-mechanics-sweep-2026-09-13",
+    "artifact_created_at": "2026-09-13T15:44:42Z",
+    "artifact_expires_at": "2026-10-13T15:44:41Z",
+    "source_commit_sha": "36ffe25077bb18b138641f8ffdf4c5a8d2d6b846",
+    "source_branch": "research/trend-mechanics-sweep-2026-09-13"
+  },
+  "expected": {
+    "sha256": "17992550ea66d6be41f9518eba710ddbee8870d267e10f16e64efd9621291fac",
+    "size_bytes": 7113491
+  },
+  "release": {
+    "tag": "evidence-2026-09-13-trend-mechanics-r3",
+    "asset_name": "trend-mechanics-round3-2026-09-13.actions.zip",
+    "manifest_asset_name": "trend-mechanics-round3-2026-09-13.manifest.json",
+    "checksum_asset_name": "trend-mechanics-round3-2026-09-13.sha256"
+  }
+}

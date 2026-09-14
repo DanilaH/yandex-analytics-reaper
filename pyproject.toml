@@ -29,6 +29,7 @@ yandex-reaper-semantic = "yandex_analytics_reaper.semantic_cli:main"
 yandex-reaper-taxonomy = "yandex_analytics_reaper.taxonomy_execution_cli:main"
 yandex-reaper-thesis = "yandex_analytics_reaper.thesis_cli:main"
 yandex-reaper-archive = "yandex_analytics_reaper.durable_archive_cli:main"
+yandex-reaper-observe = "yandex_analytics_reaper.point_observation_cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

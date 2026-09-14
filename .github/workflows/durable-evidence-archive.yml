@@ -14,6 +14,10 @@ permissions:
   actions: read
   contents: write
 
+concurrency:
+  group: durable-evidence-archive
+  cancel-in-progress: false
+
 jobs:
   archive:
     runs-on: ubuntu-latest
@@ -42,6 +46,8 @@ jobs:
             exit 0
           fi
 
+          yandex-reaper-archive validate-catalog "${requests[@]}"
+
           work_root="${RUNNER_TEMP}/durable-evidence-archive"
           mkdir -p "${work_root}"
 
@@ -50,7 +56,10 @@ jobs:
             artifact_id="$(jq -r '.source.workflow_artifact_id' "${request}")"
             workflow_run_id="$(jq -r '.source.workflow_run_id' "${request}")"
             artifact_name="$(jq -r '.source.workflow_artifact_name' "${request}")"
+            artifact_created_at="$(jq -r '.source.artifact_created_at' "${request}")"
+            artifact_expires_at="$(jq -r '.source.artifact_expires_at' "${request}")"
             source_sha="$(jq -r '.source.source_commit_sha' "${request}")"
+            source_branch="$(jq -r '.source.source_branch' "${request}")"
             expected_sha="$(jq -r '.expected.sha256' "${request}")"
             expected_size="$(jq -r '.expected.size_bytes' "${request}")"
             tag="$(jq -r '.release.tag' "${request}")"
@@ -115,6 +124,10 @@ jobs:
               -H "Accept: application/vnd.github+json" \
               "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}")"
 
+            if [[ "$(jq -r '.id' <<<"${metadata}")" != "${artifact_id}" ]]; then
+              echo "Actions artifact id disagrees with request ${request}." >&2
+              exit 1
+            fi
             if [[ "$(jq -r '.expired' <<<"${metadata}")" != "false" ]]; then
               echo "Source Actions artifact ${artifact_id} has expired before durable archival." >&2
               exit 1
@@ -127,8 +140,20 @@ jobs:
               echo "Actions artifact name disagrees with request ${request}." >&2
               exit 1
             fi
+            if [[ "$(jq -r '.created_at' <<<"${metadata}")" != "${artifact_created_at}" ]]; then
+              echo "Actions artifact created_at disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.expires_at' <<<"${metadata}")" != "${artifact_expires_at}" ]]; then
+              echo "Actions artifact expires_at disagrees with request ${request}." >&2
+              exit 1
+            fi
             if [[ "$(jq -r '.workflow_run.head_sha' <<<"${metadata}")" != "${source_sha}" ]]; then
               echo "Actions artifact source SHA disagrees with request ${request}." >&2
+              exit 1
+            fi
+            if [[ "$(jq -r '.workflow_run.head_branch' <<<"${metadata}")" != "${source_branch}" ]]; then
+              echo "Actions artifact source branch disagrees with request ${request}." >&2
               exit 1
             fi
             if [[ "$(jq -r '.size_in_bytes' <<<"${metadata}")" != "${expected_size}" ]]; then

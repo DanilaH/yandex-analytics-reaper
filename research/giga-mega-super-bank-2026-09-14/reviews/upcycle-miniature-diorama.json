@@ -1,0 +1,20 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "upcycle-miniature-diorama",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "3c061322a89134ea746a2f86916406075a0a6a761b162f5da077a1348b571508",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {
+      "platform_listing_id": "yandex_games:469882",
+      "analyst_verdict": "not_direct",
+      "reason_code": "theme_incidental",
+      "note": "Diorama is only the hidden-object setting; the player does not build or upcycle a miniature scene.",
+      "reviewed_at": "2026-09-14T15:15:00Z",
+      "semantic_directness": "direct_candidate"
+    }
+  ],
+  "content_hash": "9e7a3b5493d0959dc5599abbd8117b216761677217d33f74f72a1f80bdf24dcb"
+}

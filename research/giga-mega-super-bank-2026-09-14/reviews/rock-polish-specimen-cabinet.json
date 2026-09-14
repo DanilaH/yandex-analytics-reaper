@@ -1,0 +1,23 @@
+{
+  "spec_version": "analyst-directness-review-v1",
+  "suite_id": "giga-mega-super-bank-2026-09-14",
+  "suite_version": 1,
+  "thesis_id": "rock-polish-specimen-cabinet",
+  "thesis_version": 1,
+  "semantic_report_content_hash": "b575858fb6c2804d3b314e136cc276434bab0e0a3464582765cb1546f6f5b16a",
+  "review_scope": "direct_candidates",
+  "rows": [
+    {"platform_listing_id":"yandex_games:246478","analyst_verdict":"adjacent","reason_code":"other","note":"Real raw-stone break/cut/polish loop, but payoff is jewelry crafting rather than specimen classification and cabinet display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:272367","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 jewel theme; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:278073","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 jewel theme; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:369239","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 jewel theme; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:447669","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Stone drop/merge puzzle; no cutting, polishing, classification, or cabinet display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:297268","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 jewel theme; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:353327","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Classic jewel-matching puzzle; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:189051","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Classic jewel-matching puzzle; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:387603","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 jewel theme; no stone processing or specimen display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:514024","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Match-3 candy/jewel vocabulary collision; no specimen-processing grammar.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"},
+    {"platform_listing_id":"yandex_games:564573","analyst_verdict":"not_direct","reason_code":"mechanic_mismatch","note":"Space drilling/mining game; no mineral polishing, classification, or cabinet display.","reviewed_at":"2026-09-14T15:15:00Z","semantic_directness":"direct_candidate"}
+  ],
+  "content_hash": "1fed065c90ff340641c0bb93af330d9dd33f5dbbbf7cf5c4d552e7c3d5726862"
+}

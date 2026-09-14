@@ -115,6 +115,7 @@ Rules:
 - the expected SHA-256 and size bind one exact Actions artifact;
 - source commit SHA is the commit that produced the CI artifact, not the later archival implementation commit;
 - Release tag and asset names are fixed before publication;
+- the GitHub Release target commit is transport metadata only and is not evidence provenance;
 - changing the evidence bytes requires a new archive identity, never a replacement under the old identity.
 
 The workflow runs `yandex-reaper-archive validate-catalog` across the complete committed request set before making any Release side effects. Catalog identity collisions therefore fail as a preflight error rather than after partial publication.
@@ -168,12 +169,14 @@ validate complete request catalog
 → download exact Actions artifact by numeric artifact ID
 → verify downloaded SHA-256 + size offline
 → inventory members + build manifest
-→ create draft Release at the source commit
+→ create draft Release at the current archive-workflow commit
 → upload wrapper ZIP + manifest + checksum without clobber
 → download the Release assets again
 → verify request + manifest + wrapper + checksum
 → publish Release
 ```
+
+The Release target deliberately does **not** carry evidence provenance. Provenance is bound by the committed request, exact Actions metadata, wrapper digest/size, generated manifest and member hashes. Using the current archive-workflow commit as the publication target avoids GitHub's `GITHUB_TOKEN` restriction when a historical source commit differs from the default branch under `.github/workflows/`. Existing archives whose Releases target their original source commit remain valid; their target is informational transport metadata.
 
 Creating a draft before attaching assets is deliberate. If the repository enables GitHub's immutable-releases setting, publishing then also gives platform-level protection against changing the release tag or assets. The Reaper contract does **not** silently assume that repository setting is enabled: create-only workflow behavior plus hash verification remains mandatory either way.
 
@@ -186,12 +189,12 @@ Archival workflows are expected to be rerunnable.
 For each request:
 
 1. if no Release exists, perform first publication;
-2. if a Release exists, require its target commit to equal the committed source SHA;
+2. if a Release exists, treat its target commit as informational transport metadata rather than an evidence identity check;
 3. if all three assets exist, download wrapper, manifest and checksum;
 4. verify wrapper SHA-256/size/member inventory/content hash and request binding;
 5. verify the checksum file against the downloaded wrapper;
 6. if all checks pass, report the archive as already satisfied;
-7. if a published Release is incomplete or any identity differs, fail closed;
+7. if a published Release is incomplete or any evidence identity differs, fail closed;
 8. if an incomplete draft exists, add only missing assets and then run the full verification gate;
 9. never pass `--clobber` or otherwise replace evidence under the same archive identity.
 
@@ -251,7 +254,6 @@ Archive publication/retrieval fails closed when:
 - the Actions artifact has already expired before a durable copy exists;
 - the downloaded object is not a readable ZIP;
 - ZIP member paths are unsafe or duplicated;
-- an existing Release targets a different source commit;
 - an existing published Release is incomplete;
 - an existing Release uses the same tag with different bytes/provenance;
 - a manifest content hash or member inventory does not replay;

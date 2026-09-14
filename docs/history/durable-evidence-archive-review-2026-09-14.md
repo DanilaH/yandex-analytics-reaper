@@ -3,9 +3,9 @@
 **Scope:** independent pre-merge review of the `R0.3.1` durable evidence archive correction for Reaper longitudinal history.
 
 **PR:** `#63` — `Add durable archive for longitudinal Reaper evidence`  
-**Review status:** **PASS FOR MERGE; LIVE MIGRATION STILL REQUIRED AFTER MERGE**
+**Review status:** **PASS FOR MERGE; LIVE MIGRATION ACCEPTED AFTER MERGE**
 
-The live GitHub Release publication is deliberately not claimed as tested in this document. The archive workflow is main-branch side-effecting infrastructure and must be validated after the reviewed implementation is merged.
+The live GitHub Release publication was deliberately not claimed as tested during the pre-merge review. It has now completed successfully and is recorded separately in [`durable-evidence-archive-live-migration-2026-09-14.md`](durable-evidence-archive-live-migration-2026-09-14.md).
 
 ---
 
@@ -219,23 +219,26 @@ The full repository suite passed, not merely the new focused tests.
 
 ---
 
-## Remaining live-only verification
+## Live-only verification closure
 
-The following cannot honestly be marked complete before merge:
+The following items were intentionally deferred until after merge and are now complete:
 
-1. the main-branch archive workflow must successfully create/reconcile the four historical Releases;
-2. all three assets for every Release must be redownloaded and pass request/manifest/checksum verification;
-3. the final Release tags must target the historical producing commits as intended;
-4. repository-level **immutable releases** configuration is not currently verified by the available connector. The contract therefore does not depend on it; create-only workflow behavior + cryptographic verification remain mandatory even if that GitHub hardening is disabled.
+1. the main-branch archive workflow created/reconciled all four historical Releases;
+2. all three assets for every Release were redownloaded and passed request/manifest/checksum verification;
+3. every final Release tag targets its historical producing commit;
+4. the ordinary post-merge main CI also passed.
 
-If live publication exposes a GitHub CLI/API assumption that was not reproducible in PR CI, fix that as a new reviewed change rather than weakening identity checks.
+The live acceptance record is:
+[`durable-evidence-archive-live-migration-2026-09-14.md`](durable-evidence-archive-live-migration-2026-09-14.md).
+
+GitHub's Release API reports `immutable = false` for the published migration Releases. The contract therefore correctly continues to depend on create-only workflow behavior plus cryptographic verification rather than silently assuming repository-level immutable releases are enabled.
 
 ---
 
 ## Review decision
 
-**PASS FOR MERGE.**
+**PASS — PRE-MERGE REVIEW AND POST-MERGE LIVE ACCEPTANCE COMPLETE.**
 
 The correction is narrow, evidence-preserving, compatible with the existing 0.3 analytical contracts and does not introduce a scheduler, data lake, remote-history database or new decision engine.
 
-After merge, execute the live migration gate immediately while the four Sep-13 Actions artifacts are still available. Only then mark `R0.3.1` COMPLETE.
+`R0.3.1` may now be marked COMPLETE. Product sequencing remains unchanged: `P2` is still the next primary product path.

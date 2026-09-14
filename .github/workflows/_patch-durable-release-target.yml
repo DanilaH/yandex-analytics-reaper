@@ -1,0 +1,110 @@
+name: Patch durable archive release target
+
+on:
+  push:
+    branches:
+      - fix/durable-archive-release-target
+    paths:
+      - .github/workflows/_patch-durable-release-target.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: fix/durable-archive-release-target
+      - name: Apply bounded repair
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_str: str, old: str, new: str) -> None:
+              path = Path(path_str)
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path_str}: expected one match, found {count}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/yandex_analytics_reaper/durable_archive.py",
+              '''    archive_id: str = Field(min_length=1, pattern=_SAFE_ARCHIVE_ID_PATTERN)\n    source: WorkflowArtifactSource\n    expected: ExpectedArtifactIdentity\n    release: ReleaseBinding\n''',
+              '''    archive_id: str = Field(min_length=1, pattern=_SAFE_ARCHIVE_ID_PATTERN)\n    release_target_commit_sha: str | None = Field(default=None, min_length=40, max_length=40)\n    source: WorkflowArtifactSource\n    expected: ExpectedArtifactIdentity\n    release: ReleaseBinding\n\n    @field_validator("release_target_commit_sha")\n    @classmethod\n    def validate_release_target_commit_sha(cls, value: str | None) -> str | None:\n        if value is None:\n            return None\n        normalized = value.lower()\n        if any(character not in "0123456789abcdef" for character in normalized):\n            raise ValueError("release_target_commit_sha must be a 40-character hexadecimal SHA")\n        return normalized\n''',
+          )
+
+          replace_once(
+              ".github/workflows/durable-evidence-archive.yml",
+              '''            source_sha="$(jq -r '.source.source_commit_sha' "${request}")"\n            source_branch="$(jq -r '.source.source_branch' "${request}")"\n''',
+              '''            source_sha="$(jq -r '.source.source_commit_sha' "${request}")"\n            release_target_sha="$(jq -r '.release_target_commit_sha // .source.source_commit_sha' "${request}")"\n            source_branch="$(jq -r '.source.source_branch' "${request}")"\n''',
+          )
+          replace_once(
+              ".github/workflows/durable-evidence-archive.yml",
+              '''              if [[ "${target}" != "${source_sha}" ]]; then\n                echo "Release ${tag} targets ${target}, expected source commit ${source_sha}." >&2\n''',
+              '''              if [[ "${target}" != "${release_target_sha}" ]]; then\n                echo "Release ${tag} targets ${target}, expected publication target ${release_target_sha}." >&2\n''',
+          )
+          replace_once(
+              ".github/workflows/durable-evidence-archive.yml",
+              '''                --target "${source_sha}" \\\n''',
+              '''                --target "${release_target_sha}" \\\n''',
+          )
+
+          replace_once(
+              "research/archive/requests/2026-09-14-keycap-point-observation-baseline.json",
+              '''  "archive_id": "keycap-point-observation-baseline-2026-09-14",\n  "source": {\n''',
+              '''  "archive_id": "keycap-point-observation-baseline-2026-09-14",\n  "release_target_commit_sha": "9bf7cd3e01ac377687c19d7e544f069e04784084",\n  "source": {\n''',
+          )
+
+          test_path = Path("tests/test_durable_archive.py")
+          test_text = test_path.read_text(encoding="utf-8")
+          anchor = '''def test_build_rejects_download_that_disagrees_with_actions_identity(tmp_path: Path) -> None:\n'''
+          if test_text.count(anchor) != 1:
+              raise SystemExit("test anchor mismatch")
+          new_test = '''def test_release_target_is_request_only_and_preserves_manifest_identity(\n    tmp_path: Path,\n) -> None:\n    artifact = tmp_path / "actions.zip"\n    _write_zip(artifact, {"result.json": b"original"})\n    request = _request(artifact)\n    baseline_manifest = build_archive_manifest(request, artifact)\n    transport_request = request.model_copy(\n        update={"release_target_commit_sha": "9" * 40}\n    )\n\n    transport_manifest = build_archive_manifest(transport_request, artifact)\n\n    assert transport_request.release_target_commit_sha == "9" * 40\n    assert transport_manifest == baseline_manifest\n    assert verify_archive(\n        baseline_manifest, artifact, request=transport_request\n    ).status == "pass"\n\n\n'''
+          test_path.write_text(test_text.replace(anchor, new_test + anchor, 1), encoding="utf-8")
+
+          spec = Path("docs/spec/durable-evidence-archive.md")
+          text = spec.read_text(encoding="utf-8")
+          old = '''archive_id\nsource:\n'''
+          new = '''archive_id\nrelease_target_commit_sha  # optional transport-only SHA; defaults to source.source_commit_sha\nsource:\n'''
+          if text.count(old) != 1:
+              raise SystemExit("spec schema anchor mismatch")
+          text = text.replace(old, new, 1)
+          old = '''- source commit SHA is the commit that produced the CI artifact, not the later archival implementation commit;\n- Release tag and asset names are fixed before publication;\n'''
+          new = '''- source commit SHA is the commit that produced the CI artifact, not the later archival implementation commit;\n- `release_target_commit_sha` is optional publication transport metadata; when absent it defaults to the source commit SHA;\n- a non-default Release target does not change source provenance, artifact identity, manifest content hash, or member identity; it exists only for cases where GitHub refuses `GITHUB_TOKEN` Release creation against a historical commit that differs in `.github/workflows/`;\n- Release tag and asset names are fixed before publication;\n'''
+          if text.count(old) != 1:
+              raise SystemExit("spec rules anchor mismatch")
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              "→ create draft Release at the source commit\n",
+              "→ create draft Release at the effective publication target (source commit by default)\n",
+              1,
+          )
+          text = text.replace(
+              "2. if a Release exists, require its target commit to equal the committed source SHA;\n",
+              "2. if a Release exists, require its target commit to equal the effective publication target declared by the request (source SHA by default);\n",
+              1,
+          )
+          text = text.replace(
+              "- an existing Release targets a different source commit;\n",
+              "- an existing Release targets a different effective publication commit;\n",
+              1,
+          )
+          spec.write_text(text, encoding="utf-8")
+
+          history = Path("docs/history/durable-evidence-archive-release-target-repair-2026-09-14.md")
+          history.write_text('''# Durable Evidence Archive Release-Target Repair — 2026-09-14\n\n## Trigger\n\nThe new Keycap P1 point-observation baseline passed the complete durable-archive catalog, Actions provenance, wrapper SHA/size, ZIP inventory and manifest build, but Release creation failed twice with GitHub `403 Resource not accessible by integration`.\n\nThe exact source commit `10251bacf237ee6656a44b3d53251135ae10c166` contains a temporary `.github/workflows/` validation file relative to the current default branch. GitHub's Releases API requires workflow-write authorization when a Release target resolves to such a commit. The Actions `GITHUB_TOKEN` cannot receive that permission.\n\n## Repair\n\n`durable-evidence-archive-request-v1` gains one optional request-only field:\n\n```text\nrelease_target_commit_sha\n```\n\nWhen omitted, publication remains exactly as before: the Release target is `source.source_commit_sha`. When present, only the GitHub Release transport target changes.\n\nThe source commit remains the commit that produced the Actions artifact and is still checked directly against `workflow_run.head_sha` before download/publication. Wrapper digest/size, member hashes, manifest identity and content hash are unchanged. The new field is deliberately not part of `durable-evidence-archive-v1` so existing archived manifests remain byte/identity compatible.\n\n## Baseline request\n\nThe Keycap point-observation baseline uses `9bf7cd3e01ac377687c19d7e544f069e04784084` as its publication target while preserving `10251bacf237ee6656a44b3d53251135ae10c166` as evidence source provenance.\n\n## Acceptance\n\n- old requests without the field keep `release target = source SHA`;\n- a focused unit test proves changing only the request transport target does not change the generated manifest;\n- the complete quality gate must pass;\n- the post-merge archive workflow must publish/reverify the Keycap baseline Release before this repair is considered live-complete.\n''', encoding="utf-8")
+          PY
+          git diff --check
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/durable-evidence-archive.yml src/yandex_analytics_reaper/durable_archive.py tests/test_durable_archive.py docs/spec/durable-evidence-archive.md docs/history/durable-evidence-archive-release-target-repair-2026-09-14.md research/archive/requests/2026-09-14-keycap-point-observation-baseline.json
+          git commit -m "Repair durable archive publication target handling"
+          git push origin HEAD:fix/durable-archive-release-target

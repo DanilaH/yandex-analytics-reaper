@@ -1,0 +1,7 @@
+{
+  "spec_version": "listing-observation-set-v1",
+  "observation_set_id": "independent-extraction-2026-09-16",
+  "observation_set_version": 1,
+  "app_ids": [343194, 403630, 284126, 494528, 551281, 538829, 520331, 394851],
+  "source_surface": "catalogue.get_games"
+}

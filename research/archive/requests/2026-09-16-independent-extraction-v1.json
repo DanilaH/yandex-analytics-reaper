@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "independent-extraction-2026-09-16",
+  "source": {
+    "workflow_run_id": 35099492293,
+    "workflow_artifact_id": 10447068579,
+    "workflow_artifact_name": "independent-extraction-2026-09-16",
+    "artifact_created_at": "2026-09-16T13:03:37Z",
+    "artifact_expires_at": "2026-12-15T13:03:23Z",
+    "source_commit_sha": "260fd2bc793a439d60c7775b743b6a0b8c1f0a35",
+    "source_branch": "research/independent-extraction-2026-09-16"
+  },
+  "expected": {
+    "sha256": "1b630563af7519290a87643df7e9f7269c664cc93884c407b5ce398b7b97963f",
+    "size_bytes": 21465
+  },
+  "release": {
+    "tag": "evidence-2026-09-16-independent-extraction",
+    "asset_name": "independent-extraction-2026-09-16.actions.zip",
+    "manifest_asset_name": "independent-extraction-2026-09-16.manifest.json",
+    "checksum_asset_name": "independent-extraction-2026-09-16.sha256"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "hyper-sweep-system-b-2026-09-16",
+  "source": {
+    "workflow_run_id": 35085615493,
+    "workflow_artifact_id": 10441818437,
+    "workflow_artifact_name": "hyper-sweep-2026-09-16-raw-and-intelligence",
+    "artifact_created_at": "2026-09-16T10:34:16Z",
+    "artifact_expires_at": "2026-10-16T10:34:15Z",
+    "source_commit_sha": "3178c86a703527c9a2d5af0b34a9fc1db262adcb",
+    "source_branch": "research/hyper-sweep-2026-09-16"
+  },
+  "expected": {
+    "sha256": "767bc4900024dd4fa1d91654ce2a16839d543af989e127a3f39e331d543df858",
+    "size_bytes": 3405759
+  },
+  "release": {
+    "tag": "evidence-2026-09-16-hyper-sweep-system-b",
+    "asset_name": "hyper-sweep-system-b-2026-09-16.actions.zip",
+    "manifest_asset_name": "hyper-sweep-system-b-2026-09-16.manifest.json",
+    "checksum_asset_name": "hyper-sweep-system-b-2026-09-16.sha256"
+  }
+}

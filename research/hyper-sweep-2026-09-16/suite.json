@@ -1,0 +1,57 @@
+{
+  "spec_version": "thesis-suite-v1",
+  "suite_id": "hyper-sweep-product-systems-2026-09-16",
+  "suite_version": 1,
+  "context": {"pages": 2, "session_profile": "clean_anonymous", "lang": "ru", "device": "desktop", "platform": "desktop_other"},
+  "anomaly_policy": {"spec_version": "thesis-anomaly-policy-v1", "max_age_days": 180, "min_rating_count": 50, "min_lifetime_ratings_per_day": 2.0},
+  "theses": [
+    {
+      "thesis_id": "one-button-momentum-arcade", "thesis_version": 1,
+      "label": "flip or throw an object with one tap, hit targets, avoid obstacles and earn a score or multiplier",
+      "queries": ["мастер нарезки нож игра", "нож кувыркается режет предметы игра", "slice master knife game", "flip knife slice obstacles game"],
+      "semantic": {"theme_terms": ["knife", "blade", "нож", "лезв", "slice master"], "mechanic_terms": ["flip", "slice", "throw", "spin", "рез", "прыж", "крути"], "reward_grammar_terms": ["score", "multiplier", "finish", "очки", "множител", "финиш"]}
+    },
+    {
+      "thesis_id": "timed-dispatch-traffic", "thesis_version": 1,
+      "label": "tap to release vehicles onto moving traffic or a roundabout without collisions",
+      "queries": ["выпускай машины на круг игра", "круговое движение машины без столкновений игра", "car circle traffic game", "release cars roundabout game"],
+      "semantic": {"theme_terms": ["traffic", "roundabout", "cars", "кругов", "трафик", "машин"], "mechanic_terms": ["release", "merge", "avoid collision", "отправ", "выпуска", "столкнов"], "reward_grammar_terms": ["survive", "score", "flow", "очки", "поток", "время"]}
+    },
+    {
+      "thesis_id": "rule-based-inspection", "thesis_version": 1,
+      "label": "inspect documents or evidence under changing rules then approve reject or quarantine each case",
+      "queries": ["проверка документов пропуск игра", "досмотр на входе охранник игра", "papers please inspection game", "security checkpoint inspect documents game"],
+      "semantic": {"theme_terms": ["passport", "security", "checkpoint", "документ", "охран", "досмотр"], "mechanic_terms": ["inspect", "scan", "approve", "reject", "провер", "скан", "пропуск"], "reward_grammar_terms": ["verdict", "case", "consequence", "решени", "случа", "ошибк"]}
+    },
+    {
+      "thesis_id": "binary-consequence-microsim", "thesis_version": 1,
+      "label": "answer yes or no to recurring short requests and manage changing resources or consequences",
+      "queries": ["король решай да или нет игра", "решай судьбу жителей королевство игра", "sort the court game", "yes no king kingdom decisions game"],
+      "semantic": {"theme_terms": ["kingdom", "king", "court", "королев", "корол", "трон"], "mechanic_terms": ["yes no", "decide", "answer", "choice", "да или нет", "выбор", "реша"], "reward_grammar_terms": ["population", "happiness", "gold", "consequence", "населен", "счаст", "золот"]}
+    },
+    {
+      "thesis_id": "coverage-cleaning-navigation", "thesis_version": 1,
+      "label": "navigate a cleaner or robot to cover dirty floor area and reveal a completely clean room",
+      "queries": ["робот пылесос убирает комнату игра", "очисти весь пол пылесос игра", "robo cleaner simulator game", "clean entire floor robot vacuum game"],
+      "semantic": {"theme_terms": ["vacuum", "robot cleaner", "floor", "пылесос", "робот", "пол"], "mechanic_terms": ["drive", "clean", "navigate", "cover", "убира", "чист", "езд"], "reward_grammar_terms": ["coverage", "clean room", "percent", "чистот", "процент", "комнат"]}
+    },
+    {
+      "thesis_id": "procedural-grid-survival", "thesis_version": 1,
+      "label": "place geometric or numbered tiles to clear a board and survive an escalating procedural grid puzzle",
+      "queries": ["блоки на поле очисти ряд игра", "шестиугольники раскладывай фигуры игра", "hexellent puzzle game", "tens number merge puzzle game"],
+      "semantic": {"theme_terms": ["grid", "hex", "tiles", "блок", "шестигран", "плитк"], "mechanic_terms": ["place", "merge", "clear", "drop", "размещ", "соедин", "очист"], "reward_grammar_terms": ["score", "survive", "combo", "очки", "комбо", "уровен"]}
+    },
+    {
+      "thesis_id": "magnetic-polarity-navigation", "thesis_version": 1,
+      "label": "switch magnet polarity to attract or repel through obstacles and reach an exit",
+      "queries": ["магнитный побег игра", "меняй полярность магнита игра", "magnetic escape polarity game", "magnet attract repel puzzle game"],
+      "semantic": {"theme_terms": ["magnet", "polarity", "магнит", "полярност"], "mechanic_terms": ["attract", "repel", "switch", "притяг", "отталк", "переключ"], "reward_grammar_terms": ["exit", "level", "escape", "выход", "уровен", "побег"]}
+    },
+    {
+      "thesis_id": "goods-shelf-sorting-control", "thesis_version": 1,
+      "label": "move shelf goods to form groups of three identical products and clear levels",
+      "queries": ["сортировка товаров по полкам три в ряд", "собери три одинаковых товара на полке игра", "goods sort shelf match three game", "goods master sorting shelves game"],
+      "semantic": {"theme_terms": ["goods", "shelf", "products", "товар", "полк", "продукт"], "mechanic_terms": ["sort", "match", "move", "сортир", "перетас", "собир"], "reward_grammar_terms": ["clear", "level", "three", "очист", "уровен", "три в ряд"]}
+    }
+  ]
+}

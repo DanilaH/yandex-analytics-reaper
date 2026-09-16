@@ -1,0 +1,41 @@
+name: Super Mega Giga Hyper research sweep
+
+on:
+  push:
+    branches:
+      - research/super-mega-giga-hyper-2026-09-16
+    paths:
+      - .github/workflows/_super-mega-giga-hyper.yml
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Reaper
+        run: pip install -e ".[dev]"
+      - name: Collect exact frozen thesis suite
+        run: |
+          set -euo pipefail
+          yandex-reaper-thesis run research/super-mega-giga-hyper-2026-09-16/suite.json --workers 4 | tee /tmp/hyper-result.json
+      - name: Stage evidence
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/hyper-evidence
+          cp research/super-mega-giga-hyper-2026-09-16/suite.json /tmp/hyper-evidence/
+          cp /tmp/hyper-result.json /tmp/hyper-evidence/
+          if [ -d artifacts ]; then cp -R artifacts /tmp/hyper-evidence/; fi
+          find /tmp/hyper-evidence -type f -print | sort
+      - uses: actions/upload-artifact@v4
+        with:
+          name: super-mega-giga-hyper-2026-09-16
+          path: /tmp/hyper-evidence
+          if-no-files-found: error
+          retention-days: 30

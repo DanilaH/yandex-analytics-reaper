@@ -25,15 +25,17 @@ jobs:
         run: |
           set -euo pipefail
           yandex-reaper-thesis run research/super-mega-giga-hyper-2026-09-16/suite.json --workers 4 | tee /tmp/hyper-result.json
-      - name: Stage evidence
+      - name: Stage evidence even if collector fails
+        if: always()
         run: |
           set -euo pipefail
           mkdir -p /tmp/hyper-evidence
           cp research/super-mega-giga-hyper-2026-09-16/suite.json /tmp/hyper-evidence/
-          cp /tmp/hyper-result.json /tmp/hyper-evidence/
+          if [ -f /tmp/hyper-result.json ]; then cp /tmp/hyper-result.json /tmp/hyper-evidence/; fi
           if [ -d artifacts ]; then cp -R artifacts /tmp/hyper-evidence/; fi
           find /tmp/hyper-evidence -type f -print | sort
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: super-mega-giga-hyper-2026-09-16
           path: /tmp/hyper-evidence

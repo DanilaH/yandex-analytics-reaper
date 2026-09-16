@@ -1,0 +1,39 @@
+name: Hyper Sweep exact-ID observation (branch-only)
+on:
+  push:
+    branches:
+      - research/hyper-exact-observe-2026-09-16
+    paths:
+      - .github/workflows/_hyper-exact-observe-2026-09-16.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            constraints-dev.txt
+      - run: python -m pip install 'pip==26.2.1'
+      - run: pip install -c constraints-dev.txt -e .
+      - name: Observe exact known games and verify frozen ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          yandex-reaper-observe run research/observations/hyper-sweep-exact-controls-2026-09-16-v1.json artifacts/hyper-sweep-exact-controls-2026-09-16.zip
+          yandex-reaper-observe verify artifacts/hyper-sweep-exact-controls-2026-09-16.zip
+          sha256sum artifacts/hyper-sweep-exact-controls-2026-09-16.zip | tee artifacts/checksums.sha256
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hyper-sweep-exact-controls-2026-09-16
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90

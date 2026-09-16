@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "hyper-sweep-exact-controls-2026-09-16",
+  "source": {
+    "workflow_run_id": 35091015221,
+    "workflow_artifact_id": 10443837943,
+    "workflow_artifact_name": "hyper-sweep-exact-controls-2026-09-16",
+    "artifact_created_at": "2026-09-16T11:34:22Z",
+    "artifact_expires_at": "2026-12-15T11:34:09Z",
+    "source_commit_sha": "2ae2f2628958ee426cf6b203ba5f4210eca5856b",
+    "source_branch": "research/hyper-exact-observe-2026-09-16"
+  },
+  "expected": {
+    "sha256": "44a1f26fc8dbb8844de9d4747e52e6af495021e34d3f09ab2556bd6c785928a3",
+    "size_bytes": 21974
+  },
+  "release": {
+    "tag": "evidence-2026-09-16-hyper-exact-controls",
+    "asset_name": "hyper-sweep-exact-controls-2026-09-16.actions.zip",
+    "manifest_asset_name": "hyper-sweep-exact-controls-2026-09-16.manifest.json",
+    "checksum_asset_name": "hyper-sweep-exact-controls-2026-09-16.sha256"
+  }
+}

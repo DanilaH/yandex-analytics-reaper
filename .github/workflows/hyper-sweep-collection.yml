@@ -25,16 +25,19 @@ jobs:
           mkdir -p data/hyper-sweep-output
           set -o pipefail
           yandex-reaper-thesis run research/hyper-sweep-2026-09-16/suite.json --workers 2 | tee data/hyper-sweep-output/result.json
-      - name: Inventory raw and intelligence artifacts
+      - name: Inventory frozen ZIPs
         if: always()
         run: |
-          find data -type f -printf '%p %s bytes\n' | sort | head -100
-          find data -type f -name '*.zip' -exec sha256sum {} \;
-      - name: Preserve immutable artifacts
+          find artifacts -type f -name '*.zip' -exec sha256sum {} \; || true
+          find artifacts -type f -printf '%p %s bytes\n' | sort | head -50 || true
+      - name: Preserve exact immutable source and derived artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: hyper-sweep-2026-09-16-raw-and-intelligence
-          path: data/
-          if-no-files-found: warn
+          path: |
+            artifacts/
+            data/hyper-sweep-output/result.json
+            research/hyper-sweep-2026-09-16/suite.json
+          if-no-files-found: error
           retention-days: 30

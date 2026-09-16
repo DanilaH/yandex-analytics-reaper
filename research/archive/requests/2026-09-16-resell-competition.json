@@ -1,0 +1,23 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "resell-competition-2026-09-16",
+  "source": {
+    "workflow_run_id": 35111383348,
+    "workflow_artifact_id": 10451554997,
+    "workflow_artifact_name": "resell-competition-2026-09-16",
+    "artifact_created_at": "2026-09-16T14:51:44Z",
+    "artifact_expires_at": "2026-12-15T14:51:26Z",
+    "source_commit_sha": "3087d61a35979e23bf537369910f16aa6caaa5c4",
+    "source_branch": "research/resell-competition-observe-2026-09-16"
+  },
+  "expected": {
+    "sha256": "b02bc172a47a42c218597cba054905f58bb6c2236a3c1a77a8dafca0896a8da8",
+    "size_bytes": 15603
+  },
+  "release": {
+    "tag": "evidence-2026-09-16-resell-competition",
+    "asset_name": "resell-competition-2026-09-16.actions.zip",
+    "manifest_asset_name": "resell-competition-2026-09-16.manifest.json",
+    "checksum_asset_name": "resell-competition-2026-09-16.sha256"
+  }
+}

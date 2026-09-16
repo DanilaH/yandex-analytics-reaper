@@ -1,0 +1,7 @@
+{
+  "spec_version": "listing-observation-set-v1",
+  "observation_set_id": "resell-competition-2026-09-16",
+  "observation_set_version": 1,
+  "app_ids": [543033, 560605, 567344, 543169, 543166, 545333, 534237, 545388, 542512, 526347],
+  "source_surface": "catalogue.get_games"
+}

@@ -1,0 +1,20 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "hyper-sweep-five-systems-2026-09-16",
+  "source": {
+    "workflow_run_id": 35079773828,
+    "workflow_artifact_id": 10439911674,
+    "workflow_artifact_name": "super-mega-giga-hyper-2026-09-16",
+    "artifact_created_at": "2026-09-16T09:31:27Z",
+    "artifact_expires_at": "2026-10-16T09:31:26Z",
+    "source_commit_sha": "924cf93e620755da82c44495712259bd4968d014",
+    "source_branch": "research/super-mega-giga-hyper-2026-09-16"
+  },
+  "expected": {"sha256": "418fb0c7ad522c69fe1e61e85e8a28ea4cc602ad751347070cbc6a55985a3413", "size_bytes": 5543920},
+  "release": {
+    "tag": "evidence-2026-09-16-hyper-sweep-five-systems",
+    "asset_name": "hyper-sweep-five-systems.actions.zip",
+    "manifest_asset_name": "hyper-sweep-five-systems.manifest.json",
+    "checksum_asset_name": "hyper-sweep-five-systems.sha256"
+  }
+}

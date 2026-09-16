@@ -1,0 +1,20 @@
+{
+  "spec_version": "durable-evidence-archive-request-v1",
+  "archive_id": "hyper-sweep-reviewed-final-2026-09-16",
+  "source": {
+    "workflow_run_id": 35086597561,
+    "workflow_artifact_id": 10442393278,
+    "workflow_artifact_name": "hyper-sweep-2026-09-16-reviewed-final",
+    "artifact_created_at": "2026-09-16T10:45:13Z",
+    "artifact_expires_at": "2026-10-16T10:45:12Z",
+    "source_commit_sha": "6e65064ed14b0ca66f73d0834093149dcbf4ebdb",
+    "source_branch": "research/hyper-sweep-2026-09-16"
+  },
+  "expected": {"sha256": "1dc09d9f86877f57befb0cabdd663b311de006010a19df3039de85a5385a10c2", "size_bytes": 2215867},
+  "release": {
+    "tag": "evidence-2026-09-16-hyper-sweep-reviewed-final",
+    "asset_name": "hyper-sweep-reviewed-final.actions.zip",
+    "manifest_asset_name": "hyper-sweep-reviewed-final.manifest.json",
+    "checksum_asset_name": "hyper-sweep-reviewed-final.sha256"
+  }
+}
